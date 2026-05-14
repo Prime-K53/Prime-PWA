@@ -1,0 +1,193 @@
+﻿context/AuthContext.tsx(228,11): error TS2739: Type '{ allowReturns: true; requireCustomer: false; enableShortcuts: true; showItemImages: true; gridColumns: number; photocopyPrice: number; typePrintingPrice: number; defaultPaymentMethod: string; }' is missing the following properties from type '{ showItemImages: boolean; enableShortcuts: boolean; allowReturns: boolean; allowDiscounts: boolean; gridColumns: number; showCategoryFilters: boolean; photocopyPrice: number; typePrintingPrice: number; receiptFooter: string; requireCustomer: boolean; defaultPaymentMethod: string; }': allowDiscounts, showCategoryFilters, receiptFooter
+hooks/useDocumentPreview.ts(69,32): error TS2345: Argument of type 'FunctionComponentElement<DocProps>' is not assignable to parameter of type 'ReactElement<DocumentProps, string | JSXElementConstructor<any>>'.
+  Types of property 'props' are incompatible.
+    Type 'DocProps' has no properties in common with type 'DocumentProps'.
+services/api.ts(183,5): error TS2322: Type 'AxiosRequestHeaders | {}' is not assignable to type 'AxiosRequestHeaders'.
+  Type '{}' is not assignable to type 'AxiosRequestHeaders'.
+    Type '{}' is missing the following properties from type 'AxiosHeaders': set, get, has, delete, and 24 more.
+services/api.ts(196,5): error TS2322: Type 'AxiosRequestHeaders | {}' is not assignable to type 'AxiosRequestHeaders'.
+  Type '{}' is not assignable to type 'AxiosRequestHeaders'.
+    Type '{}' is missing the following properties from type 'AxiosHeaders': set, get, has, delete, and 24 more.
+services/api.ts(208,5): error TS2322: Type 'AxiosRequestHeaders | {}' is not assignable to type 'AxiosRequestHeaders'.
+  Type '{}' is not assignable to type 'AxiosRequestHeaders'.
+    Type '{}' is missing the following properties from type 'AxiosHeaders': set, get, has, delete, and 24 more.
+services/api.ts(637,46): error TS2339: Property 'items' does not exist on type 'unknown'.
+services/api.ts(637,68): error TS2339: Property 'items' does not exist on type 'unknown'.
+services/api.ts(638,62): error TS2339: Property 'items' does not exist on type 'unknown'.
+services/api.ts(749,51): error TS2698: Spread types may only be created from object types.
+services/api.ts(756,51): error TS2698: Spread types may only be created from object types.
+services/api.ts(768,51): error TS2698: Spread types may only be created from object types.
+services/api.ts(775,51): error TS2698: Spread types may only be created from object types.
+services/api.ts(782,55): error TS2304: Cannot find name 'Order'.
+services/api.ts(783,62): error TS2304: Cannot find name 'Order'.
+services/api.ts(784,26): error TS2304: Cannot find name 'Order'.
+services/api.ts(784,36): error TS2554: Expected 2 arguments, but got 1.
+services/api.ts(788,52): error TS2304: Cannot find name 'OrderPayment'.
+services/api.ts(788,69): error TS2554: Expected 2 arguments, but got 1.
+services/api.ts(792,50): error TS2304: Cannot find name 'Order'.
+services/api.ts(792,70): error TS2554: Expected 2 arguments, but got 1.
+services/api.ts(796,55): error TS2554: Expected 2 arguments, but got 1.
+services/api.ts(1111,26): error TS2304: Cannot find name 'generateNextId'.
+services/api.ts(1273,26): error TS2304: Cannot find name 'generateNextId'.
+services/api.ts(1402,50): error TS2304: Cannot find name 'BillOfMaterial'.
+services/api.ts(1403,20): error TS2304: Cannot find name 'BillOfMaterial'.
+services/api.ts(1728,55): error TS2304: Cannot find name 'BOMTemplate'.
+services/api.ts(1729,25): error TS2552: Cannot find name 'BOMTemplate'. Did you mean 'SMSTemplate'?
+services/api.ts(1741,63): error TS2304: Cannot find name 'MarketAdjustment'.
+services/api.ts(1742,33): error TS2304: Cannot find name 'MarketAdjustment'.
+services/hardwareService.ts(232,22): error TS2339: Property 'receiptFooter' does not exist on type 'string'.
+services/hardwareService.ts(251,87): error TS2339: Property 'receiptFooter' does not exist on type 'string'.
+services/pricingRoundingService.ts(205,39): error TS2339: Property 'customStep' does not exist on type '{}'.
+services/pricingRoundingService.ts(206,31): error TS2339: Property 'thresholdRules' does not exist on type '{}'.
+services/pricingRoundingService.ts(206,58): error TS2339: Property 'thresholdRules' does not exist on type '{}'.
+services/pricingRoundingService.ts(207,18): error TS2339: Property 'thresholdRules' does not exist on type '{}'.
+services/pricingRoundingService.ts(216,20): error TS2339: Property 'analytics' does not exist on type '{}'.
+services/pricingSettingsValidation.ts(90,25): error TS2339: Property 'errors' does not exist on type 'ZodError<unknown>'.
+services/reconciliationService.ts(51,24): error TS2345: Argument of type '{ type: string; entityId: string; entityName: string; expectedValue: number; actualValue: number; difference: number; suggestedAction: string; severity: Severity; }' is not assignable to parameter of type 'Discrepancy'.
+  Types of property 'type' are incompatible.
+    Type 'string' is not assignable to type '"customer_balance" | "supplier_balance" | "orphaned_entry" | "invoice_payment" | "bank_mirror" | "ledger_gap" | "examination_link"'.
+services/reportExportService.ts(459,41): error TS2339: Property 'decimals' does not exist on type 'ReportColumn'.
+services/reportExportService.ts(460,41): error TS2339: Property 'decimals' does not exist on type 'ReportColumn'.
+services/salesOrderService.ts(13,23): error TS2698: Spread types may only be created from object types.
+services/transactionService.ts(317,71): error TS2339: Property 'type' does not exist on type 'MultiCurrencyTransactionLine'.
+services/transactionService.ts(318,72): error TS2339: Property 'type' does not exist on type 'MultiCurrencyTransactionLine'.
+services/transactionService.ts(330,35): error TS2339: Property 'description' does not exist on type '{ accountId: string; amount: number; currency: string; type: "debit" | "credit"; }'.
+services/transactionService.ts(1062,45): error TS2339: Property 'outputTaxAccount' does not exist on type 'VATConfig'.
+services/transactionService.ts(1095,56): error TS2339: Property 'outputTaxAccount' does not exist on type 'VATConfig'.
+services/transactionService.ts(1111,56): error TS2339: Property 'outputTaxAccount' does not exist on type 'VATConfig'.
+services/transactionService.ts(1125,36): error TS2339: Property 'marketAdjustmentAccount' does not exist on type 'VATConfig'.
+services/transactionService.ts(1135,60): error TS2339: Property 'marketAdjustmentAccount' does not exist on type 'VATConfig'.
+services/transactionService.ts(1151,60): error TS2339: Property 'marketAdjustmentAccount' does not exist on type 'VATConfig'.
+services/transactionService.ts(1698,61): error TS2339: Property 'outputTaxAccount' does not exist on type 'VATConfig'.
+services/transactionService.ts(1725,59): error TS2339: Property 'outputTaxAccount' does not exist on type 'VATConfig'.
+services/transactionService.ts(1737,76): error TS2339: Property 'marketAdjustmentAccount' does not exist on type 'VATConfig'.
+services/transactionService.ts(1742,59): error TS2339: Property 'marketAdjustmentAccount' does not exist on type 'VATConfig'.
+stores/jobTicketStore.ts(76,21): error TS2339: Property 'set' does not exist on type '{ initDB: () => Promise<IDBPDatabase<NexusDB>>; setSyncListener(cb: (status: SyncStatus) => void): void; executeAtomicOperation<T>(stores: (keyof NexusDB)[], operation: (tx: any) => Promise<...>): Promise<...>; ... 15 more ...; performAutoBackup(): Promise<...>; }'.
+stores/jobTicketStore.ts(84,21): error TS2339: Property 'set' does not exist on type '{ initDB: () => Promise<IDBPDatabase<NexusDB>>; setSyncListener(cb: (status: SyncStatus) => void): void; executeAtomicOperation<T>(stores: (keyof NexusDB)[], operation: (tx: any) => Promise<...>): Promise<...>; ... 15 more ...; performAutoBackup(): Promise<...>; }'.
+stores/jobTicketStore.ts(111,21): error TS2339: Property 'set' does not exist on type '{ initDB: () => Promise<IDBPDatabase<NexusDB>>; setSyncListener(cb: (status: SyncStatus) => void): void; executeAtomicOperation<T>(stores: (keyof NexusDB)[], operation: (tx: any) => Promise<...>): Promise<...>; ... 15 more ...; performAutoBackup(): Promise<...>; }'.
+stores/jobTicketStore.ts(127,21): error TS2339: Property 'set' does not exist on type '{ initDB: () => Promise<IDBPDatabase<NexusDB>>; setSyncListener(cb: (status: SyncStatus) => void): void; executeAtomicOperation<T>(stores: (keyof NexusDB)[], operation: (tx: any) => Promise<...>): Promise<...>; ... 15 more ...; performAutoBackup(): Promise<...>; }'.
+stores/jobTicketStore.ts(133,21): error TS2339: Property 'set' does not exist on type '{ initDB: () => Promise<IDBPDatabase<NexusDB>>; setSyncListener(cb: (status: SyncStatus) => void): void; executeAtomicOperation<T>(stores: (keyof NexusDB)[], operation: (tx: any) => Promise<...>): Promise<...>; ... 15 more ...; performAutoBackup(): Promise<...>; }'.
+stores/procurementStore.ts(136,25): error TS2339: Property 'delete' does not exist on type '{ getAll: () => Promise<any[]>; save: (s: any) => Promise<string>; deleteSupplier: (id: string) => Promise<void>; }'.
+stores/salesStore.ts(149,27): error TS2551: Property 'addSalesOrder' does not exist on type '{ getAllSales: () => Promise<any[]>; createSale: (sale: any) => Promise<any>; getQuotations: () => Promise<any[]>; saveQuotation: (q: any) => Promise<{ success: boolean; }>; ... 29 more ...; cancelOrder: (orderId: string, reason: string) => Promise<...>; }'. Did you mean 'saveSalesOrder'?
+stores/salesStore.ts(227,3): error TS1117: An object literal cannot have multiple properties with the same name.
+stores/vatStore.ts(93,17): error TS2554: Expected 2-3 arguments, but got 0.
+types.ts(235,3): error TS2687: All declarations of 'discounts' must have identical modifiers.
+types.ts(236,3): error TS2687: All declarations of 'tax' must have identical modifiers.
+types.ts(301,3): error TS2717: Subsequent property declarations must have the same type.  Property 'status' must be of type '"Draft" | "Confirmed" | "Processing" | "Shipped" | "Completed" | "Cancelled"', but here has type '"Draft" | "Confirmed" | "Processing" | "Cancelled" | "Fulfilled"'.
+types.ts(304,3): error TS2687: All declarations of 'discounts' must have identical modifiers.
+types.ts(305,3): error TS2687: All declarations of 'tax' must have identical modifiers.
+types/reports.ts(644,14): error TS2741: Property 'print' is missing in type '{ pdf: string; excel: string; csv: string; json: string; html: string; }' but required in type 'Record<ExportFormat, string>'.
+types/workflow.ts(426,7): error TS2353: Object literal may only specify known properties, and 'createdBy' does not exist in type 'Omit<WorkflowDefinition, "id" | "createdAt" | "updatedAt" | "createdBy">'.
+types/workflow.ts(489,7): error TS2353: Object literal may only specify known properties, and 'createdBy' does not exist in type 'Omit<WorkflowDefinition, "id" | "createdAt" | "updatedAt" | "createdBy">'.
+types/workflow.ts(523,7): error TS2353: Object literal may only specify known properties, and 'createdBy' does not exist in type 'Omit<WorkflowDefinition, "id" | "createdAt" | "updatedAt" | "createdBy">'.
+utils/documentMapper.tsx(157,25): error TS2367: This comparison appears to be unintentional because the types '"Invoice" | "Quotation" | "Examination Invoice" | "Delivery Note" | "Statement" | "Receipt" | "Subscription Invoice" | "Work Order"' and '"Order"' have no overlap.
+utils/documentMapper.tsx(418,9): error TS2367: This comparison appears to be unintentional because the types '"Invoice" | "Examination Invoice" | "Delivery Note" | "Statement" | "Receipt" | "Subscription Invoice" | "Work Order" | "Purchase Order"' and '"Order"' have no overlap.
+utils/securitySettings.ts(24,63): error TS2339: Property 'passwordProtectionEnabled' does not exist on type '{}'.
+utils/securitySettings.ts(25,26): error TS2339: Property 'passwordProtectionEnabled' does not exist on type '{}'.
+utils/securitySettings.ts(30,63): error TS2339: Property 'enforcePasswordComplexity' does not exist on type '{}'.
+utils/securitySettings.ts(31,26): error TS2339: Property 'enforcePasswordComplexity' does not exist on type '{}'.
+views/accounts/Expenses.tsx(63,33): error TS2339: Property 'CASH_DRAWER' does not exist on type 'any[]'.
+views/accounts/Expenses.tsx(143,143): error TS2339: Property 'CASH_DRAWER' does not exist on type 'any[]'.
+views/accounts/Expenses.tsx(220,73): error TS2339: Property 'BANK' does not exist on type 'any[]'.
+views/accounts/Expenses.tsx(221,73): error TS2339: Property 'MOBILE_MONEY' does not exist on type 'any[]'.
+views/accounts/Expenses.tsx(277,54): error TS2339: Property 'CASH_DRAWER' does not exist on type 'any[]'.
+views/accounts/Expenses.tsx(278,54): error TS2339: Property 'BANK' does not exist on type 'any[]'.
+views/accounts/Expenses.tsx(279,54): error TS2339: Property 'MOBILE_MONEY' does not exist on type 'any[]'.
+views/accounts/Income.tsx(31,33): error TS2339: Property 'CASH_DRAWER' does not exist on type 'any[]'.
+views/accounts/Income.tsx(74,37): error TS2339: Property 'CASH_DRAWER' does not exist on type 'any[]'.
+views/accounts/Income.tsx(141,73): error TS2339: Property 'CASH_DRAWER' does not exist on type 'any[]'.
+views/accounts/Income.tsx(142,73): error TS2339: Property 'BANK' does not exist on type 'any[]'.
+views/accounts/Income.tsx(143,73): error TS2339: Property 'MOBILE_MONEY' does not exist on type 'any[]'.
+views/examination/components/BOMDialog.tsx(464,33): error TS2339: Property 'showCompanyLogo' does not exist on type 'CompanyConfig'.
+views/examination/components/ExaminationBatchModal.tsx(427,22): error TS2304: Cannot find name 'Calendar'.
+views/examination/components/ExaminationBatchModal.tsx(477,118): error TS2304: Cannot find name 'Calendar'.
+views/examination/components/ExaminationBatchModal.tsx(480,24): error TS2304: Cannot find name 'Eye'.
+views/examination/ExaminationJobForm.tsx(371,19): error TS2345: Argument of type '{ exam_name: any; school_id: any; sub_account_name: any; class_name: any; number_of_learners: any; bom_id: any; adjustment_id: any; adjustment_type: any; adjustment_value: any; rounding_method: any; ... 5 more ...; subjects: { ...; }[]; }' is not assignable to parameter of type 'SetStateAction<{ exam_name: string; school_id: string; sub_account_name: string; class_name: string; number_of_learners: number; bom_id: string; adjustment_id: string; adjustment_type: "fixed" | "percentage"; ... 8 more ...; subjects: { ...; }[]; }>'.
+  Property 'pricing_locked' is missing in type '{ exam_name: any; school_id: any; sub_account_name: any; class_name: any; number_of_learners: any; bom_id: any; adjustment_id: any; adjustment_type: any; adjustment_value: any; rounding_method: any; ... 5 more ...; subjects: { ...; }[]; }' but required in type '{ exam_name: string; school_id: string; sub_account_name: string; class_name: string; number_of_learners: number; bom_id: string; adjustment_id: string; adjustment_type: "fixed" | "percentage"; ... 8 more ...; subjects: Array<{ id?: string; subject_name: string; pages_per_paper: number; extra_copies: number; }>; }'.
+views/Inventory.tsx(18,13): error TS2339: Property 'fetchInventory' does not exist on type 'InventoryContextType'.
+views/Inventory.tsx(18,29): error TS2339: Property 'fetchProcurementData' does not exist on type 'InventoryContextType'.
+views/inventory/components/InventoryViews.tsx(218,107): error TS2322: Type '{ size: number; className: string; title: string; }' is not assignable to type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
+  Property 'title' does not exist on type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
+views/inventory/components/InventoryViews.tsx(269,53): error TS2322: Type '{ documentId: any; documentType: string; payload: any; onPreviewReady: (model: any) => void; title: string; }' is not assignable to type 'IntrinsicAttributes & PreviewButtonProps'.
+  Property 'documentId' does not exist on type 'IntrinsicAttributes & PreviewButtonProps'.
+views/inventory/components/InventoryViews.tsx(297,187): error TS2322: Type 'unknown' is not assignable to type 'ReactNode'.
+views/inventory/components/InventoryViews.tsx(312,57): error TS2322: Type '{ documentId: any; documentType: string; payload: any; onPreviewReady: (model: any) => void; title: string; iconSize: number; }' is not assignable to type 'IntrinsicAttributes & PreviewButtonProps'.
+  Property 'documentId' does not exist on type 'IntrinsicAttributes & PreviewButtonProps'.
+views/production/NewExamJobModal.tsx(583,69): error TS2551: Property 'batchId' does not exist on type '{ success: boolean; batch_id: any; }'. Did you mean 'batch_id'?
+views/Purchases.tsx(269,17): error TS2322: Type '{ inventory: any; suppliers: any; onCreateOrder: (data: { supplierId: string; items: any[]; reference: string; dueDate: string; date: string; }) => void; initialData: any; onUpdateOrder: (id: string, data: { ...; }) => void; onCancel: () => void; }' is not assignable to type 'IntrinsicAttributes & PurchaseBuilderProps'.
+  Property 'suppliers' does not exist on type 'IntrinsicAttributes & PurchaseBuilderProps'.
+views/reports/ReportBuilder.tsx(28,5): error TS2322: Type '"tabular"' is not assignable to type 'ReportType'.
+views/reports/ReportBuilder.tsx(444,17): error TS2322: Type '{ value: string; onChange: (value: any) => void; options: { value: string; label: string; }[]; placeholder: string; }' is not assignable to type 'IntrinsicAttributes & Omit<SelectHTMLAttributes<HTMLSelectElement>, "onChange"> & { label?: string; error?: string; options?: { ...; }[]; onChange?: (value: any) => void; } & RefAttributes<...>'.
+  Property 'placeholder' does not exist on type 'IntrinsicAttributes & Omit<SelectHTMLAttributes<HTMLSelectElement>, "onChange"> & { label?: string; error?: string; options?: { ...; }[]; onChange?: (value: any) => void; } & RefAttributes<...>'.
+views/reports/ReportBuilder.tsx(487,27): error TS2345: Argument of type '(prev: Partial<ReportDefinition>) => { groupBy: (ReportGrouping | { field: string; showSubtotals: true; })[]; id?: string; name?: string; description?: string; ... 24 more ...; version?: number; }' is not assignable to parameter of type 'SetStateAction<Partial<ReportDefinition>>'.
+  Type '(prev: Partial<ReportDefinition>) => { groupBy: (ReportGrouping | { field: string; showSubtotals: true; })[]; id?: string; name?: string; description?: string; ... 24 more ...; version?: number; }' is not assignable to type '(prevState: Partial<ReportDefinition>) => Partial<ReportDefinition>'.
+    Call signature return types '{ groupBy: (ReportGrouping | { field: string; showSubtotals: true; })[]; id?: string; name?: string; description?: string; category?: ReportCategory; type?: ReportType; ... 22 more ...; version?: number; }' and 'Partial<ReportDefinition>' are incompatible.
+      The types of 'groupBy' are incompatible between these types.
+        Type '(ReportGrouping | { field: string; showSubtotals: true; })[]' is not assignable to type 'ReportGrouping[]'.
+          Type 'ReportGrouping | { field: string; showSubtotals: true; }' is not assignable to type 'ReportGrouping'.
+            Property 'label' is missing in type '{ field: string; showSubtotals: true; }' but required in type 'ReportGrouping'.
+views/reports/ReportBuilder.tsx(515,17): error TS2322: Type '{ value: string; onChange: (value: any) => void; options: { value: string; label: string; }[]; placeholder: string; }' is not assignable to type 'IntrinsicAttributes & Omit<SelectHTMLAttributes<HTMLSelectElement>, "onChange"> & { label?: string; error?: string; options?: { ...; }[]; onChange?: (value: any) => void; } & RefAttributes<...>'.
+  Property 'placeholder' does not exist on type 'IntrinsicAttributes & Omit<SelectHTMLAttributes<HTMLSelectElement>, "onChange"> & { label?: string; error?: string; options?: { ...; }[]; onChange?: (value: any) => void; } & RefAttributes<...>'.
+views/reports/ReportBuilder.tsx(639,19): error TS2322: Type '{ value: string; onChange: (value: any) => void; options: { value: string; label: string; }[]; placeholder: string; }' is not assignable to type 'IntrinsicAttributes & Omit<SelectHTMLAttributes<HTMLSelectElement>, "onChange"> & { label?: string; error?: string; options?: { ...; }[]; onChange?: (value: any) => void; } & RefAttributes<...>'.
+  Property 'placeholder' does not exist on type 'IntrinsicAttributes & Omit<SelectHTMLAttributes<HTMLSelectElement>, "onChange"> & { label?: string; error?: string; options?: { ...; }[]; onChange?: (value: any) => void; } & RefAttributes<...>'.
+views/reports/ReportBuilder.tsx(651,19): error TS2322: Type '{ value: string; onChange: (value: any) => void; options: { value: string; label: string; }[]; placeholder: string; }' is not assignable to type 'IntrinsicAttributes & Omit<SelectHTMLAttributes<HTMLSelectElement>, "onChange"> & { label?: string; error?: string; options?: { ...; }[]; onChange?: (value: any) => void; } & RefAttributes<...>'.
+  Property 'placeholder' does not exist on type 'IntrinsicAttributes & Omit<SelectHTMLAttributes<HTMLSelectElement>, "onChange"> & { label?: string; error?: string; options?: { ...; }[]; onChange?: (value: any) => void; } & RefAttributes<...>'.
+views/reports/ReportBuilder.tsx(667,27): error TS2345: Argument of type '(prev: Partial<ReportDefinition>) => { parameters: (ReportParameter | { id: string; name: string; label: string; type: "string"; required: false; })[]; ... 27 more ...; version?: number; }' is not assignable to parameter of type 'SetStateAction<Partial<ReportDefinition>>'.
+  Type '(prev: Partial<ReportDefinition>) => { parameters: (ReportParameter | { id: string; name: string; label: string; type: "string"; required: false; })[]; ... 27 more ...; version?: number; }' is not assignable to type '(prevState: Partial<ReportDefinition>) => Partial<ReportDefinition>'.
+    Call signature return types '{ parameters: (ReportParameter | { id: string; name: string; label: string; type: "string"; required: false; })[]; id?: string; name?: string; description?: string; category?: ReportCategory; ... 23 more ...; version?: number; }' and 'Partial<ReportDefinition>' are incompatible.
+      The types of 'parameters' are incompatible between these types.
+        Type '(ReportParameter | { id: string; name: string; label: string; type: "string"; required: false; })[]' is not assignable to type 'ReportParameter[]'.
+          Type 'ReportParameter | { id: string; name: string; label: string; type: "string"; required: false; }' is not assignable to type 'ReportParameter'.
+            Property 'order' is missing in type '{ id: string; name: string; label: string; type: "string"; required: false; }' but required in type 'ReportParameter'.
+views/reports/ReportBuilder.tsx(800,19): error TS2322: Type '"secondary"' is not assignable to type '"default" | "outline" | "destructive" | "ghost"'.
+views/reports/ReportBuilder.tsx(889,5): error TS2345: Argument of type 'ReportColumn | { id: string; field: string; label: string; type: "string"; sortable: true; filterable: boolean; hidden: false; width: number; }' is not assignable to parameter of type 'ReportColumn | (() => ReportColumn)'.
+  Object literal may only specify known properties, and 'filterable' does not exist in type 'ReportColumn | (() => ReportColumn)'.
+views/reports/ReportBuilder.tsx(988,33): error TS2339: Property 'filterable' does not exist on type 'ReportColumn'.
+views/reports/ReportBuilder.tsx(1006,19): error TS2322: Type '"secondary"' is not assignable to type '"default" | "outline" | "destructive" | "ghost"'.
+views/reports/ReportBuilder.tsx(1042,35): error TS2304: Cannot find name 'FilterOperator'.
+views/reports/ReportBuilder.tsx(1080,85): error TS2304: Cannot find name 'FilterOperator'.
+views/reports/ReportBuilder.tsx(1107,19): error TS2322: Type '"secondary"' is not assignable to type '"default" | "outline" | "destructive" | "ghost"'.
+views/reports/ReportDashboard.tsx(536,18): error TS2367: This comparison appears to be unintentional because the types '"string" | "number" | "boolean" | "select" | "date" | "datetime" | "multi_select"' and '"dateRange"' have no overlap.
+views/sales/JobTickets.tsx(1223,25): error TS2607: JSX element class does not support attributes because it does not have a 'props' property.
+views/sales/JobTickets.tsx(1223,26): error TS2786: 'File' cannot be used as a JSX component.
+  Its type '{ new (fileBits: BlobPart[], fileName: string, options?: FilePropertyBag): File; prototype: File; }' is not a valid JSX element type.
+    Type '{ new (fileBits: BlobPart[], fileName: string, options?: FilePropertyBag): File; prototype: File; }' is not assignable to type 'new (props: any, context: any) => Component<any, any, any>'.
+      Type 'File' is missing the following properties from type 'Component<any, any, any>': context, setState, forceUpdate, render, and 2 more.
+views/sales/SalesOrders.tsx(50,27): error TS2322: Type '(o: any) => void' is not assignable to type '(o: any) => Promise<void>'.
+  Type 'void' is not assignable to type 'Promise<void>'.
+views/Settings.tsx(964,112): error TS2322: Type 'string' is not assignable to type '"Nearest" | "Up" | "Down" | "Truncate"'.
+views/Settings.tsx(1478,143): error TS2322: Type 'string' is not assignable to type '"Classic" | "Standard" | "Advanced" | "Custom" | "Modern" | "Professional" | "Clean"'.
+views/Settings.tsx(1967,125): error TS2339: Property 'name' does not exist on type '{ id?: string; baseUrl: string; apiKey: string; enabled: boolean; }'.
+views/Settings.tsx(2380,160): error TS2339: Property 'lastSyncTimestamp' does not exist on type 'CloudSyncConfig'.
+views/Settings.tsx(2466,79): error TS2339: Property 'triggerCloudSync' does not exist on type '{ auth: { login: (username: string, password?: string, mfaCode?: string) => Promise<{ status: number; error: string; data?: undefined; } | { status: number; data: any; error?: undefined; }>; }; ... 11 more ...; system: { ...; }; }'.
+views/Settings.tsx(2545,80): error TS2339: Property 'name' does not exist on type '{ id?: string; baseUrl: string; apiKey: string; enabled: boolean; }'.
+views/Settings.tsx(2548,100): error TS2353: Object literal may only specify known properties, and 'name' does not exist in type '{ id?: string; baseUrl: string; apiKey: string; enabled: boolean; }'.
+views/Settings.tsx(2721,99): error TS2339: Property 'emailEnabled' does not exist on type '{ customerActivityNotifications: boolean; smsGatewayEnabled: boolean; emailGatewayEnabled: boolean; }'.
+views/Settings.tsx(2726,69): error TS2322: Type '{ emailEnabled: boolean; customerActivityNotifications: boolean; smsGatewayEnabled: boolean; emailGatewayEnabled: boolean; } | { emailEnabled: boolean; smsEnabled: false; systemAlertsEnabled: true; syncIntervalMinutes: number; lastSyncTimestamp: string; syncStatus: string; autoSyncEnabled: false; }' is not assignable to type '{ customerActivityNotifications: boolean; smsGatewayEnabled: boolean; emailGatewayEnabled: boolean; }'.
+  Object literal may only specify known properties, and 'emailEnabled' does not exist in type '{ customerActivityNotifications: boolean; smsGatewayEnabled: boolean; emailGatewayEnabled: boolean; }'.
+views/Settings.tsx(2745,99): error TS2339: Property 'smsEnabled' does not exist on type '{ customerActivityNotifications: boolean; smsGatewayEnabled: boolean; emailGatewayEnabled: boolean; }'.
+views/Settings.tsx(2750,69): error TS2322: Type '{ smsEnabled: boolean; customerActivityNotifications: boolean; smsGatewayEnabled: boolean; emailGatewayEnabled: boolean; } | { smsEnabled: boolean; emailEnabled: false; systemAlertsEnabled: true; syncIntervalMinutes: number; lastSyncTimestamp: string; syncStatus: string; autoSyncEnabled: false; }' is not assignable to type '{ customerActivityNotifications: boolean; smsGatewayEnabled: boolean; emailGatewayEnabled: boolean; }'.
+  Object literal may only specify known properties, and 'smsEnabled' does not exist in type '{ customerActivityNotifications: boolean; smsGatewayEnabled: boolean; emailGatewayEnabled: boolean; }'.
+views/Settings.tsx(2773,97): error TS2339: Property 'lowStockThreshold' does not exist on type '{ customerActivityNotifications: boolean; smsGatewayEnabled: boolean; emailGatewayEnabled: boolean; }'.
+views/Settings.tsx(2778,69): error TS2322: Type '{ lowStockThreshold: number; customerActivityNotifications: boolean; smsGatewayEnabled: boolean; emailGatewayEnabled: boolean; } | { lowStockThreshold: number; emailEnabled: false; ... 5 more ...; autoSyncEnabled: false; }' is not assignable to type '{ customerActivityNotifications: boolean; smsGatewayEnabled: boolean; emailGatewayEnabled: boolean; }'.
+  Object literal may only specify known properties, and 'lowStockThreshold' does not exist in type '{ customerActivityNotifications: boolean; smsGatewayEnabled: boolean; emailGatewayEnabled: boolean; }'.
+views/Settings.tsx(2792,97): error TS2339: Property 'largeTransactionThreshold' does not exist on type '{ customerActivityNotifications: boolean; smsGatewayEnabled: boolean; emailGatewayEnabled: boolean; }'.
+views/Settings.tsx(2797,69): error TS2322: Type '{ largeTransactionThreshold: number; customerActivityNotifications: boolean; smsGatewayEnabled: boolean; emailGatewayEnabled: boolean; } | { largeTransactionThreshold: number; emailEnabled: false; ... 5 more ...; autoSyncEnabled: false; }' is not assignable to type '{ customerActivityNotifications: boolean; smsGatewayEnabled: boolean; emailGatewayEnabled: boolean; }'.
+  Object literal may only specify known properties, and 'largeTransactionThreshold' does not exist in type '{ customerActivityNotifications: boolean; smsGatewayEnabled: boolean; emailGatewayEnabled: boolean; }'.
+views/Settings.tsx(2813,89): error TS2339: Property 'dailySummaryTime' does not exist on type '{ customerActivityNotifications: boolean; smsGatewayEnabled: boolean; emailGatewayEnabled: boolean; }'.
+views/Settings.tsx(2818,61): error TS2322: Type '{ dailySummaryTime: string; customerActivityNotifications: boolean; smsGatewayEnabled: boolean; emailGatewayEnabled: boolean; } | { dailySummaryTime: string; emailEnabled: false; smsEnabled: false; ... 4 more ...; autoSyncEnabled: false; }' is not assignable to type '{ customerActivityNotifications: boolean; smsGatewayEnabled: boolean; emailGatewayEnabled: boolean; }'.
+  Object literal may only specify known properties, and 'dailySummaryTime' does not exist in type '{ customerActivityNotifications: boolean; smsGatewayEnabled: boolean; emailGatewayEnabled: boolean; }'.
+views/Settings.tsx(3316,98): error TS2339: Property 'activateLicense' does not exist on type '{ auth: { login: (username: string, password?: string, mfaCode?: string) => Promise<{ status: number; error: string; data?: undefined; } | { status: number; data: any; error?: undefined; }>; }; ... 11 more ...; system: { ...; }; }'.
+views/settings/CurrencySettings.tsx(3,34): error TS2395: Individual declarations in merged declaration 'CurrencySettings' must be all exported or all local.
+views/settings/CurrencySettings.tsx(3,34): error TS2865: Import 'CurrencySettings' conflicts with local value, so must be declared with a type-only import when 'isolatedModules' is enabled.
+views/settings/CurrencySettings.tsx(9,14): error TS2395: Individual declarations in merged declaration 'CurrencySettings' must be all exported or all local.
+views/vat/VatSettings.tsx(56,48): error TS2339: Property 'registrationNumber' does not exist on type 'VATConfig'.
+views/vat/VatSettings.tsx(57,59): error TS2345: Argument of type '"registrationNumber"' is not assignable to parameter of type 'keyof VATConfig'.
+views/vat/VatSettings.tsx(79,48): error TS2339: Property 'defaultTaxCategory' does not exist on type 'VATConfig'.
+views/vat/VatSettings.tsx(80,59): error TS2345: Argument of type '"defaultTaxCategory"' is not assignable to parameter of type 'keyof VATConfig'.
+views/vat/VatSettings.tsx(95,48): error TS2339: Property 'outputTaxAccount' does not exist on type 'VATConfig'.
+views/vat/VatSettings.tsx(96,59): error TS2345: Argument of type '"outputTaxAccount"' is not assignable to parameter of type 'keyof VATConfig'.
+views/vat/VatSettings.tsx(110,48): error TS2339: Property 'inputTaxAccount' does not exist on type 'VATConfig'.
+views/vat/VatSettings.tsx(111,59): error TS2345: Argument of type '"inputTaxAccount"' is not assignable to parameter of type 'keyof VATConfig'.
+views/vat/VatSettings.tsx(125,48): error TS2339: Property 'marketAdjustmentAccount' does not exist on type 'VATConfig'.
+views/vat/VatSettings.tsx(126,59): error TS2345: Argument of type '"marketAdjustmentAccount"' is not assignable to parameter of type 'keyof VATConfig'.

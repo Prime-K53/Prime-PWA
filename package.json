@@ -1,0 +1,87 @@
+{
+  "name": "prime-erp-workspace",
+  "private": true,
+  "version": "1.0.0",
+  "main": "src-tauri/src/main.rs",
+  "engines": {
+    "node": ">=20.18.0"
+  },
+  "description": "Prime ERP System - Enterprise Resource Management",
+  "scripts": {
+    "start": "npm run tauri:dev",
+    "postinstall": "node scripts/postinstall.cjs",
+    "dev": "concurrently -n \"backend,frontend\" -c \"magenta,cyan\" \"npm run backend\" \"npm run frontend\"",
+    "backend": "npm --prefix backend run dev",
+    "frontend": "npm --prefix frontend run dev",
+    "install-all": "npm install && npm --prefix frontend install && npm --prefix backend install",
+    "electron": "node scripts/electron-launch.cjs",
+    "electron:dev": "node scripts/electron-dev.cjs",
+    "build:frontend": "npm --prefix frontend run build",
+    "build:electron": "node scripts/build-electron-dist.cjs",
+    "build": "npm run build:frontend",
+    "dist": "npm run build && npm run build:electron",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
+    "build:tauri": "tauri build"
+  },
+  "build": {
+    "appId": "com.primeerp.system.workspace",
+    "productName": "Prime ERP System",
+    "directories": {
+      "output": "release",
+      "buildResources": "electron"
+    },
+    "files": [
+      "electron/**/*",
+      "frontend/dist/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "backend",
+        "to": "backend",
+        "filter": [
+          "**/*",
+          "!storage/**",
+          "!tests/**",
+          "!**/*.log"
+        ]
+      }
+    ],
+    "artifactName": "PrimeERP-Setup-${version}.${ext}",
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "electron/Icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Prime ERP System"
+    }
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.1",
+    "concurrently": "^8.2.2",
+    "cross-env": "^10.1.0",
+    "electron": "^33.3.1",
+    "electron-builder": "^25.1.8"
+  },
+  "dependencies": {
+    "@types/qrcode": "^1.5.6",
+    "qrcode": "^1.5.4",
+    "sqlite3": "^6.0.1",
+    "typescript": "^6.0.2",
+    "zod": "^4.3.6"
+  },
+  "packageManager": "yarn@4.11.0+sha224.209a3e277c6bbc03df6e4206fbfcb0c1621c27ecf0688f79a0c619f0"
+}

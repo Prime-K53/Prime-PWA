@@ -1,0 +1,10 @@
+﻿views/inventory/components/ProductForecastDetail.tsx(185,6): error TS17008: JSX element 'div' has no corresponding closing tag.
+views/inventory/components/ProductForecastDetail.tsx(231,8): error TS17008: JSX element 'div' has no corresponding closing tag.
+views/inventory/components/ProductForecastDetail.tsx(234,12): error TS17008: JSX element 'div' has no corresponding closing tag.
+views/inventory/components/ProductForecastDetail.tsx(291,16): error TS17008: JSX element 'div' has no corresponding closing tag.
+views/inventory/components/ProductForecastDetail.tsx(295,20): error TS17008: JSX element 'div' has no corresponding closing tag.
+views/inventory/components/ProductForecastDetail.tsx(296,24): error TS17008: JSX element 'ResponsiveContainer' has no corresponding closing tag.
+views/inventory/components/ProductForecastDetail.tsx(297,28): error TS17008: JSX element 'ComposedChart' has no corresponding closing tag.
+views/inventory/components/ProductForecastDetail.tsx(314,32): error TS1109: Expression expected.
+views/inventory/components/ProductForecastDetail.tsx(314,54): error TS1005: '</' expected.
+views/inventory/components/ProductForecastDetail.tsx(314,54): error TS1005: '}' expected.

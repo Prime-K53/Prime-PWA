@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clearing Storage...</title>
+</head>
+<body>
+    <p>Clearing app data and redirecting to setup...</p>
+    <script>
+        // Clear all app-related storage
+        localStorage.removeItem('nexus_company_config');
+        localStorage.removeItem('nexus_initialized');
+        sessionStorage.removeItem('nexus_user');
+        
+        // Redirect to the app
+        setTimeout(() => {
+            window.location.href = '/#/setup';
+        }, 500);
+    </script>
+</body>
+</html>

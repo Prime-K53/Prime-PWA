@@ -1,0 +1,398 @@
+{
+  "totalPages": 1,
+  "pages": [
+    {
+      "pageNumber": 1,
+      "width": 210,
+      "height": 297,
+      "unit": "mm",
+      "elements": [
+        {
+          "type": "text",
+          "content": "BILL TO:",
+          "box": {
+            "x": 15,
+            "y": 35,
+            "width": 90,
+            "height": 5
+          },
+          "style": {
+            "fontSize": 8,
+            "fontWeight": "bold",
+            "color": "#64748b"
+          }
+        },
+        {
+          "type": "text",
+          "content": "Global Tech Industries",
+          "box": {
+            "x": 15,
+            "y": 40,
+            "width": 90,
+            "height": 5
+          },
+          "style": {
+            "fontWeight": "600"
+          }
+        },
+        {
+          "type": "text",
+          "content": "Friedrichstraße 123, Berlin",
+          "box": {
+            "x": 15,
+            "y": 45,
+            "width": 90,
+            "height": 5
+          },
+          "style": {
+            "fontSize": 10
+          }
+        },
+        {
+          "type": "text",
+          "content": "Invoice #: INV-2026-001",
+          "box": {
+            "x": 105,
+            "y": 35,
+            "width": 90,
+            "height": 5
+          },
+          "style": {
+            "fontWeight": "bold"
+          }
+        },
+        {
+          "type": "text",
+          "content": "Date: Jan 21, 2026",
+          "box": {
+            "x": 105,
+            "y": 40,
+            "width": 90,
+            "height": 5
+          },
+          "style": {
+            "fontSize": 10
+          }
+        },
+        {
+          "type": "text",
+          "content": "Due Date: Feb 20, 2026",
+          "box": {
+            "x": 105,
+            "y": 45,
+            "width": 90,
+            "height": 5
+          },
+          "style": {
+            "fontSize": 10,
+            "color": "#ef4444"
+          }
+        },
+        {
+          "type": "text",
+          "content": "Description",
+          "box": {
+            "x": 15,
+            "y": 50,
+            "width": 45,
+            "height": 8
+          },
+          "style": {
+            "fontWeight": "bold",
+            "fontSize": 9
+          }
+        },
+        {
+          "type": "text",
+          "content": "Qty",
+          "box": {
+            "x": 60,
+            "y": 50,
+            "width": 45,
+            "height": 8
+          },
+          "style": {
+            "fontWeight": "bold",
+            "fontSize": 9
+          }
+        },
+        {
+          "type": "text",
+          "content": "Unit Price",
+          "box": {
+            "x": 105,
+            "y": 50,
+            "width": 45,
+            "height": 8
+          },
+          "style": {
+            "fontWeight": "bold",
+            "fontSize": 9
+          }
+        },
+        {
+          "type": "text",
+          "content": "Total",
+          "box": {
+            "x": 150,
+            "y": 50,
+            "width": 45,
+            "height": 8
+          },
+          "style": {
+            "fontWeight": "bold",
+            "fontSize": 9
+          }
+        },
+        {
+          "type": "text",
+          "content": "Enterprise ERP Subscription - Professional Tier",
+          "box": {
+            "x": 15,
+            "y": 58,
+            "width": 45,
+            "height": 8
+          },
+          "style": {
+            "fontSize": 9
+          }
+        },
+        {
+          "type": "text",
+          "content": "1.00",
+          "box": {
+            "x": 60,
+            "y": 58,
+            "width": 45,
+            "height": 8
+          },
+          "style": {
+            "fontSize": 9
+          }
+        },
+        {
+          "type": "text",
+          "content": "€1,200.00",
+          "box": {
+            "x": 105,
+            "y": 58,
+            "width": 45,
+            "height": 8
+          },
+          "style": {
+            "fontSize": 9
+          }
+        },
+        {
+          "type": "text",
+          "content": "€1,200.00",
+          "box": {
+            "x": 150,
+            "y": 58,
+            "width": 45,
+            "height": 8
+          },
+          "style": {
+            "fontSize": 9
+          }
+        },
+        {
+          "type": "text",
+          "content": "On-site Integration Consultancy",
+          "box": {
+            "x": 15,
+            "y": 66,
+            "width": 45,
+            "height": 8
+          },
+          "style": {
+            "fontSize": 9
+          }
+        },
+        {
+          "type": "text",
+          "content": "15.5",
+          "box": {
+            "x": 60,
+            "y": 66,
+            "width": 45,
+            "height": 8
+          },
+          "style": {
+            "fontSize": 9
+          }
+        },
+        {
+          "type": "text",
+          "content": "€150.00",
+          "box": {
+            "x": 105,
+            "y": 66,
+            "width": 45,
+            "height": 8
+          },
+          "style": {
+            "fontSize": 9
+          }
+        },
+        {
+          "type": "text",
+          "content": "€2,092.50",
+          "box": {
+            "x": 150,
+            "y": 66,
+            "width": 45,
+            "height": 8
+          },
+          "style": {
+            "fontSize": 9
+          }
+        },
+        {
+          "type": "text",
+          "content": "Subtotal:",
+          "box": {
+            "x": 105,
+            "y": 74,
+            "width": 45,
+            "height": 5
+          },
+          "style": {}
+        },
+        {
+          "type": "text",
+          "content": "€3,292.50",
+          "box": {
+            "x": 150,
+            "y": 74,
+            "width": 45,
+            "height": 5
+          },
+          "style": {
+            "textAlign": "right"
+          }
+        },
+        {
+          "type": "line",
+          "thickness": 1,
+          "box": {
+            "x": 105,
+            "y": 84,
+            "width": 90,
+            "height": 1
+          },
+          "style": {
+            "padding": {
+              "top": 2,
+              "right": 0,
+              "bottom": 2,
+              "left": 0
+            }
+          }
+        },
+        {
+          "type": "text",
+          "content": "TOTAL:",
+          "box": {
+            "x": 105,
+            "y": 87,
+            "width": 45,
+            "height": 5
+          },
+          "style": {
+            "fontWeight": "bold"
+          }
+        },
+        {
+          "type": "text",
+          "content": "€3,918.08",
+          "box": {
+            "x": 150,
+            "y": 87,
+            "width": 45,
+            "height": 5
+          },
+          "style": {
+            "fontWeight": "bold",
+            "textAlign": "right",
+            "fontSize": 14
+          }
+        },
+        {
+          "type": "text",
+          "content": "INVOICE",
+          "box": {
+            "x": 15,
+            "y": 15,
+            "width": 90,
+            "height": 5
+          },
+          "style": {
+            "fontSize": 24,
+            "fontWeight": "bold",
+            "color": "#1e293b"
+          }
+        },
+        {
+          "type": "text",
+          "content": "Prime Solutions Ltd.",
+          "box": {
+            "x": 105,
+            "y": 15,
+            "width": 90,
+            "height": 5
+          },
+          "style": {
+            "fontWeight": "bold"
+          }
+        },
+        {
+          "type": "text",
+          "content": "London, United Kingdom",
+          "box": {
+            "x": 105,
+            "y": 20,
+            "width": 90,
+            "height": 5
+          },
+          "style": {
+            "fontSize": 9
+          }
+        },
+        {
+          "type": "text",
+          "content": "Thank you for your business. Please quote invoice number on all payments.",
+          "box": {
+            "x": 15,
+            "y": 267,
+            "width": 180,
+            "height": 5
+          },
+          "style": {
+            "fontSize": 8,
+            "textAlign": "center",
+            "color": "#64748b"
+          }
+        },
+        {
+          "type": "text",
+          "content": "Page {pageNumber} of {totalPages}",
+          "box": {
+            "x": 15,
+            "y": 272,
+            "width": 180,
+            "height": 5
+          },
+          "style": {
+            "fontSize": 8,
+            "textAlign": "right"
+          }
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "generatedAt": "2026-01-21T18:13:12.738Z",
+    "title": "Standard Invoice Layout"
+  }
+}

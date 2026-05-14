@@ -1,0 +1,339 @@
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { AlertTriangle, FileText, Loader2, RefreshCw, Download, ExternalLink } from 'lucide-react';
+import type { PDFPreviewSource } from './pdfPreviewUtils';
+import { downloadPdfSource, formatPdfSize, getPdfErrorMessage, preparePdfBytes } from './pdfPreviewUtils';
+import { platform } from '../../../../services/platform';
+
+const HARD_TIMEOUT_MS = 20000;
+const SLOW_WARN_MS = 10000;
+
+interface NativePdfPreviewProps {
+  source?: PDFPreviewSource | null;
+  directPath?: string | null;
+  className?: string;
+  title?: string;
+  hideHeader?: boolean;
+  onLoadSuccess?: () => void;
+  onLoadError?: (error: Error) => void;
+}
+
+const previewLog = (event: string, meta?: Record<string, unknown>) => {
+  const entry = { ts: Date.now(), event, ...meta };
+  if (platform.isDesktop) {
+    platform.api.log({ message: `[Preview] ${event}`, ...meta });
+  }
+  console.log('[Preview]', JSON.stringify(entry));
+};
+
+export const NativePdfPreview: React.FC<NativePdfPreviewProps> = ({
+  source = null,
+  directPath = null,
+  className = '',
+  title = 'PDF Preview',
+  hideHeader = false,
+  onLoadSuccess,
+  onLoadError,
+}) => {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const blobUrlRef = useRef<string | null>(null);
+  const tempFileRef = useRef<string | null>(null);
+  const loadedRef = useRef(false);
+
+  const [phase, setPhase] = useState<'idle' | 'prepare' | 'load' | 'done' | 'error'>('idle');
+  const [error, setError] = useState<string | null>(null);
+  const [diag, setDiag] = useState<Array<{ label: string; value: string }>>([]);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [slow, setSlow] = useState(false);
+  const [retry, setRetry] = useState(0);
+  const [size, setSize] = useState<string>('');
+
+  const cleanup = useCallback(() => {
+    loadedRef.current = false;
+    if (blobUrlRef.current) { URL.revokeObjectURL(blobUrlRef.current); blobUrlRef.current = null; }
+    if (tempFileRef.current && platform.isDesktop) {
+      platform.api.cleanupTempPdf(tempFileRef.current).catch(() => {});
+      tempFileRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    cleanup();
+    setPhase('idle'); setError(null); setDiag([]); setSlow(false); setPreviewUrl(null); setSize('');
+    if (!source && !directPath) return;
+
+    let dead = false;
+    const d: Array<{ label: string; value: string }> = [];
+
+    (async () => {
+      if (directPath) {
+        if (platform.isDesktop) {
+          tempFileRef.current = directPath;
+          const url = platform.api.getPdfPreviewUrl(directPath);
+          d.push({ label: 'Engine', value: platform.type === 'tauri' ? 'Tauri' : 'Electron' });
+          setPreviewUrl(url);
+          setSize('from worker');
+          if (dead) return;
+          setDiag(d);
+          setPhase('load');
+          previewLog('direct-path-loading', { path: directPath });
+        } else {
+          d.push({ label: 'Engine', value: 'Browser' });
+          setPreviewUrl(directPath);
+          setSize('');
+          if (dead) return;
+          setDiag(d);
+          setPhase('load');
+          previewLog('direct-path-loading', { path: directPath });
+        }
+        return;
+      }
+
+      if (!source) return;
+      setPhase('prepare');
+      try {
+        const bytes = await preparePdfBytes(source, title);
+        const kb = (bytes.byteLength / 1024).toFixed(1);
+        setSize(`${kb} KB`);
+        d.push({ label: 'Size', value: formatPdfSize(bytes.byteLength) });
+
+        if (platform.isDesktop) {
+          const r = await platform.api.writeTempPdf(Array.from(bytes), `pv_${Date.now()}.pdf`);
+          if (!r?.success) throw new Error(r?.error || 'Temp write failed');
+          tempFileRef.current = r.path;
+          const url = platform.api.getPdfPreviewUrl(r.path);
+          if (!url) throw new Error('Preview URL generation failed');
+          d.push({ label: 'Engine', value: platform.type === 'tauri' ? 'Tauri' : 'Electron' });
+          setPreviewUrl(url);
+          previewLog('temp-written', { path: r.path, bytes: bytes.byteLength });
+        } else {
+          const blob = new Blob([bytes], { type: 'application/pdf' });
+          blobUrlRef.current = URL.createObjectURL(blob);
+          d.push({ label: 'Engine', value: 'Browser' });
+          setPreviewUrl(blobUrlRef.current);
+        }
+
+        if (dead) return;
+        setDiag(d);
+        setPhase('load');
+        previewLog('preview-loading', { title });
+      } catch (err: any) {
+        if (dead) return;
+        const msg = getPdfErrorMessage(err);
+        d.push({ label: 'Error', value: msg });
+        setDiag(d); setError(msg); setPhase('error');
+        previewLog('preview-error', { title, error: msg });
+        onLoadError?.(err instanceof Error ? err : new Error(msg));
+      }
+    })();
+
+    return () => { dead = true; cleanup(); previewLog('preview-cancelled', { title }); };
+  }, [source, directPath, title, retry, cleanup, onLoadError]);
+
+  useEffect(() => {
+    if (phase !== 'load' || !previewUrl) return;
+
+    const el = iframeRef.current;
+    loadedRef.current = false;
+
+    const onIframeLoad = () => {
+      if (loadedRef.current) return;
+      loadedRef.current = true;
+      setPhase('done'); setSlow(false);
+      previewLog('iframe-loaded', { title });
+      onLoadSuccess?.();
+    };
+
+    if (el) {
+      el.addEventListener('load', onIframeLoad);
+    }
+
+    const slowTimer = setTimeout(() => {
+      if (!loadedRef.current) setSlow(true);
+    }, SLOW_WARN_MS);
+
+    const hardTimeout = setTimeout(() => {
+      if (loadedRef.current) return;
+      loadedRef.current = true;
+      const msg = 'PDF preview timed out — the viewer may not be available in this environment';
+      setError(msg); setPhase('error');
+      previewLog('timeout', { title });
+      onLoadError?.(new Error(msg));
+    }, HARD_TIMEOUT_MS);
+
+    return () => {
+      if (el) el.removeEventListener('load', onIframeLoad);
+      clearTimeout(slowTimer);
+      clearTimeout(hardTimeout);
+    };
+  }, [phase, previewUrl, onLoadSuccess, onLoadError, title]);
+
+  const handleRetry = () => { cleanup(); setError(null); setPhase('idle'); setRetry((k) => k + 1); previewLog('retry', { title }); };
+
+  const handleDownload = () => {
+    if (source) downloadPdfSource(source, title).catch((e) => { setError(getPdfErrorMessage(e)); setPhase('error'); });
+  };
+
+  const handleOpenSystemViewer = async () => {
+    if (!tempFileRef.current || !platform.isDesktop) return;
+    try {
+      await platform.api.openPdfWithSystemViewer(tempFileRef.current);
+      previewLog('system-viewer-opened', { path: tempFileRef.current });
+    } catch (err: any) {
+      previewLog('system-viewer-error', { error: getPdfErrorMessage(err) });
+    }
+  };
+
+  if (!source && !directPath) {
+    return (
+      <div className={`flex min-h-[320px] items-center justify-center ${className}`}>
+        <div className="text-center text-slate-400">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100">
+            <FileText className="h-6 w-6" />
+          </div>
+          <p className="mt-3 text-sm font-medium text-slate-500">{title}</p>
+          <p className="mt-1 text-xs">No preview available</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (phase === 'prepare') {
+    return (
+      <div className={`flex min-h-[320px] items-center justify-center ${className}`}>
+        <div className="text-center">
+          <Loader2 className="mx-auto h-6 w-6 animate-spin text-slate-900" />
+          <p className="mt-3 text-sm font-semibold text-slate-800">Preparing PDF…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (phase === 'error') {
+    return (
+      <div className={`flex min-h-[320px] items-center justify-center ${className}`}>
+        <div className="w-full max-w-md rounded-2xl border border-rose-200 bg-white p-6 shadow-sm">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-100 text-rose-600">
+              <AlertTriangle size={20} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-slate-900">Preview failed</p>
+              <p className="mt-1 text-xs leading-relaxed text-slate-500">{error}</p>
+              {diag.length > 0 && (
+                <div className="mt-3 space-y-1 rounded-xl bg-slate-50 p-3 text-[10px] text-slate-500">
+                  {diag.map((d) => (
+                    <div key={d.label} className="flex justify-between gap-4">
+                      <span className="font-semibold text-slate-600">{d.label}</span>
+                      <span className="break-all text-right">{d.value}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button onClick={handleRetry} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50">
+                  <RefreshCw className="h-3.5 w-3.5" /> Retry
+                </button>
+                {(tempFileRef.current || directPath) && platform.isDesktop && (
+                  <button onClick={handleOpenSystemViewer} className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100">
+                    <ExternalLink className="h-3.5 w-3.5" /> Open in System Viewer
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (hideHeader) {
+    return (
+      <div className={`relative flex h-full flex-col overflow-hidden ${className}`}>
+        {slow && phase === 'load' && (
+          <div className="z-10 border-b border-amber-200 bg-amber-50 px-4 py-2 text-[10px] text-amber-800">
+            Preview is taking longer than expected. If it doesn't load, try opening in system viewer.
+          </div>
+        )}
+
+        <div className="relative flex flex-1 flex-col overflow-hidden bg-slate-100">
+          {previewUrl && (
+            platform.isDesktop ? (
+              <embed
+                src={previewUrl}
+                type="application/pdf"
+                className="h-full w-full"
+                style={{ background: 'transparent' }}
+              />
+            ) : (
+              <iframe
+                ref={iframeRef}
+                src={previewUrl}
+                className="h-full w-full border-none"
+                title={title}
+                
+              />
+            )
+          )}
+          {phase === 'load' && !loadedRef.current && (
+            <div className="absolute inset-0 flex items-center justify-center bg-white/70">
+              <div className="text-center">
+                <Loader2 className="mx-auto h-6 w-6 animate-spin text-slate-900" />
+                <p className="mt-2 text-xs font-medium text-slate-500">
+                  {slow ? 'Still loading…' : 'Loading PDF…'}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`flex h-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-inner ${className}`}>
+      <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-white px-3 py-2 text-xs text-slate-500">
+        <div className="flex items-center gap-3 overflow-hidden">
+          <FileText className="h-4 w-4 shrink-0 text-blue-600" />
+          <span className="truncate font-medium text-slate-700">{title}</span>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          {size && <span className="text-slate-400">{size}</span>}
+          {phase === 'done' && <span className="font-medium text-emerald-600">Ready</span>}
+          <button onClick={handleDownload} className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700" title="Download PDF">
+            <Download className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      {slow && phase === 'load' && (
+        <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
+          Preview is taking longer than expected. If it doesn't load, try opening in system viewer.
+        </div>
+      )}
+
+      <div className="relative flex flex-1 flex-col overflow-hidden bg-slate-200">
+        {previewUrl && (
+          <iframe
+            ref={iframeRef}
+            src={previewUrl}
+            className="h-full w-full"
+            style={{ border: 'none' }}
+            title={title}
+          />
+        )}
+        {phase === 'load' && !loadedRef.current && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/70">
+            <div className="text-center">
+              <Loader2 className="mx-auto h-6 w-6 animate-spin text-slate-900" />
+              <p className="mt-2 text-xs font-medium text-slate-500">
+                {slow ? 'Still loading…' : 'Loading PDF…'}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default NativePdfPreview;
