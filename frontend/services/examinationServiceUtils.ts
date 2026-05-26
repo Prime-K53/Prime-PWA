@@ -4,31 +4,13 @@
  */
 
 import { getUrl } from '../config/api.js';
+import { getJsonRequestHeaders } from './requestHeaders';
 
 /**
  * Constructs proper API headers with user context from session storage
  */
 export const getHeaders = () => {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-  const userJson = sessionStorage.getItem('nexus_user');
-  if (userJson) {
-    try {
-      const user = JSON.parse(userJson);
-      if (user.id) headers['x-user-id'] = user.id;
-      if (user.role) headers['x-user-role'] = user.role;
-      if (user.email) headers['x-user-email'] = user.email;
-      headers['x-user-is-super-admin'] = user.isSuperAdmin === true ? 'true' : 'false';
-    } catch (e) {
-      console.warn('Failed to parse user from session storage', e);
-    }
-  } else {
-    headers['x-user-id'] = 'USR-0001';
-    headers['x-user-role'] = 'Admin';
-    headers['x-user-is-super-admin'] = 'true';
-  }
-  return headers;
+  return getJsonRequestHeaders();
 };
 
 /**
@@ -78,8 +60,11 @@ export const toServiceError = async (response: Response, fallback: string) => {
 
     try {
       const data = JSON.parse(raw);
-      const detail = data?.error || data?.message || data?.diagnostic;
-      if (detail) return `${fallback}: ${String(detail)}`;
+      const detailParts = [data?.error, data?.message, data?.diagnostic]
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+        .filter((value, index, values) => values.indexOf(value) === index);
+      if (detailParts.length > 0) return `${fallback}: ${detailParts.join(' - ')}${statusSuffix}`;
     } catch (parseError) {
       console.error(`[examinationService] Failed to parse JSON response:`, parseError);
       console.debug(`[examinationService] Raw response text:`, raw);

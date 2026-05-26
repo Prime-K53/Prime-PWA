@@ -6,7 +6,8 @@ import {
     AlertTriangle, Plus, Eye, Package, User, MapPin, Calendar, ShoppingBag
 } from 'lucide-react';
 import { Order, OrderPayment, OrderItem } from '../../../types';
-import { useData } from '../../../context/DataContext';
+import { useAuth } from '../../../context/AuthContext';
+import { useOrders } from '../../../context/OrdersContext';
 import { useDocumentPreview } from '../../../hooks/useDocumentPreview';
 import { useLocation } from 'react-router-dom';
 import DocLink from '../../../components/DocLink';
@@ -20,9 +21,8 @@ interface OrderDetailsProps {
 }
 
 export const OrderDetails: React.FC<OrderDetailsProps> = ({ order: initialOrder, onClose, onEdit, onAction }) => {
-    const {
-        companyConfig, orders = [], notify
-    } = useData();
+    const { companyConfig, notify } = useAuth();
+    const { orders = [] } = useOrders();
     const { handlePreview } = useDocumentPreview();
     const location = useLocation();
     const currency = companyConfig?.currencySymbol || '$';

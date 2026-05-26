@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Banknote, CreditCard, Smartphone, Briefcase, X, Wallet, Award, Clock, CheckCircle2, AlertCircle, ArrowLeftRight } from 'lucide-react';
 import type { PaymentDetail } from '../../../types';
-import { useData } from '../../../context/DataContext';
+import { useAuth } from '../../../context/AuthContext';
+import { useFinance } from '../../../context/FinanceContext';
 import { useBankingStore } from '../../../context/BankingContext';
 import { DEFAULT_ACCOUNTS } from '../../../constants';
 
@@ -35,7 +36,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     roundingAccumulation: _roundingAccumulation = 0,
     totalProfitMargin = 0
 }) => {
-    const { companyConfig, notify, invoices } = useData();
+    const { companyConfig, notify } = useAuth(); const { invoices } = useFinance();
     const { accounts: bankAccounts, fetchBankingData } = useBankingStore();
     const currency = companyConfig?.currencySymbol || '$';
     const [splitPayments, setSplitPayments] = useState<PaymentDetail[]>([]);

@@ -2,7 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Plus, PauseCircle, Printer, Book, Scissors, Image, Layout, PenTool, Box, Briefcase, Layers, FileText, Grid, Hash } from 'lucide-react';
 import { Item, ProductVariant } from '../../../types';
-import { useData } from '../../../context/DataContext';
+import { useAuth } from '../../../context/AuthContext';
+import { useProduction } from '../../../context/ProductionContext';
 import { useKeyboardListNavigation } from '../../../hooks/useKeyboardListNavigation';
 import { VariantSelectorModal, PrintingVariantModal } from './PosModals';
 
@@ -22,7 +23,7 @@ interface ProductGridProps {
 type ViewMode = 'Large' | 'Small' | 'List';
 
 export const ProductGrid: React.FC<ProductGridProps> = ({ inventory, addToCart, onConfigureService, onRecall, heldCount, onZReport }) => {
-    const { companyConfig, boms } = useData();
+    const { companyConfig } = useAuth(); const { boms } = useProduction();
     const searchInputRef = React.useRef<HTMLInputElement>(null);
     const currency = companyConfig.currencySymbol;
     const [searchTerm, setSearchTerm] = useState('');

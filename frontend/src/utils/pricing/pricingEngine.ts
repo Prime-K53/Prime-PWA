@@ -1,5 +1,12 @@
-import { getEffectiveMargin, applyMargin } from '../../../utils/getEffectiveMargin';
+import { getEffectiveMargin } from '../../../utils/getEffectiveMargin';
 import { roundToCurrency, safeNumber } from './helpers';
+import { applyProductPriceRounding } from '../../../services/pricingRoundingService';
+import { calculateMargin } from '../../../utils/roundingUtils';
+import {
+  calculatePricingAdjustmentTotal,
+  normalizePricingSnapshots,
+  resolveVolumeMarginValue,
+} from '../../../utils/pricingEngineShared';
 import {
   PricingInput,
   PricingResult,
@@ -9,21 +16,6 @@ import {
 } from './types';
 
 export const PRICING_ENGINE_VERSION = "1.0.0";
-
-const normalizeAdjustment = (adj: any): SnapshotEntry => ({
-  name: adj.name || 'Adjustment',
-  type: adj.type || (adj.percentage !== undefined ? 'PERCENTAGE' : 'FIXED'),
-  value: Number(adj.value) || 0,
-  percentage: adj.percentage ?? (adj.type === 'PERCENTAGE' ? adj.value : undefined),
-  adjustmentId: adj.adjustmentId,
-  adjustmentCategory: adj.adjustmentCategory,
-  isActive: adj.isActive !== false
-});
-
-const normalizeAdjustments = (input: any[] | undefined): SnapshotEntry[] => {
-  if (!input || !Array.isArray(input)) return [];
-  return input.map(normalizeAdjustment);
-};
 
 const validatePricingInput = (input: any): void => {
   if (input.adjustments !== undefined && !Array.isArray(input.adjustments)) {
@@ -50,50 +42,12 @@ const getCompanyConfig = (): any | null => {
   }
 };
 
-const getRoundingSettings = () => {
-  const config = getCompanyConfig();
-  return config?.pricingSettings || { enableRounding: true, defaultMethod: 'ALWAYS_UP_50', customStep: 50 };
-};
-
 const applyRounding = (price: number): number => {
-  const settings = getRoundingSettings();
-  if (!settings?.enableRounding) return roundToCurrency(price);
-
-  const method = settings.defaultMethod || 'ALWAYS_UP_50';
-  const step = settings.customStep || 50;
-  const original = roundToCurrency(price);
-
-  let rounded: number;
-  switch (method) {
-    case 'NEAREST_10':
-    case 'NEAREST_50':
-    case 'NEAREST_100':
-      const nearestStep = method === 'NEAREST_10' ? 10 : method === 'NEAREST_50' ? 50 : 100;
-      rounded = Math.round(original / nearestStep) * nearestStep;
-      break;
-    case 'ALWAYS_UP_10':
-    case 'ALWAYS_UP_50':
-    case 'ALWAYS_UP_100':
-    case 'ALWAYS_UP_500':
-    case 'ALWAYS_UP_CUSTOM':
-      const upStep = method === 'ALWAYS_UP_10' ? 10 : method === 'ALWAYS_UP_50' ? 50 : method === 'ALWAYS_UP_100' ? 100 : method === 'ALWAYS_UP_500' ? 500 : (step || 50);
-      rounded = Math.ceil(original / upStep) * upStep;
-      break;
-    case 'PSYCHOLOGICAL':
-      const mag = original >= 1000 ? 1000 : original >= 100 ? 100 : 10;
-      rounded = Math.floor(original / mag) * mag + (mag - 1);
-      if (rounded < original) rounded += mag;
-      break;
-    default:
-      rounded = original;
-  }
-
-  if (rounded < original) {
-    const minStep = method.includes('10') ? 10 : method.includes('50') ? 50 : method.includes('100') ? 100 : 50;
-    rounded = Math.ceil(original / minStep) * minStep;
-  }
-
-  return roundToCurrency(rounded);
+  return applyProductPriceRounding({
+    calculatedPrice: price,
+    companyConfig: getCompanyConfig(),
+    trackAnalytics: false,
+  }).roundedPrice;
 };
 
 const resolveMargin = async (
@@ -105,52 +59,15 @@ const resolveMargin = async (
   return { margin, shouldApply };
 };
 
-/**
- * Volume-discount tier resolver.
- * Returns the effective margin % for the given page count.
- * Tiers: 0-179→0%, 180-249→10%, 250-499→15%, 500-1000→25%.
- */
-const resolveVolumeMarginValue = (pages: number): number => {
-  if (pages >= 500) return 25;
-  if (pages >= 250) return 15;
-  if (pages >= 180) return 10;
-  return 0;
-};
-
-const calculateMarginAmount = (
-  baseCost: number,
-  margin: EffectiveMargin
-): number => {
-  if (margin.margin_type === 'percentage') {
-    return roundToCurrency(baseCost * (margin.margin_value / 100));
-  }
-  return roundToCurrency(margin.margin_value);
+const calculateMarginAmount = (baseCost: number, margin: EffectiveMargin): number => {
+  return calculateMargin(baseCost, margin);
 };
 
 const normalizeSnapshots = (
   rawSnapshots: SnapshotEntry[] | undefined,
   baseAmount: number
 ): SnapshotEntry[] => {
-  if (!rawSnapshots || rawSnapshots.length === 0) return [];
-
-  return rawSnapshots.map(snap => {
-    const value = safeNumber(snap.value, 0);
-    const isPct = snap.type === 'PERCENTAGE' || snap.type === 'PERCENT' || snap.type === 'percentage';
-    const calculatedAmount = isPct
-      ? roundToCurrency(baseAmount * (value / 100))
-      : roundToCurrency(value);
-
-    return {
-      name: snap.name || 'Adjustment',
-      type: isPct ? 'PERCENTAGE' : 'FIXED',
-      value,
-      percentage: isPct ? value : undefined,
-      calculatedAmount,
-      adjustmentId: snap.adjustmentId,
-      adjustmentCategory: snap.adjustmentCategory,
-      isActive: snap.isActive
-    };
-  });
+  return normalizePricingSnapshots(rawSnapshots, baseAmount) as SnapshotEntry[];
 };
 
 const injectProfitMarginSnapshot = (
@@ -176,9 +93,7 @@ const injectProfitMarginSnapshot = (
 };
 
 const calculateAdjustmentTotal = (snapshots: SnapshotEntry[]): number => {
-  return roundToCurrency(
-    snapshots.reduce((sum, s) => sum + (s.calculatedAmount || 0), 0)
-  );
+  return calculatePricingAdjustmentTotal(snapshots);
 };
 
 export async function calculateSellingPrice(
@@ -219,7 +134,7 @@ export async function calculateSellingPrice(
       totalPrice,
       cost: safeCost,
       marginAmount,
-      adjustmentSnapshots: (Object.freeze(normalizedAdjustments) as unknown) as SnapshotEntry[],
+      adjustmentSnapshots: normalizedAdjustments,
       adjustmentTotal,
       roundingDifference: 0,
       breakdown: {
@@ -272,7 +187,7 @@ export async function calculateSellingPrice(
     totalPrice,
     cost: runningCost,
     marginAmount,
-    adjustmentSnapshots: (Object.freeze(currentSnapshots) as unknown) as SnapshotEntry[],
+    adjustmentSnapshots: currentSnapshots,
     adjustmentTotal,
     roundingDifference: roundToCurrency(unitPrice - totalBeforeRounding),
     breakdown,

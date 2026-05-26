@@ -2,6 +2,7 @@ import { JobTicket, JobTicketSettings, JobTicketStatus, JobTicketPriority } from
 import { generateNextId } from '../utils/helpers';
 import { localFileStorage } from './localFileStorage';
 import { dbService } from './db';
+import { productionDb } from './productionDb';
 
 export interface JobTicketNotification {
   id: string;
@@ -56,8 +57,10 @@ const migrateLegacyData = async () => {
   if (typeof window === 'undefined') return;
 
   const migrationCompleted = localStorage.getItem(MIGRATION_KEY) === 'true';
-  const existingTickets = await dbService.getAll<JobTicket>('jobTickets');
-  const existingSettings = await dbService.get<{ id: string } & JobTicketSettings>('jobTicketSettings', SETTINGS_ID);
+  let existingTickets: JobTicket[];
+  try { existingTickets = await productionDb.jobTickets.toArray(); } catch { existingTickets = await dbService.getAll<JobTicket>('jobTickets'); }
+  let existingSettings: ({ id: string } & JobTicketSettings) | undefined;
+  try { existingSettings = await productionDb.jobTicketSettings.get(SETTINGS_ID); } catch { existingSettings = await dbService.get<{ id: string } & JobTicketSettings>('jobTicketSettings', SETTINGS_ID); }
 
   if (migrationCompleted && existingTickets.length > 0 && existingSettings) {
     return;
@@ -68,19 +71,18 @@ const migrateLegacyData = async () => {
 
   if (existingTickets.length === 0 && legacyTickets.length > 0) {
     for (const ticket of legacyTickets) {
-      await dbService.put('jobTickets', {
+      const migrated = {
         ...ticket,
         updatedAt: ticket.updatedAt || ticket.createdAt || new Date().toISOString(),
         sourceType: ticket.sourceType || 'manual'
-      } as JobTicket);
+      } as JobTicket;
+      try { await productionDb.jobTickets.put(migrated); } catch { await dbService.put('jobTickets', migrated); }
     }
   }
 
   if (!existingSettings) {
-    await dbService.put('jobTicketSettings', {
-      id: SETTINGS_ID,
-      ...(legacySettings || defaultSettings)
-    });
+    const migratedSettings = { id: SETTINGS_ID, ...(legacySettings || defaultSettings) };
+    try { await productionDb.jobTicketSettings.put(migratedSettings); } catch { await dbService.put('jobTicketSettings', migratedSettings); }
   }
 
   localStorage.setItem(MIGRATION_KEY, 'true');
@@ -88,23 +90,24 @@ const migrateLegacyData = async () => {
 
 const getStoredTickets = async (): Promise<JobTicket[]> => {
   await migrateLegacyData();
-  return dbService.getAll<JobTicket>('jobTickets');
+  try { return await productionDb.jobTickets.toArray(); } catch { return dbService.getAll<JobTicket>('jobTickets'); }
 };
 
 const getStoredSettings = async (): Promise<JobTicketSettings> => {
   await migrateLegacyData();
-  const saved = await dbService.get<{ id: string } & JobTicketSettings>('jobTicketSettings', SETTINGS_ID);
+  let saved: ({ id: string } & JobTicketSettings) | undefined;
+  try { saved = await productionDb.jobTicketSettings.get(SETTINGS_ID); } catch { saved = await dbService.get<{ id: string } & JobTicketSettings>('jobTicketSettings', SETTINGS_ID); }
   if (!saved) return defaultSettings;
   const { id: _id, ...settings } = saved;
   return { ...defaultSettings, ...settings };
 };
 
 const saveTicket = async (ticket: JobTicket) => {
-  await dbService.put('jobTickets', ticket);
+  try { await productionDb.jobTickets.put(ticket); } catch { await dbService.put('jobTickets', ticket); }
 };
 
 const saveSettings = async (settings: JobTicketSettings) => {
-  await dbService.put('jobTicketSettings', { id: SETTINGS_ID, ...settings });
+  try { await productionDb.jobTicketSettings.put({ id: SETTINGS_ID, ...settings }); } catch { await dbService.put('jobTicketSettings', { id: SETTINGS_ID, ...settings }); }
 };
 
 export const jobTicketService = {
@@ -114,7 +117,7 @@ export const jobTicketService = {
 
   getById: async (id: string): Promise<JobTicket | undefined> => {
     await migrateLegacyData();
-    return dbService.get<JobTicket>('jobTickets', id);
+    try { return await productionDb.jobTickets.get(id); } catch { return dbService.get<JobTicket>('jobTickets', id); }
   },
 
   create: async (ticket: Partial<JobTicket>): Promise<JobTicket> => {
@@ -229,7 +232,7 @@ export const jobTicketService = {
   delete: async (id: string): Promise<boolean> => {
     const existing = await jobTicketService.getById(id);
     if (!existing) return false;
-    await dbService.delete('jobTickets', id);
+    try { await productionDb.jobTickets.delete(id); } catch { await dbService.delete('jobTickets', id); }
     return true;
   },
 

@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Landmark, Plus, Edit2, Trash2, Search, X, CheckCircle, FolderTree, AlertCircle, History, BarChart3, ArrowRight, ExternalLink } from 'lucide-react';
-import { useData } from '../../context/DataContext';
+import { useFinance } from '../../context/FinanceContext';
+import { useAuth } from '../../context/AuthContext';
 import { Account, AccountType, LedgerEntry } from '../../types';
 import { format, parseISO } from 'date-fns';
 import { AccountDetailsDashboard } from './components/AccountDetailsDashboard';
@@ -9,7 +10,8 @@ import { AccountDetailsDashboard } from './components/AccountDetailsDashboard';
 const ChartOfAccounts: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { accounts, ledger, addAccount, updateAccount, deleteAccount, checkPermission, notify, companyConfig } = useData();
+  const { accounts, ledger, addAccount, updateAccount, deleteAccount } = useFinance();
+  const { checkPermission, notify, companyConfig } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<AccountType | 'All'>('All');
   const currency = companyConfig?.currencySymbol || '$';
@@ -115,7 +117,7 @@ const ChartOfAccounts: React.FC = () => {
         }
         
         const accountData: Account = {
-          id: `ACC-${Date.now()}`,
+          id: `ACC-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
           code: formData.code,
           name: formData.name,
           type: formData.type as AccountType

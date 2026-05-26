@@ -8,9 +8,9 @@ export const salesOrderService = {
   },
 
   async update(id: string, patch: Partial<SalesOrder>) {
-    const existing = await dbService.get('salesOrders', id);
+    const existing = await dbService.get<SalesOrder>('salesOrders', id);
     if (!existing) throw new Error('Not found');
-    const updated = { ...existing, ...patch };
+    const updated: SalesOrder = Object.assign({}, existing, patch);
     await dbService.put('salesOrders', updated);
     return updated;
   },

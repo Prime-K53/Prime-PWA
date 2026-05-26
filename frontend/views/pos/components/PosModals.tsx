@@ -2,7 +2,10 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 // PRICING RULE: Do NOT implement pricing logic here. All pricing MUST go through pricingEngine.ts
 import { X, CheckCircle, Printer, Usb, Wallet, UserPlus, Save, ArrowRight, Calculator, DollarSign, Tag, ShieldCheck, Plus, Search, Building2, FileText, Clock, Settings, Info, RefreshCw, Layers } from 'lucide-react';
 import { HeldOrder, Sale, Invoice, Item, ProductVariant, BillOfMaterial, WorkOrder, BOMTemplate } from '../../../types';
-import { useData } from '../../../context/DataContext';
+import { useAuth } from '../../../context/AuthContext';
+import { useFinance } from '../../../context/FinanceContext';
+import { useInventory } from '../../../context/InventoryContext';
+import { useSales } from '../../../context/SalesContext';
 import { DEFAULT_ACCOUNTS, ACCOUNT_IDS } from '../../../constants';
 import { hardwareService } from '../../../services/hardwareService';
 import { generateAccountNumber, roundFinancial, formatNumber, roundToCurrency } from '../../../utils/helpers';
@@ -24,7 +27,7 @@ export const PrintingVariantModal: React.FC<{
     onSelect: (variant: any) => void;
     onClose: () => void;
 }> = ({ product, bom, materials, onSelect, onClose }) => {
-    const { companyConfig, notify, inventory, marketAdjustments } = useData();
+    const { companyConfig, notify } = useAuth(); const { inventory, marketAdjustments } = useInventory();
     const currency = companyConfig.currencySymbol;
     const [bomTemplates, setBomTemplates] = useState<BOMTemplate[]>([]);
     const [attributes, setAttributes] = useState<Record<string, any>>({
@@ -123,7 +126,7 @@ export const PrintingVariantModal: React.FC<{
         const variantName = `${product.name} (${Object.entries(attributes).map(([k, v]) => `${k}: ${v}`).join(', ')})`;
         const virtualVariant = {
             ...product,
-            id: `${product.id}-${Date.now()}`,
+            id: `${product.id}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
             parentId: product.id,
             name: variantName,
             attributes: attributes,
@@ -210,13 +213,28 @@ export const ServiceCalculatorModal: React.FC<{
     onConfirm: (pricing: DynamicServicePricingResult) => void;
     onClose: () => void;
 }> = ({ service, currencySymbol, initialPages = 1, initialCopies = 1, onConfirm, onClose }) => {
-    const { inventory = [], marketAdjustments = [], companyConfig } = useData();
+    const { companyConfig } = useAuth(); const { inventory = [], marketAdjustments = [] } = useInventory();
     const [pages, setPages] = useState(Math.max(1, Number(initialPages) || 1));
     const [copies, setCopies] = useState(Math.max(1, Number(initialCopies) || 1));
     const [isCalculating, setIsCalculating] = useState(false);
     const [enginePricing, setEnginePricing] = useState<DynamicServicePricingResult | null>(null);
+    const [finishingCostOverrides, setFinishingCostOverrides] = useState<Record<string, number>>({});
 
     const config = service.serviceConfig;
+
+    useEffect(() => {
+        let mounted = true;
+        dbService.getSetting<Record<string, number>>('finishingOptionCosts')
+            .then((savedCosts) => {
+                if (!mounted) return;
+                setFinishingCostOverrides(savedCosts || {});
+            })
+            .catch(() => {
+                if (!mounted) return;
+                setFinishingCostOverrides({});
+            });
+        return () => { mounted = false; };
+    }, []);
 
     const normalizedAdjustments = useMemo(() => {
         return (marketAdjustments || [])
@@ -229,6 +247,8 @@ export const ServiceCalculatorModal: React.FC<{
                 name: adj.name,
                 type: adj.type,
                 value: adj.value,
+                percentage: adj.percentage ?? adj.value,
+                calculatedAmount: adj.value,
                 adjustmentId: adj.id,
                 isActive: true
             }));
@@ -236,8 +256,24 @@ export const ServiceCalculatorModal: React.FC<{
 
     const computePageScaledCost = useCallback((pageCount: number, copyCount: number): number => {
         const sp = (service as any).smartPricing;
+        const defaultFinishingCosts: Record<string, number> = {
+            binding: 150,
+            coverPages: 20,
+            cutting: 30,
+            holePunch: 20,
+            folding: 15,
+            stapling: 10
+        };
 
         if (sp) {
+            const savedPages = Math.max(1, Number(sp.pages) || 1);
+            const savedCopies = Math.max(1, Number(sp.copies) || 1);
+            const savedBaseCost = Number(sp.baseCost) || 0;
+
+            if (savedBaseCost > 0 && savedPages === pageCount && savedCopies === copyCount) {
+                return savedBaseCost;
+            }
+
             let paperCost = 0;
             const paper = inventory.find((i: any) => i.id === sp.paperItemId);
             if (paper) {
@@ -258,12 +294,27 @@ export const ServiceCalculatorModal: React.FC<{
                 tonerCost = Number((totalPages * (tonerUnitCost / capacity)).toFixed(2));
             }
 
-            const finishingCost = ((sp.finishingEnabled || []) as string[]).reduce((sum: number, id: string) => {
-                const FINISHING_DEFAULTS: Record<string, number> = {
-                    binding: 150, coverPages: 20, cutting: 30,
-                    holePunch: 20, folding: 15, stapling: 10
-                };
-                return sum + ((FINISHING_DEFAULTS[id] || 0) * copyCount);
+            const enabledFinishingIds = ((sp.finishingEnabled || []) as string[]);
+            const savedFinishingSelections = Array.isArray(sp.finishingSelections) ? sp.finishingSelections : [];
+            const savedFinishingCostMap = (sp.finishingOptionCosts || {}) as Record<string, number>;
+            const savedFinishingFallbackPerOption = enabledFinishingIds.length > 0 && Number(sp.finishingCost) > 0
+                ? (Number(sp.finishingCost) / (enabledFinishingIds.length * savedCopies))
+                : 0;
+
+            const finishingCost = enabledFinishingIds.reduce((sum: number, id: string) => {
+                const selection = savedFinishingSelections.find((option: any) => option?.id === id);
+                const configuredOption = companyConfig?.productionSettings?.finishingOptions?.find((option: any) => option?.id === id);
+                const configuredCost = Number(
+                    selection?.price
+                    ?? savedFinishingCostMap[id]
+                    ?? finishingCostOverrides[id]
+                    ?? configuredOption?.price
+                ) || 0;
+                const optionCost = configuredCost > 0
+                    ? configuredCost
+                    : (savedFinishingFallbackPerOption > 0 ? savedFinishingFallbackPerOption : (defaultFinishingCosts[id] || 0));
+
+                return sum + (optionCost * copyCount);
             }, 0);
 
             return paperCost + tonerCost + finishingCost;
@@ -273,7 +324,7 @@ export const ServiceCalculatorModal: React.FC<{
         const baselinePages = Number((service as any).pages) || 1;
         const scaledCostPerCopy = flatCostPerCopy * (pageCount / baselinePages);
         return scaledCostPerCopy * copyCount;
-    }, [service, inventory, config]);
+    }, [service, inventory, config, companyConfig?.productionSettings?.finishingOptions, finishingCostOverrides]);
 
     useEffect(() => {
         let mounted = true;
@@ -343,6 +394,14 @@ export const ServiceCalculatorModal: React.FC<{
 
     const activePricing = enginePricing;
     const formatCurrency = (value: number) => `${currencySymbol}${formatNumber(value)}`;
+    const marginBaseAmount = roundToCurrency(
+        Number(activePricing?.totalCost || 0)
+        + Math.max(0, Number(activePricing?.adjustmentTotal || 0) - Number(activePricing?.marginAmount || 0))
+    );
+    const effectiveMarginPercent = marginBaseAmount > 0
+        ? roundToCurrency((Number(activePricing?.marginAmount || 0) / marginBaseAmount) * 100)
+        : 0;
+    const formatPercent = (value: number) => `${Number(value.toFixed(1)).toString()}%`;
 
     if (!activePricing) return null;
 
@@ -439,7 +498,7 @@ export const ServiceCalculatorModal: React.FC<{
                                     <div className="flex items-center gap-1.5">
                                         <span className="text-[13px] text-blue-700">Profit Margin</span>
                                         <span className="text-[10px] bg-blue-100 text-blue-700 px-1 py-0.5 rounded font-semibold">
-                                            +{Math.round((activePricing.marginAmount / (activePricing.unitCostPerCopy * activePricing.copies)) * 100)}%
+                                            +{formatPercent(effectiveMarginPercent)}
                                         </span>
                                     </div>
                                     <span className="text-[13px] font-semibold text-blue-700 tabular-nums">+{formatCurrency(activePricing.marginAmount)}</span>
@@ -509,7 +568,7 @@ export const CustomerModal: React.FC<{
     onSelect: (name: string) => void;
     onClose: () => void;
 }> = ({ onSelect, onClose }) => {
-    const { invoices, customers, companyConfig, notify } = useData();
+    const { companyConfig, notify } = useAuth(); const { invoices } = useFinance(); const { customers } = useSales();
     const [showQuickAdd, setShowQuickAdd] = useState(false);
     const [newCustomerName, setNewCustomerName] = useState('');
     const [newCustomerContact, setNewCustomerContact] = useState('');
@@ -769,7 +828,7 @@ export const VariantSelectorModal: React.FC<{
     onSelect: (variant: ProductVariant) => void;
     onClose: () => void;
 }> = ({ product, onSelect, onClose }) => {
-    const { companyConfig } = useData();
+    const { companyConfig } = useAuth();
     const currency = companyConfig.currencySymbol;
     const [quantity, setQuantity] = useState(1);
 

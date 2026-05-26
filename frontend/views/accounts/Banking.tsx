@@ -6,6 +6,8 @@ import {
 import { useBankingStore } from '../../context/BankingContext';
 import { useData, REFRESH_INTERVAL } from '../../context/DataContext';
 import { useModuleRefresh } from '../../hooks/useModuleRefresh';
+import { useAuth } from '../../context/AuthContext';
+import { useFinance } from '../../context/FinanceContext';
 import {
   Building2, Clock, TrendingUp, TrendingDown, AlertTriangle, DollarSign, Target,
   Calendar, Download, Filter, RefreshCw, ChevronDown, CheckCircle, Wallet,
@@ -41,7 +43,9 @@ const Banking: React.FC = () => {
     acknowledgeAlert, createCategory, updateCategory, deleteCategory,
     saveExchangeRate
   } = useBankingStore();
-  const { companyConfig, recurringInvoices = [], refreshAllData } = useData();
+  const { refreshAllData } = useData();
+  const { companyConfig } = useAuth();
+  const { recurringInvoices } = useFinance();
   const currency = companyConfig?.currencySymbol || '$';
 
   // 5-minute poll + focus refresh
@@ -579,7 +583,7 @@ const Banking: React.FC = () => {
       amount,
       type: transactionForm.type,
       description: transactionForm.description.trim() || transactionForm.type,
-      reference: transactionForm.reference.trim() || `TXN-${Date.now()}`,
+      reference: transactionForm.reference.trim() || `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
       bankAccountId: transactionForm.bankAccountId,
       categoryId: transactionForm.categoryId || undefined,
       category: categories.find(c => c.id === transactionForm.categoryId)?.name,

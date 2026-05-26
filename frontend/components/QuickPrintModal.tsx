@@ -6,6 +6,7 @@ interface QuickPrintModalProps {
   onClose: () => void;
   type: 'photocopy' | 'printing';
   pricePerPage: number;
+  costPerPage?: number;
   currency: string;
   staplePrice?: number;
   onConfirm: (quantity: number, pages: number, total: number, type: 'photocopy' | 'printing', pinningCost?: number, pinningCount?: number) => void;
@@ -21,6 +22,7 @@ const QuickPrintModal: React.FC<QuickPrintModalProps> = ({
   onClose,
   type,
   pricePerPage,
+  costPerPage,
   currency,
   onConfirm,
   pinningItem,
@@ -31,6 +33,7 @@ const QuickPrintModal: React.FC<QuickPrintModalProps> = ({
 
   const totalPages = quantity * pagesPerCopy;
   const printTotal = totalPages * pricePerPage;
+  const materialCost = costPerPage ? totalPages * costPerPage : 0;
 
   // Auto-calculate pinning/stapling cost per copy (based on settings) - not visible to customer
   const pinningCost = useMemo(() => {
@@ -136,6 +139,18 @@ const QuickPrintModal: React.FC<QuickPrintModalProps> = ({
               <span className="text-[13px] font-medium text-slate-600">Total Pages:</span>
               <span className="font-semibold text-slate-800 tabular-nums text-right">{totalPages}</span>
             </div>
+            {costPerPage ? (
+              <>
+                <div className="flex justify-between items-center pt-1.5 border-t border-slate-100">
+                  <span className="text-[12px] text-slate-500">Material Cost ({currency}{costPerPage.toFixed(2)}/pg)</span>
+                  <span className="font-medium text-slate-600 tabular-nums text-right text-[12px]">{currency}{materialCost.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-[12px] text-emerald-600 font-medium">Estimated Profit</span>
+                  <span className="font-medium text-emerald-600 tabular-nums text-right text-[12px]">+{currency}{(finalTotal - materialCost).toFixed(2)}</span>
+                </div>
+              </>
+            ) : null}
             <div className="flex justify-between items-center pt-1.5 border-t border-slate-200">
               <span className="font-semibold text-slate-700" style={{ fontSize: '13.5px' }}>Total:</span>
               <span className="font-bold text-emerald-600 tabular-nums text-right" style={{ fontSize: '18px' }}>

@@ -9,11 +9,17 @@ import { publishSystemAlert } from '../services/systemAlertService';
 import { isPasswordProtectionEnabled, normalizeSecuritySettings, withNormalizedSecurityConfig } from '../utils/securitySettings';
 import { DEFAULT_SHARED_NUMBERING_RULE, normalizeCompanyNumberingConfig } from '../utils/numbering';
 import { hydrateCompanyPdfAssets } from '../utils/companyAssetUtils';
+import {
+  clearStoredUserSession,
+  getAuthInvalidEventName,
+  getStoredUserSession,
+  persistUserSession
+} from '../services/authSession';
 
 interface Notification {
   id: string;
   message: string;
-  type: 'success' | 'error' | 'info';
+  type: 'success' | 'error' | 'info' | 'warning';
 }
 
 interface AuditParams {
@@ -43,7 +49,7 @@ interface AuthContextType {
   dbSyncStatus: 'idle' | 'connected' | 'syncing' | 'error' | 'restricted';
   lastSyncTime: string | null;
   
-  notify: (message: string, type: 'success' | 'error' | 'info') => void;
+  notify: (message: string, type: 'success' | 'error' | 'info' | 'warning') => void;
   clearNotification: () => void;
   login: (username: string, password?: string, mfaCode?: string) => Promise<'SUCCESS' | 'INVALID' | 'MFA_REQUIRED' | 'EXPIRED'>;
   logout: () => void;
@@ -80,14 +86,20 @@ export const hashPassword = async (text: string): Promise<string> => {
   
   // Fallback for non-secure contexts (http/IP) where crypto.subtle is unavailable
   if (!window.isSecureContext || !crypto.subtle) {
-    // Non-secure context detected. Using insecure fallback hash.
+    console.warn('[Auth] Non-secure context detected. Password hashing is degraded.');
     let hash = 0;
+    const salt = 'PrimeERP2024';
     for (let i = 0; i < text.length; i++) {
-      const char = text.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; // Convert to 32bit integer
+      const code = text.charCodeAt(i);
+      hash = ((hash << 7) - hash) + code + (salt.charCodeAt(i % salt.length) << 4);
+      hash = hash & 0x7FFFFFFF;
     }
-    return 'insecure_' + Math.abs(hash).toString(16);
+    let h2 = 0;
+    for (let i = 0; i < text.length; i++) {
+      h2 = ((h2 << 5) - h2) + text.charCodeAt(i);
+      h2 = h2 & 0x7FFFFFFF;
+    }
+    return `INSECURE_${Math.abs(hash).toString(16).padStart(8, '0')}${Math.abs(h2).toString(16).padStart(8, '0')}`;
   }
 
   const msgBuffer = new TextEncoder().encode(text);
@@ -184,7 +196,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           trackMachineDownTime: true,
           showKioskSummary: true,
           defaultWorkCenterId: 'WC-MAIN',
-          defaultExamBomId: 'BOM-EXAM-STD'
+          defaultExamBomId: 'BOM-EXAM-STD',
+          finishingOptions: []
       },
       enabledModules: {
           manufacturing: true,
@@ -227,7 +240,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               allowDiscounts: true,
               showCategoryFilters: true,
               receiptFooter: '',
-              defaultPaymentMethod: 'Cash'
+              defaultPaymentMethod: 'Cash',
+              photocopyCostPerPage: 0,
+              typePrintingCostPerPage: 0,
+              showShortcutHints: true,
+              shortcutLabels: { F1: '', F2: '', F3: '', F10: '' }
           }
       },
       pricingSettings: { ...DEFAULT_PRICING_SETTINGS },
@@ -292,9 +309,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Sync user to sessionStorage for API auth bypass
     if (user) {
-      sessionStorage.setItem('nexus_user', JSON.stringify(user));
+      persistUserSession(user as any);
     } else {
-      sessionStorage.removeItem('nexus_user');
+      clearStoredUserSession();
     }
 
     return () => {
@@ -336,18 +353,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         let restoredSession: User | null = null;
-        const savedSession = sessionStorage.getItem('nexus_user');
+        const savedSession = getStoredUserSession<User>();
         if (savedSession) {
-          try {
-            const parsed = JSON.parse(savedSession);
-            const expiry = parsed?.tokenExpiry ? new Date(parsed.tokenExpiry).getTime() : 0;
-            if (isPasswordBypassSession(parsed) || (expiry && expiry > Date.now())) {
-              restoredSession = parsed;
-            } else {
-              sessionStorage.removeItem('nexus_user');
-            }
-          } catch {
-            sessionStorage.removeItem('nexus_user');
+          const hydrated = persistUserSession(savedSession);
+          const expiry = hydrated?.tokenExpiry ? new Date(hydrated.tokenExpiry).getTime() : 0;
+          if (hydrated && (isPasswordBypassSession(hydrated) || (expiry && expiry > Date.now()))) {
+            restoredSession = hydrated as User;
+          } else {
+            clearStoredUserSession();
           }
         }
 
@@ -369,17 +382,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           localStorage.setItem('nexus_initialized', 'true');
         }
         if (!setupComplete) {
-          sessionStorage.removeItem('nexus_user');
+          clearStoredUserSession();
           setUser(null);
         } else if (!isPasswordProtectionEnabled(effectiveConfig)) {
           const activeSession = restoredSession && !isPasswordBypassSession(restoredSession)
             ? restoredSession
-            : buildPasswordBypassSession(effectiveConfig, u);
+            : persistUserSession(buildPasswordBypassSession(effectiveConfig, u));
           setUser(activeSession);
         } else if (restoredSession && !isPasswordBypassSession(restoredSession)) {
           setUser(restoredSession);
         } else {
-          sessionStorage.removeItem('nexus_user');
+          clearStoredUserSession();
           setUser(null);
         }
         setRequiresSetup(!setupComplete);
@@ -433,17 +446,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loadInitData();
   }, []);
 
-  const notify = useCallback((message: string, type: 'success' | 'error' | 'info') => {
-    setNotification({ id: Date.now().toString(), message, type });
+  const notify = useCallback((message: string, type: 'success' | 'error' | 'info' | 'warning') => {
+    setNotification({ id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, message, type });
   }, []);
 
   const clearNotification = useCallback(() => {
     setNotification(null);
   }, []);
 
+  useEffect(() => {
+    const authInvalidEvent = getAuthInvalidEventName();
+
+    const handleAuthInvalid = (event: Event) => {
+      const customEvent = event as CustomEvent<{ reason?: string }>;
+      const reason = customEvent.detail?.reason || 'Your session has expired. Please sign in again.';
+      const passwordProtectionEnabled = isPasswordProtectionEnabled(companyConfig);
+
+      if (!passwordProtectionEnabled && !requiresSetup) {
+        const bypassSession = persistUserSession(buildPasswordBypassSession(withNormalizedSecurityConfig(companyConfig), allUsers));
+        setUser(bypassSession);
+        notify(reason, 'info');
+        return;
+      }
+
+      clearStoredUserSession();
+      setUser(null);
+      notify(reason, 'error');
+    };
+
+    window.addEventListener(authInvalidEvent, handleAuthInvalid as EventListener);
+    return () => window.removeEventListener(authInvalidEvent, handleAuthInvalid as EventListener);
+  }, [allUsers, companyConfig, notify, requiresSetup]);
+
   const addAuditLog = useCallback(async (params: AuditParams) => {
     const entry: AuditLogEntry = {
-        id: `LOG-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+        id: `LOG-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
         date: new Date().toISOString(),
         action: params.action,
         entityType: params.entityType,
@@ -470,9 +507,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Found users in DB
 
         if (!passwordProtectionEnabled) {
-            const bypassSession = buildPasswordBypassSession(withNormalizedSecurityConfig(companyConfig), dbUsers);
+            const bypassSession = persistUserSession(buildPasswordBypassSession(withNormalizedSecurityConfig(companyConfig), dbUsers));
             setUser(bypassSession);
-            sessionStorage.setItem('nexus_user', JSON.stringify(bypassSession));
             return 'SUCCESS';
         }
         
@@ -508,13 +544,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         const sessionTimeoutMinutes = Math.max(5, Number(companyConfig?.securitySettings?.sessionTimeoutMinutes) || 120);
         const sessionDuration = sessionTimeoutMinutes * 60 * 1000;
-        const sessionUser = { 
+        const sessionUser = persistUserSession({
             ...foundUser, 
-            tokenExpiry: new Date(Date.now() + sessionDuration).toISOString() 
-        };
+            tokenExpiry: new Date(Date.now() + sessionDuration).toISOString(),
+            authMode: 'local'
+        });
 
         setUser(sessionUser);
-        sessionStorage.setItem('nexus_user', JSON.stringify(sessionUser));
         
         // Login successful
         
@@ -543,13 +579,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
         const passwordProtectionEnabled = isPasswordProtectionEnabled(companyConfig);
         if (!passwordProtectionEnabled && !requiresSetup) {
-            const bypassSession = buildPasswordBypassSession(withNormalizedSecurityConfig(companyConfig), allUsers);
+            const bypassSession = persistUserSession(buildPasswordBypassSession(withNormalizedSecurityConfig(companyConfig), allUsers));
             setUser(bypassSession);
-            sessionStorage.setItem('nexus_user', JSON.stringify(bypassSession));
             return;
         }
         setUser(null);
-        sessionStorage.removeItem('nexus_user');
+        clearStoredUserSession();
     }
   }, [user, addAuditLog, companyConfig, requiresSetup, allUsers]);
 
@@ -629,14 +664,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
     const passwordProtectionEnabled = isPasswordProtectionEnabled(normalizedConfig);
     if (!passwordProtectionEnabled) {
-      const bypassSession = buildPasswordBypassSession(normalizedConfig, allUsers);
+      const bypassSession = persistUserSession(buildPasswordBypassSession(normalizedConfig, allUsers));
       if (!user || isPasswordBypassSession(user)) {
         setUser(bypassSession);
-        sessionStorage.setItem('nexus_user', JSON.stringify(bypassSession));
       }
     } else if (isPasswordBypassSession(user)) {
       setUser(null);
-      sessionStorage.removeItem('nexus_user');
+      clearStoredUserSession();
     }
     notify('System config saved', 'success');
   };
@@ -724,18 +758,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (isPasswordProtectionEnabled(normalizedConfig)) {
       setUser(null);
-      sessionStorage.removeItem('nexus_user');
+      clearStoredUserSession();
     } else {
-      const bypassSession = buildPasswordBypassSession(normalizedConfig, updatedUsers);
+      const bypassSession = persistUserSession(buildPasswordBypassSession(normalizedConfig, updatedUsers));
       setUser(bypassSession);
-      sessionStorage.setItem('nexus_user', JSON.stringify(bypassSession));
     }
   };
 
   const setFinancialYear = (year: number) => setActiveFinancialYear(year);
 
   const addReminder = useCallback(async (text: string, date?: string) => {
-      const r: Reminder = { id: `REM-${Date.now()}`, text, date: date || new Date().toISOString(), completed: false };
+      const r: Reminder = { id: `REM-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, text, date: date || new Date().toISOString(), completed: false };
       await dbService.put('reminders', r);
       setReminders(prev => [r, ...prev]);
   }, []);

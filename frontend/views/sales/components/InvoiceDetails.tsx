@@ -8,9 +8,13 @@ import {
     ChevronRight, Send, ExternalLink, TrendingUp, BarChart3, Zap, Lock, RefreshCw, Ban, Truck, Eye, Percent, User, Wallet
 } from 'lucide-react';
 import { Invoice, CustomerPayment, InvoiceAllocation } from '../../../types';
-import { useData } from '../../../context/DataContext';
+import { useAuth } from '../../../context/AuthContext';
+import { useFinance } from '../../../context/FinanceContext';
+import { useSales } from '../../../context/SalesContext';
+import { useExamination } from '../../../context/ExaminationContext';
 import { useDocumentPreview } from '../../../hooks/useDocumentPreview';
 import TransactionPricingInsights from './TransactionPricingInsights';
+import { enrichInvoiceWithBatchPricing, findMatchingExaminationBatch } from '../../../utils/examinationInvoicePricing';
 
 interface InvoiceDetailsProps {
     invoice: Invoice;
@@ -20,11 +24,10 @@ interface InvoiceDetailsProps {
 }
 
 export const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoice: initialInvoice, onClose, onEdit, onAction }) => {
-    const {
-        companyConfig, customerPayments = [], invoices = [], deliveryNotes = [],
-        ledger = [], accounts = [], auditLogs = [], customers = [],
-        updateCustomerPayment, updateInvoice, notify, addCustomerPayment
-    } = useData();
+    const { companyConfig, auditLogs, notify } = useAuth();
+    const { customerPayments = [], invoices = [], deliveryNotes = [], ledger = [], accounts = [], updateCustomerPayment, updateInvoice, addCustomerPayment } = useFinance();
+    const { customers = [] } = useSales();
+    const { batches = [] } = useExamination();
 
     const { handlePreview } = useDocumentPreview();
     const navigate = useNavigate();
@@ -41,6 +44,16 @@ export const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoice: initial
     const isExaminationInvoice = String((invoice as any).originModule || (invoice as any).origin_module || '').toLowerCase() === 'examination'
         || String((invoice as any).documentTitle || (invoice as any).document_title || '').toLowerCase().includes('examination invoice')
         || String((invoice as any).reference || '').toUpperCase().startsWith('EXM-BATCH-');
+    const matchingExaminationBatch = useMemo(
+        () => isExaminationInvoice ? findMatchingExaminationBatch(invoice, batches) : undefined,
+        [batches, invoice, isExaminationInvoice]
+    );
+    const pricingInsightTransaction = useMemo(
+        () => (isExaminationInvoice && matchingExaminationBatch)
+            ? enrichInvoiceWithBatchPricing(invoice as Invoice & Record<string, unknown>, matchingExaminationBatch)
+            : invoice,
+        [invoice, isExaminationInvoice, matchingExaminationBatch]
+    );
     
     // Debug logging to help verify invoice type detection - Removed due to console spam
     
@@ -65,7 +78,7 @@ export const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoice: initial
         try {
             if (newStatus === 'Paid' && !isPaid) {
                 // LOGIC LINK: "Force Paid" must generate financial history.
-                const paymentId = `PAY-FORCE-${Date.now().toString().slice(-4)}`;
+                const paymentId = `PAY-FORCE-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
                 const payment: CustomerPayment = {
                     id: paymentId,
                     date: new Date().toISOString(),
@@ -320,7 +333,7 @@ export const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoice: initial
 
                     {activeTab === 'Financials' && (
                         <div className="space-y-6 animate-in fade-in duration-300">
-                            <TransactionPricingInsights transaction={invoice} currencySymbol={currency} />
+                            <TransactionPricingInsights transaction={pricingInsightTransaction} currencySymbol={currency} />
 
                             <div className="bg-white rounded-[1.25rem] border border-slate-200 overflow-hidden shadow-sm">
                                 <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">

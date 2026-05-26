@@ -10,7 +10,7 @@ export const config = {
   tonerMgPerSheet: parseInt(import.meta.env.VITE_TONER_MG || '20'),
   
   // API
-  apiBaseUrl: import.meta.env.VITE_API_URL || 'https://prime-erp-system.onrender.com',
+  apiBaseUrl: import.meta.env.VITE_API_URL || 'http://localhost:3000',
   
   // Features
   enableMultiCurrency: import.meta.env.VITE_ENABLE_MULTI_CURRENCY === 'true',

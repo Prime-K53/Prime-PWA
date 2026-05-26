@@ -56,7 +56,7 @@ export const CurrencySettings: React.FC = () => {
   const handleAddRate = async () => {
     try {
       const rate: ExchangeRate = {
-        id: `RATE-${Date.now()}`,
+        id: `RATE-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
         fromCurrency: newRate.fromCurrency,
         toCurrency: newRate.toCurrency,
         rate: newRate.rate,

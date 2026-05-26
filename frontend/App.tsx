@@ -11,6 +11,7 @@ import { SalesProvider } from './context/SalesContext';
 import { ProductionProvider } from './context/ProductionContext';
 import { ProcurementProvider } from './context/ProcurementContext';
 import { DataProvider, useData } from './context/DataContext';
+import { useSales } from './context/SalesContext';
 import { ExaminationProvider } from './context/ExaminationContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { OrdersProvider } from './context/OrdersContext';
@@ -18,23 +19,30 @@ import { PwaInstallProvider, usePwaInstall } from './context/PwaInstallContext';
 import PwaInstallBanner from './components/PwaInstallBanner';
 import PwaUpdateNotification from './components/PwaUpdateNotification';
 import PwaInstallPage from './views/PwaInstallPage';
-import OfflineBanner from './components/OfflineBanner';
+
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { useDocumentStore } from './stores/documentStore.ts';
 import { PreviewModal } from './views/shared/components/PDF/PreviewModal.tsx';
 import { PdfWorker } from './views/shared/components/PDF/PdfWorker.tsx';
 import { Bell, Loader2, Coins, X, Calculator, Menu } from 'lucide-react';
 import { dbService } from './services/db';
+import { PrimeDatabaseBootstrap } from './services/dexie/PrimeDatabaseBootstrap';
 import Login from './views/auth/Login';
 import SetupWizard from './views/auth/SetupWizard';
+import { resolveAppAssetUrl } from './utils/runtime';
+import { isResponsiveDebugEnabled } from './utils/debugFlags';
 
 
 // Helper for lazy loading with retry logic to handle "Failed to fetch dynamically imported module" errors
+// Includes a cooldown window to prevent infinite reload loops when IndexedDB initialization
+// blocks the main thread and causes Vite HMR chunk load timeouts.
 const lazyWithRetry = (name: string, componentImport: () => Promise<any>) =>
   lazy(async () => {
     const pageHasBeenForceRefreshed = JSON.parse(
       window.localStorage.getItem('page-has-been-force-refreshed') || 'false'
     );
+    const lastRefreshAt = parseInt(window.localStorage.getItem('last-force-refresh-at') || '0', 10);
+    const cooldownMs = 10000;
 
     try {
       const component = await componentImport();
@@ -47,14 +55,15 @@ const lazyWithRetry = (name: string, componentImport: () => Promise<any>) =>
         stack: (error as any)?.stack,
         error
       });
-      if (!pageHasBeenForceRefreshed) {
-        // First failure, try to refresh the page once
+      if (!pageHasBeenForceRefreshed || Date.now() - lastRefreshAt > cooldownMs) {
+        // First failure or cooldown expired, try to refresh the page once
         window.localStorage.setItem('page-has-been-force-refreshed', 'true');
+        window.localStorage.setItem('last-force-refresh-at', String(Date.now()));
         window.location.reload();
-        return new Promise(() => { }); // Return a never-resolving promise while the page reloads
+        throw error;
       }
 
-      // If we already refreshed and it still fails, throw the error
+      // If we already refreshed recently and it still fails, throw the error
       throw error;
     }
   });
@@ -118,6 +127,7 @@ const UserManagement = lazyWithRetry('./views/admin/UserManagement', () => impor
 const ProfileActivity = lazyWithRetry('./views/admin/ProfileActivity', () => import('./views/admin/ProfileActivity'));
 const BOMRecipes = lazyWithRetry('./views/production/BOMRecipes', () => import('./views/production/BOMRecipes'));
 const DataImport = lazyWithRetry('./views/admin/DataImport', () => import('./views/admin/DataImport'));
+const MigrationHealthDashboard = lazyWithRetry('./views/admin/MigrationHealthDashboard', () => import('./views/admin/MigrationHealthDashboard'));
 const GlobalSearch = lazyWithRetry('./views/GlobalSearch', () => import('./views/GlobalSearch'));
 const ChequeManager = lazyWithRetry('./views/tools/ChequeManager', () => import('./views/tools/ChequeManager'));
 const VatView = lazyWithRetry('./views/vat/VatView', () => import('./views/vat/VatView'));
@@ -165,26 +175,24 @@ const ProtectedRoute: React.FC<{ permission: string, children: React.ReactNode }
 };
 
 const ReminderMonitor: React.FC = () => {
-  const { tasks, notify, addAlert } = useData();
+  const { notify, addAlert, reminders } = useAuth();
   const notifiedTasks = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     const checkReminders = () => {
       const now = new Date();
-      (tasks || []).forEach((task: any) => {
+      (reminders || []).forEach((task: any) => {
         if (task.hasAlarm && task.reminderDate && !notifiedTasks.current.has(task.id)) {
           const reminderTime = new Date(task.reminderDate);
-          // If reminder time is now or in the past (but recently, say last 5 mins)
           if (reminderTime <= now && now.getTime() - reminderTime.getTime() < 5 * 60 * 1000) {
-            notify(`TASK ALERT: ${task.title}`, 'info');
+            notify(`TASK ALERT: ${task.text || task.title}`, 'info');
 
-            // Log a persistent system alert for the notification hub
             addAlert({
-              id: `ALERT-${task.id}-${Date.now()}`,
-              message: `Task Due: ${task.title}. Details: ${task.notes || 'N/A'}`,
+              id: `ALERT-${task.id}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+              message: `Task Due: ${task.text || task.title}. Details: ${task.notes || 'N/A'}`,
               type: 'System',
               date: new Date().toISOString(),
-              severity: task.priority === 'High' || task.priority === 'Urgent' ? 'High' : 'Medium'
+              severity: 'Medium'
             });
 
             notifiedTasks.current.add(task.id);
@@ -193,15 +201,15 @@ const ReminderMonitor: React.FC = () => {
       });
     };
 
-    const interval = setInterval(checkReminders, 30000); // Every 30s
+    const interval = setInterval(checkReminders, 30000);
     return () => clearInterval(interval);
-  }, [tasks, notify, addAlert]);
+  }, [reminders, notify, addAlert]);
 
   return null;
 };
 
 const ResponsiveDebugUtility: React.FC = () => {
-  const isDev = import.meta.env.DEV;
+  const isDev = isResponsiveDebugEnabled();
   const [width, setWidth] = useState(() => window.innerWidth);
   const [breakpoint, setBreakpoint] = useState(() => {
     if (window.innerWidth <= 767) return 'mobile';
@@ -259,7 +267,7 @@ const AppLayout: React.FC = () => {
   const {
     isPosModalOpen,
     setIsPosModalOpen
-  } = useData();
+  } = useSales();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
@@ -354,7 +362,7 @@ const AppLayout: React.FC = () => {
           </div>
         </div>
         <main className="app-content-scroll flex-1 min-h-0 overflow-auto relative custom-scrollbar">
-          <OfflineBanner />
+
           <Toast />
           <PwaInstallBanner />
           <PwaUpdateNotificationWrapper />
@@ -505,6 +513,7 @@ const AppLayout: React.FC = () => {
                 <Route path="/audit" element={<AuditLogs />} />
                 <Route path="/admin/users" element={<ProtectedRoute permission="admin.users"><UserManagement /></ProtectedRoute>} />
                 <Route path="/admin/profile" element={<ProfileActivity />} />
+                <Route path="/admin/migration-health" element={<ProtectedRoute permission="admin.settings"><MigrationHealthDashboard /></ProtectedRoute>} />
                 <Route path="/settings" element={<ProtectedRoute permission="admin.settings"><Settings /></ProtectedRoute>} />
                 <Route path="/accounts/income" element={<ProtectedRoute permission="accounts.view"><IncomeView /></ProtectedRoute>} />
                 <Route path="/accounts/banking" element={<ProtectedRoute permission="accounts.view"><Banking /></ProtectedRoute>} />
@@ -578,7 +587,7 @@ const RootNavigator: React.FC = () => {
           <div className="relative">
             <div className="w-24 h-24 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
             <div className="absolute inset-0 flex items-center justify-center">
-              <img src="/pwa-icon-192x192.png" alt="Prime ERP" className="w-14 h-14 rounded-2xl shadow-lg shadow-blue-200 animate-pulse-subtle" />
+              <img src={resolveAppAssetUrl('/pwa-icon-192x192.png')} alt="Prime ERP" className="w-14 h-14 rounded-2xl shadow-lg shadow-blue-200 animate-pulse-subtle" />
             </div>
           </div>
 
@@ -664,27 +673,29 @@ const App: React.FC = () => {
   return (
     <HashRouter>
       <ErrorBoundary>
-        <NotificationProvider>
-          <AuthProvider>
-            <FinanceProvider>
-              <InventoryProvider>
-                <ProductionProvider>
-                  <ExaminationProvider>
-                    <ProcurementProvider>
-                      <SalesProvider>
-                        <OrdersProvider>
-                          <DataProvider>
-                              <RootNavigator />
-                            </DataProvider>
-                        </OrdersProvider>
-                      </SalesProvider>
-                    </ProcurementProvider>
-                  </ExaminationProvider>
-                </ProductionProvider>
-              </InventoryProvider>
-            </FinanceProvider>
-          </AuthProvider>
-        </NotificationProvider>
+        <PrimeDatabaseBootstrap>
+          <NotificationProvider>
+            <AuthProvider>
+              <FinanceProvider>
+                <InventoryProvider>
+                  <ProductionProvider>
+                    <ExaminationProvider>
+                      <ProcurementProvider>
+                        <SalesProvider>
+                          <OrdersProvider>
+                            <DataProvider>
+                                <RootNavigator />
+                              </DataProvider>
+                          </OrdersProvider>
+                        </SalesProvider>
+                      </ProcurementProvider>
+                    </ExaminationProvider>
+                  </ProductionProvider>
+                </InventoryProvider>
+              </FinanceProvider>
+            </AuthProvider>
+          </NotificationProvider>
+        </PrimeDatabaseBootstrap>
       </ErrorBoundary>
     </HashRouter>
   );

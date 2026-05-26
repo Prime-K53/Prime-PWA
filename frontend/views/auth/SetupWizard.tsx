@@ -2,6 +2,7 @@ import React, { useMemo, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Building2, CheckCircle2, ShieldCheck, UserPlus, Loader2, Sparkles, Receipt, CalendarDays, Mail, Phone, MapPin, Globe, User, Key, Lock, Plus, Upload, AlertCircle, CheckCircle } from 'lucide-react';
 import { Input } from '../../components/Input';
+import AuthLayout from './AuthLayout';
 import { useAuth } from '../../context/AuthContext';
 import { dbService } from '../../services/db';
 import { isPasswordComplexityEnabled, isPasswordProtectionEnabled, withNormalizedSecurityConfig } from '../../utils/securitySettings';
@@ -235,12 +236,9 @@ const SetupWizard: React.FC = () => {
   const progress = ((step + 1) / steps.length) * 100;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 flex flex-col relative overflow-hidden font-sans">
-      <div className="fixed top-0 right-0 w-[600px] h-[600px] bg-gradient-to-br from-blue-500/10 to-transparent rounded-full blur-[150px]" />
-      <div className="fixed bottom-0 left-0 w-[600px] h-[600px] bg-gradient-to-tr from-indigo-500/10 to-transparent rounded-full blur-[150px]" />
-
-      <div className="relative z-10 flex flex-col flex-1 max-w-lg mx-auto w-full px-5">
-        <div className="pt-6 pb-2 flex items-center justify-between">
+    <AuthLayout title="Get Started" subtitle="Choose how to set up Prime ERP" showBrand>
+      <div className="relative z-10 flex flex-col flex-1 w-full px-3">
+        <div className="pt-4 pb-1 flex items-center justify-between">
           {step > 0 ? (
             <button
               type="button"
@@ -257,7 +255,7 @@ const SetupWizard: React.FC = () => {
           <span className="text-xs font-medium text-slate-500">{step + 1} / {steps.length}</span>
         </div>
 
-        <div className="h-1 bg-white/10 rounded-full overflow-hidden mb-8">
+        <div className="h-1 bg-white/10 rounded-full overflow-hidden mb-6">
           <div
             className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-500 ease-out"
             style={{ width: `${progress}%` }}
@@ -268,8 +266,8 @@ const SetupWizard: React.FC = () => {
           <div className={`flex-1 transition-all duration-200 ${isTransitioning ? 'opacity-0 translate-y-3' : 'opacity-100 translate-y-0'}`}>
             {step === 0 && (
               <div className="pt-4 animate-fade-in">
-                <h1 className="text-3xl font-bold text-white mb-1">Get Started</h1>
-                <p className="text-sm text-slate-400 mb-10">Choose how to set up Prime ERP</p>
+                <h1 className="text-xl lg:text-2xl font-semibold text-slate-100 mb-1">Get Started</h1>
+                <p className="text-sm text-slate-400 mb-6">Choose how to set up Prime ERP</p>
 
                 <div className="space-y-3">
                   <input
@@ -301,8 +299,8 @@ const SetupWizard: React.FC = () => {
                       <Plus size={22} className={setupMode === 'create' ? 'text-blue-400' : 'text-slate-400'} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-white font-semibold">Create New Company</div>
-                      <div className="text-xs text-slate-400 mt-0.5">Set up a fresh Prime ERP instance</div>
+                    <div className="text-slate-100 font-semibold">Create New Company</div>
+                    <div className="text-xs text-slate-400 mt-0.5">Set up a fresh Prime ERP instance</div>
                     </div>
                     <div className={`w-5 h-5 rounded-full border-2 transition-all duration-200 shrink-0 ${
                       setupMode === 'create' ? 'border-blue-400 bg-blue-500' : 'border-white/20'
@@ -335,8 +333,8 @@ const SetupWizard: React.FC = () => {
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-white font-semibold">Restore Existing Company</div>
-                      <div className="text-xs text-slate-400 mt-0.5">Upload a backup file to restore</div>
+                    <div className="text-slate-100 font-semibold">Restore Existing Company</div>
+                    <div className="text-xs text-slate-400 mt-0.5">Upload a backup file to restore</div>
                     </div>
                     <div className={`w-5 h-5 rounded-full border-2 transition-all duration-200 shrink-0 ${
                       setupMode === 'restore' ? 'border-purple-400 bg-purple-500' : 'border-white/20'
@@ -350,8 +348,8 @@ const SetupWizard: React.FC = () => {
 
             {step === 1 && (
               <div className="pt-4 animate-fade-in">
-                <h1 className="text-3xl font-bold text-white mb-1">Company Profile</h1>
-                <p className="text-sm text-slate-400 mb-8">Tell us about your organization</p>
+                <h1 className="text-xl lg:text-2xl font-semibold text-slate-100 mb-1">Company Profile</h1>
+                <p className="text-sm text-slate-400 mb-6">Tell us about your organization</p>
 
                 {error && (
                   <div className="mb-5 p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-start gap-2">
@@ -366,7 +364,7 @@ const SetupWizard: React.FC = () => {
                     <Input
                       value={company.companyName}
                       onChange={e => setCompany(prev => ({ ...prev, companyName: e.target.value }))}
-                      className="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all placeholder:text-slate-600"
+                      className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all placeholder:text-slate-500"
                       placeholder="Acme Corporation"
                       required
                     />
@@ -378,7 +376,7 @@ const SetupWizard: React.FC = () => {
                       <Input
                         value={company.phone}
                         onChange={e => setCompany(prev => ({ ...prev, phone: e.target.value }))}
-                        className="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all placeholder:text-slate-600"
+                        className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all placeholder:text-slate-500"
                         placeholder="+1 (555) 000-0000"
                         required
                       />
@@ -389,7 +387,7 @@ const SetupWizard: React.FC = () => {
                         type="email"
                         value={company.email}
                         onChange={e => setCompany(prev => ({ ...prev, email: e.target.value }))}
-                        className="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all placeholder:text-slate-600"
+                        className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all placeholder:text-slate-500"
                         placeholder="contact@co.com"
                       />
                     </div>
@@ -400,7 +398,7 @@ const SetupWizard: React.FC = () => {
                     <Input
                       value={company.addressLine1}
                       onChange={e => setCompany(prev => ({ ...prev, addressLine1: e.target.value }))}
-                      className="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all placeholder:text-slate-600"
+                      className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all placeholder:text-slate-500"
                       placeholder="123 Business Way, Suite 100"
                       required
                     />
@@ -412,7 +410,7 @@ const SetupWizard: React.FC = () => {
                       <Input
                         value={company.city}
                         onChange={e => setCompany(prev => ({ ...prev, city: e.target.value }))}
-                        className="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all placeholder:text-slate-600"
+                        className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all placeholder:text-slate-500"
                         placeholder="New York"
                       />
                     </div>
@@ -421,7 +419,7 @@ const SetupWizard: React.FC = () => {
                       <select
                         value={company.currencySymbol}
                         onChange={e => setCompany(prev => ({ ...prev, currencySymbol: e.target.value }))}
-                        className="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all outline-none appearance-none cursor-pointer"
+                        className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all outline-none appearance-none cursor-pointer"
                       >
                         <option value="K" className="bg-slate-900">K - Kwacha</option>
                         <option value="MWK" className="bg-slate-900">MWK - Malawi</option>
@@ -437,7 +435,7 @@ const SetupWizard: React.FC = () => {
                     <select
                       value={company.dateFormat}
                       onChange={e => setCompany(prev => ({ ...prev, dateFormat: e.target.value }))}
-                      className="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all outline-none appearance-none cursor-pointer"
+                      className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all outline-none appearance-none cursor-pointer"
                     >
                       <option value="DD/MM/YYYY" className="bg-slate-900">DD/MM/YYYY</option>
                       <option value="MM/DD/YYYY" className="bg-slate-900">MM/DD/YYYY</option>
@@ -450,8 +448,8 @@ const SetupWizard: React.FC = () => {
 
             {step === 2 && (
               <div className="pt-4 animate-fade-in">
-                <h1 className="text-3xl font-bold text-white mb-1">Financial Setup</h1>
-                <p className="text-sm text-slate-400 mb-8">Configure financial year and pricing</p>
+                <h1 className="text-xl lg:text-2xl font-semibold text-slate-100 mb-1">Financial Setup</h1>
+                <p className="text-sm text-slate-400 mb-6">Configure financial year and pricing</p>
 
                 <div className="space-y-5">
                   <div className="grid grid-cols-2 gap-3">
@@ -460,7 +458,7 @@ const SetupWizard: React.FC = () => {
                       <select
                         value={company.financialYearStart}
                         onChange={e => setCompany(prev => ({ ...prev, financialYearStart: e.target.value }))}
-                        className="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all outline-none appearance-none cursor-pointer"
+                        className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all outline-none appearance-none cursor-pointer"
                       >
                         {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map(month => (
                           <option key={month} value={month} className="bg-slate-900">{month}</option>
@@ -472,7 +470,7 @@ const SetupWizard: React.FC = () => {
                       <select
                         value={company.fiscalYearEndMonth}
                         onChange={e => setCompany(prev => ({ ...prev, fiscalYearEndMonth: e.target.value }))}
-                        className="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all outline-none appearance-none cursor-pointer"
+                        className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all outline-none appearance-none cursor-pointer"
                       >
                         {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map(month => (
                           <option key={month} value={month} className="bg-slate-900">{month}</option>
@@ -498,7 +496,7 @@ const SetupWizard: React.FC = () => {
                         }`}>
                           <Receipt size={20} className={company.vatPricingMode === 'VAT' ? 'text-blue-400' : 'text-slate-400'} />
                         </div>
-                        <div className="text-white font-semibold text-sm">Tax (VAT)</div>
+                        <div className="text-slate-100 font-semibold text-sm">Tax (VAT)</div>
                         <div className="text-xs text-slate-400 mt-0.5">Standard pricing</div>
                       </button>
                       <button
@@ -515,7 +513,7 @@ const SetupWizard: React.FC = () => {
                         }`}>
                           <Sparkles size={20} className={company.vatPricingMode === 'MarketAdjustment' ? 'text-purple-400' : 'text-slate-400'} />
                         </div>
-                        <div className="text-white font-semibold text-sm">Market Adj.</div>
+                        <div className="text-slate-100 font-semibold text-sm">Market Adj.</div>
                         <div className="text-xs text-slate-400 mt-0.5">Dynamic pricing</div>
                       </button>
                     </div>
@@ -526,8 +524,8 @@ const SetupWizard: React.FC = () => {
 
             {step === 3 && (
               <div className="pt-4 animate-fade-in">
-                <h1 className="text-3xl font-bold text-white mb-1">Admin Account</h1>
-                <p className="text-sm text-slate-400 mb-8">Create your primary user account</p>
+                <h1 className="text-xl lg:text-2xl font-semibold text-slate-100 mb-1">Admin Account</h1>
+                <p className="text-sm text-slate-400 mb-6">Create your primary user account</p>
 
                 {error && (
                   <div className="mb-5 p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-start gap-2">
@@ -543,7 +541,7 @@ const SetupWizard: React.FC = () => {
                       <Input
                         value={admin.fullName}
                         onChange={e => setAdmin(prev => ({ ...prev, fullName: e.target.value }))}
-                        className="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all placeholder:text-slate-600"
+                        className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all placeholder:text-slate-500"
                         placeholder="John Doe"
                         required
                       />
@@ -554,7 +552,7 @@ const SetupWizard: React.FC = () => {
                         type="email"
                         value={admin.email}
                         onChange={e => setAdmin(prev => ({ ...prev, email: e.target.value }))}
-                        className="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all placeholder:text-slate-600"
+                        className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all placeholder:text-slate-500"
                         placeholder="admin@co.com"
                       />
                     </div>
@@ -564,7 +562,7 @@ const SetupWizard: React.FC = () => {
                     <Input
                       value={admin.username}
                       onChange={e => setAdmin(prev => ({ ...prev, username: e.target.value }))}
-                      className="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all placeholder:text-slate-600"
+                      className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all placeholder:text-slate-500"
                       placeholder="admin_prime"
                       required
                     />
@@ -576,10 +574,10 @@ const SetupWizard: React.FC = () => {
             {step === 4 && (
               <div className="pt-4 animate-fade-in">
                 <div className="flex items-center gap-3 mb-1">
-                  <h1 className="text-3xl font-bold text-white">Security</h1>
+                  <h1 className="text-xl lg:text-2xl font-semibold text-slate-100">Security</h1>
                   <span className="px-2 py-0.5 bg-white/10 border border-white/10 rounded-md text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Optional</span>
                 </div>
-                <p className="text-sm text-slate-400 mb-8">Configure account access settings</p>
+                <p className="text-sm text-slate-400 mb-6 leading-[1.45]">Configure account access settings</p>
 
                 <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-start gap-2 mb-6">
                   <AlertCircle size={14} className="text-blue-400 shrink-0 mt-0.5" />
@@ -594,7 +592,7 @@ const SetupWizard: React.FC = () => {
                         type="password"
                         value={admin.password}
                         onChange={e => setAdmin(prev => ({ ...prev, password: e.target.value }))}
-                        className="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all placeholder:text-slate-600"
+                        className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all placeholder:text-slate-500"
                         placeholder="Leave blank to skip"
                       />
                     </div>
@@ -604,7 +602,7 @@ const SetupWizard: React.FC = () => {
                         type="password"
                         value={admin.confirmPassword}
                         onChange={e => setAdmin(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                        className="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all placeholder:text-slate-600"
+                        className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all placeholder:text-slate-500"
                         placeholder="Repeat password"
                       />
                     </div>
@@ -641,7 +639,7 @@ const SetupWizard: React.FC = () => {
                     
                     <div className="flex items-center justify-between p-3.5 bg-white/5 rounded-xl border border-white/10">
                       <div>
-                        <div className="text-sm font-medium text-white">Password Protection</div>
+                        <div className="text-sm font-medium text-slate-100">Password Protection</div>
                         <div className="text-xs text-slate-400 mt-0.5">Require password for logins</div>
                       </div>
                       <button
@@ -659,7 +657,7 @@ const SetupWizard: React.FC = () => {
 
                     <div className="flex items-center justify-between p-3.5 bg-white/5 rounded-xl border border-white/10">
                       <div>
-                        <div className="text-sm font-medium text-white">Complex Passwords</div>
+                        <div className="text-sm font-medium text-slate-100">Complex Passwords</div>
                         <div className="text-xs text-slate-400 mt-0.5">Enforce minimum complexity</div>
                       </div>
                       <button
@@ -680,7 +678,7 @@ const SetupWizard: React.FC = () => {
             )}
           </div>
 
-          <div className="py-5">
+          <div className="py-4">
             {step < steps.length - 1 ? (
               <button
                 type="button"
@@ -697,7 +695,7 @@ const SetupWizard: React.FC = () => {
                   goToStep(step + 1);
                 }}
                 disabled={step === 0 && !setupMode}
-                className="w-full py-3.5 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 disabled:from-slate-700 disabled:to-slate-700 disabled:text-slate-500 text-white font-semibold rounded-xl shadow-lg shadow-blue-500/25 transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2 text-sm"
+                className="w-full py-2 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 disabled:from-slate-700 disabled:to-slate-700 disabled:text-slate-500 text-white font-semibold rounded-xl shadow-lg shadow-blue-500/25 transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2 text-sm"
               >
                 Continue
                 <ArrowRight size={16} />
@@ -707,7 +705,7 @@ const SetupWizard: React.FC = () => {
                 type="button"
                 onClick={handleSetup}
                 disabled={!canSubmitAdmin || submitting}
-                className="w-full py-3.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:from-slate-700 disabled:to-slate-700 disabled:text-slate-500 text-white font-semibold rounded-xl shadow-lg shadow-emerald-500/25 transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2 text-sm"
+                className="w-full py-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:from-slate-700 disabled:to-slate-700 disabled:text-slate-500 text-white font-semibold rounded-xl shadow-lg shadow-emerald-500/25 transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2 text-sm"
               >
                 {submitting ? (
                   <>
@@ -725,7 +723,7 @@ const SetupWizard: React.FC = () => {
           </div>
         </div>
       </div>
-    </div>
+    </AuthLayout>
   );
 };
 

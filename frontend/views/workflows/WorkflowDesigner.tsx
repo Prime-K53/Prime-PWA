@@ -103,7 +103,7 @@ export const WorkflowDesigner: React.FC = () => {
 
   const addStep = () => {
     const newStep: WorkflowStep = {
-      id: `STEP-${Date.now()}`,
+      id: `STEP-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
       name: `Step ${(workflow.steps?.length || 0) + 1}`,
       order: (workflow.steps?.length || 0) + 1,
       approverRole: '',
@@ -182,7 +182,7 @@ export const WorkflowDesigner: React.FC = () => {
     if (!step) return;
 
     const newCondition: WorkflowCondition = {
-      id: `COND-${Date.now()}`,
+      id: `COND-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
       type: 'amount_greater_than',
       field: 'amount',
       operator: 'gt',

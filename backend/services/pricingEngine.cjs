@@ -6,16 +6,11 @@
  * to ensure consistency between frontend and backend
  */
 
-const { db } = require('../db.cjs');
+const { getDatabase } = require('../db.cjs');
+const getDb = () => getDatabase();
+const { roundToCurrency, calculateMarginAmount } = require('../utils/mathUtils.cjs');
 
 const PRICING_ENGINE_VERSION = "1.0.0";
-
-/**
- * Round to currency precision (2 decimal places)
- */
-const roundToCurrency = (value) => {
-  return Math.round((Number(value) || 0) * 100) / 100;
-};
 
 /**
  * Normalize snapshot entry from various formats
@@ -53,7 +48,7 @@ const calculateAdjustmentTotal = (snapshots) => {
 const resolveMargin = async (itemId, categoryId) => {
   return new Promise((resolve) => {
     if (itemId) {
-      db.get(
+      getDb().get(
         "SELECT margin_value, margin_type, scope FROM profit_margin_settings WHERE scope = 'line_item' AND scope_ref_id = ? AND is_active = 1 AND deleted_at IS NULL",
         [itemId],
         (err, row) => {
@@ -71,7 +66,7 @@ const resolveMargin = async (itemId, categoryId) => {
 
 const resolveCategoryMargin = (categoryId, resolve) => {
   if (categoryId) {
-    db.get(
+    getDb().get(
       "SELECT margin_value, margin_type, scope FROM profit_margin_settings WHERE scope = 'category' AND scope_ref_id = ? AND is_active = 1 AND deleted_at IS NULL",
       [categoryId],
       (err, row) => {
@@ -87,7 +82,7 @@ const resolveCategoryMargin = (categoryId, resolve) => {
 };
 
 const resolveGlobalMargin = (resolve) => {
-  db.get(
+  getDb().get(
     "SELECT margin_value, margin_type, scope FROM profit_margin_settings WHERE scope = 'global' AND is_active = 1 AND deleted_at IS NULL",
     [],
     (err, row) => {
@@ -110,16 +105,6 @@ const resolveVolumeMargin = (pages, margin) => {
   if (p >= 250) return 15;
   if (p >= 180) return 10;
   return 0;
-};
-
-/**
- * Calculate margin amount
- */
-const calculateMarginAmount = (baseCost, margin) => {
-  if (margin.margin_type === 'percentage') {
-    return roundToCurrency(baseCost * ((margin.margin_value || 0) / 100));
-  }
-  return roundToCurrency(margin.margin_value || 0);
 };
 
 /**
@@ -153,11 +138,11 @@ const normalizeSnapshots = (rawSnapshots, baseAmount) => {
  */
 const getPricingSettings = () => {
   return new Promise((resolve) => {
-    db.get(
+    getDb().all(
       "SELECT key, value FROM company_settings WHERE key LIKE 'pricingSettings.%'",
       [],
       (err, rows) => {
-        if (err || !rows) {
+        if (err || !rows || !rows.length) {
           return resolve({ enableRounding: true, defaultMethod: 'ALWAYS_UP_50', customStep: 50 });
         }
         const settings = { enableRounding: true, defaultMethod: 'ALWAYS_UP_50', customStep: 50 };
@@ -236,7 +221,28 @@ const calculatePriceCore = async (input) => {
 
   const safeCost = roundToCurrency(Number(baseCost) || 0);
   const safeQty = Math.max(1, Math.floor(Number(quantity) || 1));
-  const initialBase = roundToCurrency(Number(basePrice) ?? safeCost);
+
+  // When basePrice is explicitly provided (manually set item price), use it directly
+  // without recalculating margins, matching frontend behavior.
+  if (basePrice != null && !isNaN(basePrice) && basePrice > 0) {
+    const unitPrice = applyRounding(basePrice, await getPricingSettings());
+    const totalPrice = roundToCurrency(unitPrice * safeQty);
+    const normalizedAdjustments = normalizeSnapshots(adjustments || [], safeCost);
+    const adjustmentTotal = calculateAdjustmentTotal(normalizedAdjustments);
+    const marginAmount = roundToCurrency(unitPrice - safeCost - adjustmentTotal);
+    return {
+      unitPrice,
+      totalPrice,
+      cost: safeCost,
+      marginAmount,
+      adjustmentSnapshots: normalizedAdjustments,
+      adjustmentTotal,
+      roundingDifference: 0,
+      pricingVersion: PRICING_ENGINE_VERSION
+    };
+  }
+
+  const initialBase = roundToCurrency(Number(basePrice) || safeCost);
 
   const normalizedAdjustments = normalizeSnapshots(adjustments || [], initialBase);
   
@@ -336,6 +342,7 @@ const validateTransactionPrice = async (lineItem) => {
     itemId,
     categoryId,
     baseCost: cost,
+    basePrice: price,
     quantity,
     adjustments: adjustmentSnapshots,
     context: 'TRANSACTION_VALIDATION'

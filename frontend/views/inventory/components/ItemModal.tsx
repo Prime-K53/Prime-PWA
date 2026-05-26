@@ -2,7 +2,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 // PRICING RULE: Do NOT implement pricing logic here. All pricing MUST go through pricingEngine.ts
 import { X, Save, Plus, Trash2, AlertCircle, Package, DollarSign, Hash, MapPin, Truck, Tag, FileText, Box, Layers, ArrowRight, Wand2, Grid, Scale, RefreshCw, Eye, EyeOff, Info, Check, Edit3, TrendingUp } from 'lucide-react';
 import { Item, Warehouse, ProductVariant, PricingConfig, FinishingOption, AdjustmentSnapshot, BOMTemplate, PricingRoundingMethod } from '../../../types';
-import { useData } from '../../../context/DataContext';
+import { useAuth } from '../../../context/AuthContext';
+import { useInventory } from '../../../context/InventoryContext';
+import { useProcurement } from '../../../context/ProcurementContext';
 import { generateAutoSKU, generateAutoBarcode, generateBulkVariants } from '../../../utils/skuGenerator';
 import { pricingService } from '../../../services/pricingService';
 import { dbService } from '../../../services/db';
@@ -98,7 +100,9 @@ const ItemModal: React.FC<ItemModalProps> = ({
     mode
 }) => {
 
-    const { suppliers, companyConfig, inventory, marketAdjustments } = useData();
+    const { companyConfig } = useAuth();
+    const { inventory, marketAdjustments } = useInventory();
+    const { suppliers } = useProcurement();
     const currency = companyConfig.currencySymbol || '$';
 
     const [formData, setFormData] = useState<Partial<Item>>(defaultItem);
@@ -386,6 +390,7 @@ const ItemModal: React.FC<ItemModalProps> = ({
                     type: adj.type,
                     value: adj.value,
                     percentage: adj.percentage ?? adj.value,
+                    calculatedAmount: adj.value,
                     adjustmentId: adj.id,
                     isActive: true
                 }));

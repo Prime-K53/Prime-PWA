@@ -277,7 +277,7 @@ class WorkflowService {
   ): Promise<WorkflowDefinition> {
     const newDefinition: WorkflowDefinition = {
       ...definition,
-      id: `WF-${Date.now()}`,
+      id: `WF-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
       version: 1,
       createdBy: userId,
       createdAt: new Date(),
@@ -443,7 +443,7 @@ class WorkflowService {
 
     const now = new Date();
     const instance: WorkflowInstance = {
-      id: `WI-${Date.now()}`,
+      id: `WI-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
       workflowDefinitionId,
       workflowDefinitionName: definition.name,
       entityType,
@@ -511,7 +511,7 @@ class WorkflowService {
 
     // Create approval record
     const approval: WorkflowApproval = {
-      id: `APR-${Date.now()}`,
+      id: `APR-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
       workflowInstanceId: instanceId,
       stepId: step.id,
       stepName: step.name,
@@ -936,7 +936,7 @@ class WorkflowService {
   ): Promise<void> {
     const historyEntry: WorkflowHistoryEntry = {
       ...entry,
-      id: `WH-${Date.now()}`,
+      id: `WH-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
       timestamp: new Date(),
     };
 
@@ -963,7 +963,7 @@ class WorkflowService {
   ): Promise<void> {
     const notification: WorkflowNotification = {
       ...data,
-      id: `WN-${Date.now()}`,
+      id: `WN-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
       read: false,
       createdAt: new Date(),
     };

@@ -1,11 +1,13 @@
 
 import React, { useState, useRef } from 'react';
 import { Search, Printer, Plus, Minus, X, ScanLine, Box, FileText, Loader2 } from 'lucide-react';
-import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
+import { useInventory } from '../../context/InventoryContext';
 import { Item } from '../../types';
 
 const BarcodePrinter: React.FC = () => {
-    const { inventory, companyConfig, notify } = useData();
+    const { companyConfig, notify } = useAuth();
+    const { inventory } = useInventory();
     const currency = companyConfig.currencySymbol;
     const [searchTerm, setSearchTerm] = useState('');
     const [printQueue, setPrintQueue] = useState<{item: Item, qty: number}[]>([]);

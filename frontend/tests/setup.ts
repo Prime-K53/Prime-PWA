@@ -39,20 +39,7 @@ vi.mock('../services/logger', () => ({
   },
 }));
 
-// Mock platform API (for desktop Tauri/Electron app)
-Object.defineProperty(window, '__TAURI_INTERNALS__', {
-  value: undefined,
-  writable: true,
-});
-Object.defineProperty(window, 'electronAPI', {
-  value: {
-    invoke: vi.fn(() => Promise.resolve()),
-    send: vi.fn(),
-    on: vi.fn(),
-    removeAllListeners: vi.fn(),
-  },
-});
-
+// Mock platform API (browser-only web app)
 const mockPlatformAPI = {
   getBackendUrl: vi.fn(() => Promise.resolve('http://localhost:3000')),
   log: vi.fn(),

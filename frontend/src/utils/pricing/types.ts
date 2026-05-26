@@ -47,6 +47,7 @@ export interface PricingResult {
   adjustmentTotal: number;
   roundingDifference: number;
   breakdown: PricingBreakdown;
+  pricingVersion?: string;
 }
 
 export interface ResolvedMargin {

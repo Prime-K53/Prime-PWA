@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Play, AlertTriangle, CheckCircle, Package, ArrowRight } from 'lucide-react';
-import { useData } from '../../context/DataContext';
+import { useProduction } from '../../context/ProductionContext';
+import { useInventory } from '../../context/InventoryContext';
+import { useAuth } from '../../context/AuthContext';
 import { BOMComponent } from '../../types';
 import { OfflineImage } from '../../components/OfflineImage';
 import { bomService } from '../../services/bomService';
 
 const NewBatch: React.FC = () => {
-  const { boms, inventory, produceBatch, companyConfig, notify } = useData();
+  const { boms, produceBatch } = useProduction();
+  const { inventory } = useInventory();
+  const { companyConfig, notify } = useAuth();
   const [selectedBomId, setSelectedBomId] = useState('');
   const [variantId, setVariantId] = useState('');
   const [quantity, setQuantity] = useState(1);
@@ -92,7 +96,7 @@ const NewBatch: React.FC = () => {
     if(!canProduce || !selectedBom) return;
     
     produceBatch({
-      id: 'BATCH-' + Date.now(),
+      id: `BATCH-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
       date: new Date().toISOString(),
       bomId: selectedBom.id,
       productName: selectedVariant ? selectedVariant.name : selectedBom.productName,

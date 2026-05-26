@@ -1,13 +1,9 @@
 import { PricingBreakdownSnapshot } from '../types';
 import { resolveStoredRoundingDifference } from './pricing';
-
-const roundMoney = (value: unknown): number => {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return 0;
-  return Math.round((parsed + Number.EPSILON) * 100) / 100;
-};
+import { roundMoney } from './roundingUtils';
 
 const PROFIT_MARGIN_LABEL = 'profit margin';
+const ROUNDING_LABEL = 'rounding';
 
 const toFiniteAmount = (value: unknown): number | undefined => {
   const parsed = Number(value);
@@ -26,10 +22,27 @@ const normalizeSnapshotName = (snapshot: any): string =>
 export const isProfitMarginSnapshot = (snapshot: any): boolean =>
   normalizeSnapshotName(snapshot) === PROFIT_MARGIN_LABEL;
 
+export const isRoundingSnapshot = (snapshot: any): boolean => {
+  if (Boolean(snapshot?.is_rounding ?? snapshot?.isRounding)) {
+    return true;
+  }
+
+  const normalizedName = normalizeSnapshotName(snapshot);
+  const normalizedId = String(snapshot?.id || snapshot?.adjustmentId || '').trim().toLowerCase();
+
+  return normalizedId === 'auto-rounding'
+    || normalizedName === ROUNDING_LABEL
+    || normalizedName.includes('rounding')
+    || normalizedName.includes('round up')
+    || normalizedName.includes('round down');
+};
+
 export const getSnapshotCalculatedAmount = (snapshot: any): number => {
   const explicitAmount = [
     snapshot?.calculatedAmount,
     snapshot?.amount,
+    snapshot?.total_amount,
+    snapshot?.totalAmount,
     snapshot?.appliedAmount,
     snapshot?.totalApplied
   ]
@@ -52,7 +65,13 @@ export const getSnapshotCalculatedAmount = (snapshot: any): number => {
 };
 
 export const getMarketAdjustmentSnapshots = <T extends Record<string, any>>(snapshots: T[] = []): T[] => {
-  return (Array.isArray(snapshots) ? snapshots : []).filter((snapshot) => !isProfitMarginSnapshot(snapshot));
+  return (Array.isArray(snapshots) ? snapshots : []).filter(
+    (snapshot) => !isProfitMarginSnapshot(snapshot) && !isRoundingSnapshot(snapshot)
+  );
+};
+
+export const getRoundingSnapshots = <T extends Record<string, any>>(snapshots: T[] = []): T[] => {
+  return (Array.isArray(snapshots) ? snapshots : []).filter((snapshot) => isRoundingSnapshot(snapshot));
 };
 
 export const getProfitMarginAmountFromSnapshots = (snapshots: any[] = []): number | undefined => {
@@ -60,6 +79,14 @@ export const getProfitMarginAmountFromSnapshots = (snapshots: any[] = []): numbe
   if (profitSnapshots.length === 0) return undefined;
   return roundMoney(
     profitSnapshots.reduce((sum, snapshot) => sum + getSnapshotCalculatedAmount(snapshot), 0)
+  );
+};
+
+export const getRoundingAmountFromSnapshots = (snapshots: any[] = []): number | undefined => {
+  const roundingSnapshots = getRoundingSnapshots(snapshots);
+  if (roundingSnapshots.length === 0) return undefined;
+  return roundMoney(
+    roundingSnapshots.reduce((sum, snapshot) => sum + getSnapshotCalculatedAmount(snapshot), 0)
   );
 };
 
@@ -195,12 +222,15 @@ export const buildPricingBreakdownSnapshot = (
     ?? resolveStoredRoundingDifference(item)
   );
 
-  const explicitMargin = Number(
-    smartSnapshot?.profitMarginAmount
-    ?? item.profitMarginAmount
-    ?? item.marginAmount
-    ?? getProfitMarginAmountFromSnapshots(adjustmentSnapshots)
-  );
+  const isManualOverride = Boolean((item as any).manual_override ?? (item as any).manualOverride);
+  const explicitMargin = isManualOverride
+    ? Number.NaN
+    : Number(
+        smartSnapshot?.profitMarginAmount
+        ?? item.profitMarginAmount
+        ?? item.marginAmount
+        ?? getProfitMarginAmountFromSnapshots(adjustmentSnapshots)
+      );
   const profitMarginAmount = Number.isFinite(explicitMargin)
     ? roundMoney(explicitMargin)
     : roundMoney(sellingPrice - baseMaterialCost - adjustmentTotal - roundingDifference);
@@ -322,30 +352,76 @@ export const resolveTransactionPricingSummary = (transaction: any) => {
   const derivedSummary = summarizePricingBreakdown(normalizedItems);
 
   const pickMetric = (rootValue: unknown, derivedValue: number) => {
+    const parsedRoot = Number(rootValue);
+    if (Number.isFinite(parsedRoot) && Math.abs(parsedRoot) > 0.0001) {
+      return roundMoney(parsedRoot);
+    }
+
     if (Math.abs(derivedValue) > 0.0001) {
       return roundMoney(derivedValue);
     }
 
-    const parsedRoot = Number(rootValue);
-    return Number.isFinite(parsedRoot) ? roundMoney(parsedRoot) : 0;
+    return 0;
   };
 
-  const rootSnapshots = Array.isArray(transaction?.adjustmentSnapshots)
-    ? getMarketAdjustmentSnapshots(transaction.adjustmentSnapshots).map((snapshot: any) => ({
+  const rawRootSnapshots = Array.isArray(transaction?.adjustmentSnapshots)
+    ? transaction.adjustmentSnapshots
+    : [];
+  const rootSnapshots = getMarketAdjustmentSnapshots(rawRootSnapshots).map((snapshot: any) => ({
         ...snapshot,
         calculatedAmount: getSnapshotCalculatedAmount(snapshot)
-      }))
-    : [];
+      }));
+  const hasRootRoundingSnapshots = getRoundingSnapshots(rawRootSnapshots).length > 0;
+  const rootAdjustmentTotalFromSnapshots = roundMoney(
+    rootSnapshots.reduce((sum, snapshot) => sum + getSnapshotCalculatedAmount(snapshot), 0)
+  );
+  const rootRoundingTotalFromSnapshots = roundMoney(getRoundingAmountFromSnapshots(rawRootSnapshots) ?? 0);
+  const rootRoundingValue = roundMoney(
+    Number(
+      transaction?.roundingTotal
+      ?? transaction?.rounding_total
+      ?? transaction?.roundingDifference
+      ?? transaction?.rounding_difference
+    )
+  );
+  const preRoundingTotal = Number(
+    transaction?.preRoundingTotalAmount
+    ?? transaction?.pre_rounding_total_amount
+    ?? transaction?.subtotal
+  );
+  const totalAmount = Number(transaction?.totalAmount ?? transaction?.total ?? transaction?.total_amount);
+  const isExaminationTransaction = String(transaction?.originModule || transaction?.origin_module || '').trim().toLowerCase() === 'examination'
+    || String(transaction?.documentTitle || transaction?.document_title || '').trim().toLowerCase().includes('examination')
+    || String(transaction?.reference || '').trim().toUpperCase().startsWith('EXM-BATCH-')
+    || Boolean(transaction?.batchId || transaction?.originBatchId || transaction?.origin_batch_id);
+  const inferredRoundingFromTotals = (
+    isExaminationTransaction
+    && Number.isFinite(preRoundingTotal)
+    && Number.isFinite(totalAmount)
+  )
+    ? roundMoney(totalAmount - preRoundingTotal)
+    : 0;
 
   return {
     items: normalizedItems,
     materialTotal: pickMetric(transaction?.materialTotal ?? transaction?.material_total, derivedSummary.materialTotal),
-    adjustmentTotal: pickMetric(transaction?.adjustmentTotal ?? transaction?.adjustment_total, derivedSummary.adjustmentTotal),
-    profitMarginTotal: pickMetric(transaction?.profitMarginTotal ?? transaction?.profit_margin_total ?? transaction?.profitAdjustment, derivedSummary.profitMarginTotal),
-    roundingTotal: pickMetric(
-      transaction?.roundingTotal ?? transaction?.rounding_total ?? transaction?.roundingDifference ?? transaction?.rounding_difference,
-      derivedSummary.roundingTotal
+    adjustmentTotal: (
+      rootSnapshots.length > 0 || hasRootRoundingSnapshots
+        ? rootAdjustmentTotalFromSnapshots
+        : pickMetric(transaction?.adjustmentTotal ?? transaction?.adjustment_total, derivedSummary.adjustmentTotal)
     ),
-    adjustmentSnapshots: rootSnapshots.length > 0 ? rootSnapshots : aggregateMarketAdjustmentSnapshots(normalizedItems)
+    profitMarginTotal: pickMetric(transaction?.profitMarginTotal ?? transaction?.profit_margin_total ?? transaction?.profitAdjustment, derivedSummary.profitMarginTotal),
+    roundingTotal: (
+      hasRootRoundingSnapshots
+        ? rootRoundingTotalFromSnapshots
+        : Math.abs(rootRoundingValue) > 0.0001
+          ? rootRoundingValue
+          : Math.abs(inferredRoundingFromTotals) > 0.0001
+            ? inferredRoundingFromTotals
+            : pickMetric(undefined, derivedSummary.roundingTotal)
+    ),
+    adjustmentSnapshots: rootSnapshots.length > 0 || hasRootRoundingSnapshots
+      ? rootSnapshots
+      : aggregateMarketAdjustmentSnapshots(normalizedItems)
   };
 };

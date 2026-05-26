@@ -1,4 +1,6 @@
 import { attachPricingBreakdown, getMarketAdjustmentSnapshots } from '../utils/pricingBreakdown';
+import { roundMoney } from '../utils/roundingUtils';
+import { enrichInvoiceWithBatchPricing, findMatchingExaminationBatch } from '../utils/examinationInvoicePricing';
 
 export type RevenueSource = 'POS' | 'ORDER_FORM' | 'EXAMINATION';
 
@@ -40,6 +42,7 @@ export interface RevenueAnalysisLine {
   adjustmentTotal: number;
   profitMargin: number;
   roundingTotal: number;
+  manualOverrideAmount: number;
   grossGain: number;
   reconciliationDelta: number;
   adjustmentLines: Array<{ name: string; amount: number }>;
@@ -62,6 +65,7 @@ export interface RevenueAnalysisTransaction {
   adjustmentTotal: number;
   profitMargin: number;
   roundingTotal: number;
+  manualOverrideAmount: number;
   grossGain: number;
   reconciliationDelta: number;
 }
@@ -76,6 +80,7 @@ export interface RevenueSourceSummary {
   adjustmentTotal: number;
   profitMargin: number;
   roundingTotal: number;
+  manualOverrideAmount: number;
   grossGain: number;
   reconciliationDelta: number;
 }
@@ -87,12 +92,6 @@ export interface RevenueAnalysisDataset {
   adjustmentLedger: RevenueAdjustmentLedgerRow[];
   itemPerformance: RevenueItemPerformanceRow[];
 }
-
-const roundMoney = (value: unknown): number => {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return 0;
-  return Math.round((parsed + Number.EPSILON) * 100) / 100;
-};
 
 const toNumber = (value: unknown, fallback = 0): number => {
   const parsed = Number(value);
@@ -290,17 +289,24 @@ const createNormalizedLine = ({
         : toNumber(normalizedItem?.roundingDifference ?? normalizedItem?.rounding_difference, 0) * quantity
   );
 
+  const explicitManualOverride = toNumber(normalizedItem?.manual_override_amount ?? normalizedItem?.manualOverrideAmount, 0);
+  const manualOverrideAmount = roundMoney(
+    explicitManualOverride !== 0
+      ? explicitManualOverride
+      : toNumber(transaction?.manualOverrideAmount ?? transaction?.manual_override_amount, 0) * revenueShare
+  );
+
   const explicitMargin = toNumber(breakdown?.profitMarginAmount ?? normalizedItem?.profitMarginAmount, Number.NaN);
   const profitMargin = roundMoney(
     Number.isFinite(explicitMargin)
       ? explicitMargin * quantity
       : rootProfitMargin !== 0
         ? rootProfitMargin * revenueShare
-        : (revenue - materialCost - adjustmentTotal - roundingTotal)
+        : (revenue - materialCost - adjustmentTotal - roundingTotal - manualOverrideAmount)
   );
 
   const reconciliationDelta = roundMoney(
-    revenue - materialCost - adjustmentTotal - profitMargin - roundingTotal
+    revenue - materialCost - adjustmentTotal - profitMargin - roundingTotal - manualOverrideAmount
   );
 
   return {
@@ -326,6 +332,7 @@ const createNormalizedLine = ({
     adjustmentTotal,
     profitMargin,
     roundingTotal,
+    manualOverrideAmount,
     grossGain: roundMoney(revenue - materialCost),
     reconciliationDelta,
     adjustmentLines: buildAdjustmentLines(normalizedItem?.adjustmentSnapshots || [], quantity, adjustmentTotal)
@@ -351,13 +358,38 @@ const normalizeGenericTransaction = (
 
 const buildExaminationLines = (invoice: any, batch: any): RevenueAnalysisLine[] => {
   const classes = Array.isArray(batch?.classes) ? batch.classes : [];
+  if (classes.length > 0) {
+    const enrichedInvoice = enrichInvoiceWithBatchPricing(invoice, batch);
+    return normalizeGenericTransaction({
+      ...enrichedInvoice,
+      date: invoice?.date || batch?.updated_at || batch?.created_at,
+      status: invoice?.status || batch?.status || '',
+      customerName: invoice?.customerName || batch?.school_name || batch?.schoolName || 'School',
+      subAccountName: invoice?.subAccountName || invoice?.sub_account_name || batch?.subAccountName || batch?.sub_account_name || ''
+    }, 'EXAMINATION', 'Examination Invoice');
+  }
+
   if (classes.length === 0) {
     // Fallback: invoice items were built by examinationInvoiceSyncService where
     // cost=price when no breakdown exists. Use root-level materialTotal to
     // reconstruct proper cost allocation across items.
     const invoiceItems = Array.isArray(invoice?.items) ? invoice.items : [];
     const rootMaterialTotal = toNumber(invoice?.materialTotal, 0);
-    const rootAdjustmentTotal = toNumber(invoice?.adjustmentTotal, 0);
+    // Prefer true adjustment total from snapshots over stored adjustmentTotal (which may include margin/rounding)
+    const batchSnapshots = Array.isArray(batch?.adjustmentSnapshots)
+      ? batch.adjustmentSnapshots
+      : (Array.isArray(batch?.adjustment_snapshots) ? batch.adjustment_snapshots : []);
+    const rawSnapshots = batchSnapshots.length > 0
+      ? batchSnapshots
+      : (Array.isArray(invoice?.adjustmentSnapshots) ? invoice.adjustmentSnapshots : []);
+    const rootAdjustmentTotal = rawSnapshots.length > 0
+      ? roundMoney(
+          getMarketAdjustmentSnapshots(rawSnapshots).reduce(
+            (sum: number, s: any) => sum + toNumber(s?.calculatedAmount ?? s?.amount ?? s?.value ?? s?.total_amount ?? s?.totalAmount, 0),
+            0
+          )
+        )
+      : toNumber(invoice?.adjustmentTotal, 0);
     const rootRevenue = invoiceItems.reduce((sum: number, it: any) => {
       const qty = Math.max(1, toNumber(it?.quantity, 1));
       const price = toNumber(it?.price ?? it?.unitPrice, 0);
@@ -421,110 +453,6 @@ const buildExaminationLines = (invoice: any, batch: any): RevenueAnalysisLine[] 
       };
     });
   }
-
-  const totalRevenue = roundMoney(
-    classes.reduce((sum: number, cls: any) => {
-      const learners = Math.max(0, Math.floor(toNumber(cls?.number_of_learners, 0)));
-      const classRevenue = toNumber(
-        cls?.live_total_preview,
-        toNumber(cls?.final_fee_per_learner ?? cls?.price_per_learner, 0) * learners
-      );
-      return sum + classRevenue;
-    }, 0)
-  );
-  // Separate market adjustments from rounding adjustments
-  const totalMarketAdjustment = roundMoney(
-    classes.reduce((sum: number, cls: any) => {
-      const marketAdj = toNumber(cls?.market_adjustment_total ?? cls?.adjustment_total_cost, 0);
-      return sum + marketAdj;
-    }, 0)
-  );
-  const totalRoundingAdjustment = roundMoney(
-    classes.reduce((sum: number, cls: any) => sum + toNumber(cls?.rounding_adjustment, 0), 0)
-  );
-  // Use separated rounding if available, otherwise fall back to batch-level rounding
-  const batchRounding = roundMoney(
-    totalRoundingAdjustment !== 0
-      ? totalRoundingAdjustment
-      : (invoice?.roundingDifference
-        ?? invoice?.roundingTotal
-        ?? batch?.rounding_adjustment_total
-        ?? 0)
-  );
-  const rawSnapshots = Array.isArray(invoice?.adjustmentSnapshots)
-    ? invoice.adjustmentSnapshots
-    : (Array.isArray(batch?.adjustmentSnapshots) ? batch.adjustmentSnapshots : []);
-
-  let allocatedRounding = 0;
-
-  return classes.map((cls: any, index: number) => {
-    const learners = Math.max(1, Math.floor(toNumber(cls?.number_of_learners, 1)));
-    const revenue = roundMoney(
-      toNumber(
-        cls?.live_total_preview,
-        toNumber(cls?.final_fee_per_learner ?? cls?.price_per_learner, 0) * learners
-      )
-    );
-    const materialCost = roundMoney(toNumber(cls?.material_total_cost, 0));
-    // Use separated market adjustment if available, otherwise fall back to combined adjustment_total_cost
-    const adjustmentTotal = roundMoney(toNumber(cls?.market_adjustment_total ?? cls?.adjustment_total_cost, 0));
-    const allocationBase = totalRevenue > 0 ? revenue / totalRevenue : (1 / classes.length);
-    // Use separated rounding adjustment if available, otherwise allocate from batch rounding
-    const classRounding = toNumber(cls?.rounding_adjustment, 0);
-    const roundingTotal = classRounding !== 0
-      ? roundMoney(classRounding)
-      : (index === classes.length - 1
-        ? roundMoney(batchRounding - allocatedRounding)
-        : roundMoney(batchRounding * allocationBase));
-    allocatedRounding = roundMoney(allocatedRounding + roundingTotal);
-    const explicitMargin = toNumber(cls?.margin_amount, Number.NaN);
-    const calculatedTotalCost = toNumber(cls?.calculated_total_cost, 0);
-    
-    let baseMargin = 0;
-    if (Number.isFinite(explicitMargin)) {
-      baseMargin = explicitMargin;
-    } else if (calculatedTotalCost > 0) {
-      baseMargin = calculatedTotalCost - materialCost - adjustmentTotal;
-    } else {
-      baseMargin = revenue - materialCost - adjustmentTotal - roundingTotal;
-    }
-    const profitMargin = roundMoney(Math.max(0, baseMargin));
-    
-    // Any remaining variance between revenue and costs is the true rounding difference
-    const actualRoundingTotal = roundMoney(revenue - materialCost - adjustmentTotal - profitMargin);
-
-    const adjustmentRatio = totalMarketAdjustment > 0
-      ? adjustmentTotal / totalMarketAdjustment
-      : allocationBase;
-
-    const scaledSnapshots = rawSnapshots.map((snapshot: any) => ({
-      ...snapshot,
-      calculatedAmount: roundMoney(toNumber(snapshot?.calculatedAmount ?? snapshot?.amount ?? snapshot?.value, 0) * adjustmentRatio)
-    }));
-
-    return {
-      lineId: `EXAMINATION:${invoice?.id || batch?.id || 'BATCH'}:${cls?.id || index}:${index}`,
-      source: 'EXAMINATION' as RevenueSource,
-      transactionId: String(invoice?.id || batch?.id || ''),
-      transactionNumber: getTransactionNumber(invoice),
-      transactionType: 'Examination Invoice',
-      date: toDateKey(invoice?.date || batch?.updated_at || batch?.created_at),
-      status: String(invoice?.status || batch?.status || ''),
-      customerName: String(invoice?.customerName || batch?.school_name || batch?.schoolName || 'School'),
-      subAccountName: String(invoice?.subAccountName || invoice?.sub_account_name || batch?.subAccountName || batch?.sub_account_name || '').trim(),
-      itemId: String(cls?.id || `EXAM-CLASS-${index + 1}`),
-      itemName: String(cls?.class_name || `Class ${index + 1}`),
-      quantity: learners,
-      revenue,
-      materialCost,
-      adjustmentTotal,
-      profitMargin,
-      roundingTotal: actualRoundingTotal,
-      grossGain: roundMoney(revenue - materialCost),
-      reconciliationDelta: roundMoney(revenue - materialCost - adjustmentTotal - profitMargin - actualRoundingTotal),
-      adjustmentLines: buildAdjustmentLines(scaledSnapshots, 1, adjustmentTotal)
-    };
-  });
 };
 
 const aggregateTransactions = (lines: RevenueAnalysisLine[]): RevenueAnalysisTransaction[] => {
@@ -541,6 +469,7 @@ const aggregateTransactions = (lines: RevenueAnalysisLine[]): RevenueAnalysisTra
       existing.adjustmentTotal = roundMoney(existing.adjustmentTotal + line.adjustmentTotal);
       existing.profitMargin = roundMoney(existing.profitMargin + line.profitMargin);
       existing.roundingTotal = roundMoney(existing.roundingTotal + line.roundingTotal);
+      existing.manualOverrideAmount = roundMoney(existing.manualOverrideAmount + line.manualOverrideAmount);
       existing.grossGain = roundMoney(existing.grossGain + line.grossGain);
       existing.reconciliationDelta = roundMoney(existing.reconciliationDelta + line.reconciliationDelta);
       return;
@@ -563,6 +492,7 @@ const aggregateTransactions = (lines: RevenueAnalysisLine[]): RevenueAnalysisTra
       adjustmentTotal: line.adjustmentTotal,
       profitMargin: line.profitMargin,
       roundingTotal: line.roundingTotal,
+      manualOverrideAmount: line.manualOverrideAmount,
       grossGain: line.grossGain,
       reconciliationDelta: line.reconciliationDelta
     });
@@ -595,6 +525,7 @@ const buildSourceSummaries = (lines: RevenueAnalysisLine[]): RevenueSourceSummar
       adjustmentTotal: roundMoney(scopedLines.reduce((sum, line) => sum + line.adjustmentTotal, 0)),
       profitMargin: roundMoney(scopedLines.reduce((sum, line) => sum + line.profitMargin, 0)),
       roundingTotal: roundMoney(scopedLines.reduce((sum, line) => sum + line.roundingTotal, 0)),
+      manualOverrideAmount: roundMoney(scopedLines.reduce((sum, line) => sum + line.manualOverrideAmount, 0)),
       grossGain: roundMoney(scopedLines.reduce((sum, line) => sum + line.grossGain, 0)),
       reconciliationDelta: roundMoney(scopedLines.reduce((sum, line) => sum + line.reconciliationDelta, 0))
     };
@@ -702,14 +633,6 @@ export const buildRevenueAnalysisDataset = ({
   orders?: any[];
   batches?: any[];
 }): RevenueAnalysisDataset => {
-  const batchMap = new Map<string, any>();
-  (Array.isArray(batches) ? batches : []).forEach((batch: any) => {
-    if (!batch) return;
-    if (batch.id) batchMap.set(String(batch.id), batch);
-    const bNum = batch.batch_number || batch.batchNumber;
-    if (bNum) batchMap.set(String(bNum), batch);
-  });
-
   const orderKeysCoveredByInvoices = new Set<string>();
   const recognizedSales = (Array.isArray(sales) ? sales : []).filter(isRecognizedSale);
   const recognizedSaleIds = new Set<string>(
@@ -736,14 +659,7 @@ export const buildRevenueAnalysisDataset = ({
     if (status === 'cancelled' || status === 'draft') return;
 
     if (isExaminationInvoice(invoice)) {
-      const batchId = String(
-        invoice?.batchId
-        || invoice?.linkedBatchId
-        || invoice?.originBatchId
-        || invoice?.origin_batch_id
-        || ''
-      ).trim();
-      const batch = batchMap.get(batchId);
+      const batch = findMatchingExaminationBatch(invoice, Array.isArray(batches) ? batches : []);
       lines.push(...buildExaminationLines(invoice, batch));
       return;
     }

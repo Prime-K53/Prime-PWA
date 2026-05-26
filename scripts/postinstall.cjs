@@ -1,40 +1,58 @@
-
-const { spawnSync } = require('child_process');
+const { execSync } = require('child_process');
 const path = require('path');
 
-/**
- * Smart postinstall script for Prime ERP Workspace
- * 
- * This script runs 'npm install' in the backend directory
- * UNLESS we are in a Netlify build environment (where the backend
- * is not needed and often fails due to native compilation requirements).
- */
+const REQUIRED_NODE_VERSION = '20.18.0';
 
-console.log('--- Prime ERP Workspace Post-Install ---');
+function checkNode() {
+  try {
+    const version = execSync('node --version', { encoding: 'utf8' }).trim();
+    console.log(`  Node.js version: ${version}`);
 
-const runInstall = (targetDir, label) => {
-  console.log(`Installing ${label} dependencies via --prefix ${targetDir}...`);
+    const fullVersion = version.replace(/^v/, '');
+    const [major, minor, patch] = fullVersion.split('.').map(Number);
+    const [reqMajor, reqMinor, reqPatch] = REQUIRED_NODE_VERSION.split('.').map(Number);
 
-  const result = spawnSync('npm', ['install'], {
-    stdio: 'inherit',
-    shell: true,
-    cwd: path.resolve(__dirname, '..', targetDir)
-  });
-
-  if (result.status !== 0) {
-    console.error(`${label} installation failed with status:`, result.status);
-    process.exit(result.status || 1);
+    if (
+      major < reqMajor ||
+      (major === reqMajor && minor < reqMinor) ||
+      (major === reqMajor && minor === reqMinor && patch < reqPatch)
+    ) {
+      console.error(`  ERROR: Node.js ${REQUIRED_NODE_VERSION}+ required, found ${fullVersion}`);
+      process.exit(1);
+    }
+  } catch {
+    console.error('  ERROR: Node.js is not installed or not accessible via PATH.');
+    console.error('  Install Node.js from https://nodejs.org/ (LTS recommended).');
+    process.exit(1);
   }
-
-  console.log(`${label} dependencies installed successfully.`);
-};
-
-const isNetlify = process.env.NETLIFY === 'true' || process.env.IS_NETLIFY === 'true';
-
-if (isNetlify) {
-  console.log('Netlify environment detected. Skipping backend dependency installation.');
-} else {
-  runInstall('backend', 'backend');
 }
 
-runInstall('frontend', 'frontend');
+function checkRegistry() {
+  try {
+    const registry = execSync('npm config get registry', { encoding: 'utf8' }).trim();
+    if (!registry.startsWith('https://')) {
+      console.warn(`  WARNING: npm registry does not use HTTPS: ${registry}`);
+      console.warn('  Run: npm config set registry https://registry.npmjs.org/');
+    } else {
+      console.log(`  npm registry: ${registry}`);
+    }
+  } catch {
+    console.warn('  Could not verify npm registry configuration.');
+  }
+}
+
+console.log('');
+console.log('--- Prime ERP Workspace Post-Install ---');
+console.log('');
+
+console.log('  Workspace root:', path.resolve(__dirname, '..'));
+console.log('  Workspaces: frontend/, backend/');
+console.log('');
+
+checkNode();
+checkRegistry();
+
+console.log('');
+console.log('  All dependencies installed successfully via npm workspaces.');
+console.log('  Run "npm run dev" to start the development servers.');
+console.log('');

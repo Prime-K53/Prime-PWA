@@ -1,29 +1,13 @@
 import { ExaminationSubject } from '../types';
+import { roundMoney, roundUpToStep as _roundUpToStep, calculateMargin } from './roundingUtils';
+import { calculateExaminationBomCost } from '../src/domain/examination/pricingEngine';
 
-export const roundCurrency = (value: number) => Math.round((Number(value) || 0) * 100) / 100;
+export const roundCurrency = roundMoney;
 
-export const roundUpToStep = (value: number, step: number) => {
-  const safeValue = Number(value) || 0;
-  const safeStep = Math.max(1, Math.round(Number(step) || 50));
-  return Math.ceil(safeValue / safeStep) * safeStep;
-};
+export const roundUpToStep = (value: number, step: number) => _roundUpToStep(value, Math.max(1, Math.round(Number(step) || 50)));
 
-export type EffectiveMarginLike = {
-  margin_value?: number;
-  margin_type?: 'percentage' | 'fixed_amount' | string;
-} | null | undefined;
-
-export const resolveMarginAmount = (baseCost: number, margin: EffectiveMarginLike) => {
-  const safeBaseCost = roundCurrency(baseCost);
-  const marginValue = Number(margin?.margin_value ?? 0) || 0;
-  if (marginValue <= 0) return 0;
-
-  if (String(margin?.margin_type || 'percentage').toLowerCase() === 'fixed_amount') {
-    return roundCurrency(marginValue);
-  }
-
-  return roundCurrency(safeBaseCost * (marginValue / 100));
-};
+export type EffectiveMarginLike = Parameters<typeof calculateMargin>[1];
+export const resolveMarginAmount = calculateMargin;
 
 export const calculateLocalClassPreviewBase = (
   subjects: ExaminationSubject[],
@@ -35,24 +19,15 @@ export const calculateLocalClassPreviewBase = (
   adjustments: any[]
 ) => {
   const safeLearners = Math.max(0, Math.floor(Number(learners) || 0));
-  let totalSheets = 0;
-  let totalPages = 0;
-
-  (subjects || []).forEach((subject) => {
-    const pagesPerPaper = Math.max(0, Math.floor(Number(subject?.pages) || 0));
-    const extraCopies = Math.max(0, Math.floor(Number(subject?.extra_copies) || 0));
-    const totalCopies = safeLearners + extraCopies;
-    totalPages += pagesPerPaper * totalCopies;
-    totalSheets += Math.ceil(pagesPerPaper / 2) * totalCopies;
-  });
-
-  const safePaperConversionRate = Math.max(1, Number(paperConversionRate) || 500);
-  const safeTonerPagesPerUnit = Math.max(1, Number(tonerPagesPerUnit) || 20000);
-  const paperQuantity = totalSheets / safePaperConversionRate;
-  const tonerQuantity = totalPages / safeTonerPagesPerUnit;
-  const paperCost = roundCurrency(paperQuantity * Math.max(0, Number(paperUnitCost) || 0));
-  const tonerCost = roundCurrency(tonerQuantity * Math.max(0, Number(tonerUnitCost) || 0));
-  const totalBomCost = roundCurrency(paperCost + tonerCost);
+  const bom = calculateExaminationBomCost(
+    subjects,
+    safeLearners || 1,
+    paperUnitCost,
+    tonerUnitCost,
+    paperConversionRate,
+    tonerPagesPerUnit
+  );
+  const { totalSheets, totalPages, paperCost, tonerCost, totalBomCost } = bom;
 
   const marketAdjustmentTotal = roundCurrency((adjustments || []).reduce((sum, adjustment) => {
     const type = String(adjustment?.type || '').toUpperCase();
@@ -62,6 +37,9 @@ export const calculateLocalClassPreviewBase = (
       : roundCurrency(totalBomCost * (rawValue / 100));
     return sum + amount;
   }, 0));
+
+  const paperQuantity = totalSheets / Math.max(1, Number(paperConversionRate) || 500);
+  const tonerQuantity = totalPages / Math.max(1, Number(tonerPagesPerUnit) || 20000);
 
   return {
     totalSheets,

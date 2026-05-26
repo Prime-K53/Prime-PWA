@@ -6,7 +6,9 @@ import {
   Info, X, Trash2, ShieldCheck, MessageSquare, Navigation, CheckSquare, 
   Eye, UserPlus, Car, Upload, FileSearch, Globe
 } from 'lucide-react';
-import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
+import { useFinance } from '../../context/FinanceContext';
+import { useSales } from '../../context/SalesContext';
 import { Shipment, DeliveryNote, Employee, SignatureInputMode } from '../../types';
 import { format } from 'date-fns';
 import { pdf } from '@react-pdf/renderer';
@@ -24,7 +26,9 @@ const carriers = ['Own Delivery', 'DHL', 'FedEx', 'UPS', 'Local Courier', 'Speed
 const DELIVERY_POD_RECONCILE_KEY = 'prime_shipping_pod_reconcile_v1';
 
 const ShippingManager: React.FC = () => {
-    const { deliveryNotes, companyConfig, notify, shipments, customers, employees = [], fetchSalesData, fetchFinanceData } = useData();
+    const { companyConfig, notify } = useAuth();
+    const { deliveryNotes, employees = [], fetchFinanceData } = useFinance();
+    const { shipments, customers, fetchSalesData } = useSales();
     const { handlePreview } = useDocumentPreview();
     const [searchTerm, setSearchTerm] = useState('');
     const [activeTab, setActiveTab] = useState<'Pipeline' | 'Active' | 'History'>('Pipeline');
@@ -160,7 +164,7 @@ const ShippingManager: React.FC = () => {
     const handleConfirmDispatch = async () => {
         if (!dispatchTarget) return;
 
-        const id = `SHP-${Date.now().toString().slice(-4)}`;
+        const id = `SHP-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
         const driverName = isAddingNewDriver 
             ? dispatchForm.newDriverName 
             : payrollDrivers.find(e => e.id === dispatchForm.driverId)?.name || 'Unknown';

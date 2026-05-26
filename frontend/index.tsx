@@ -18,27 +18,48 @@ import './index.css';
 import App from './App.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js', { scope: './' })
-      .then((registration) => {
-        if (registration.installing) {
-          console.log('[PWA] Service worker installing');
-        } else if (registration.waiting) {
-          console.log('[PWA] Service worker installed, awaiting activation');
-        } else if (registration.active) {
-          console.log('[PWA] Service worker active');
+const canRegisterServiceWorker = () => {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
+    return false;
+  }
+
+  if (window.location.protocol === 'file:') {
+    return false;
+  }
+
+  const hostname = String(window.location.hostname || '').toLowerCase();
+  const isLocalhost = hostname === 'localhost'
+    || hostname === '127.0.0.1'
+    || hostname === '0.0.0.0'
+    || hostname === '::1'
+    || hostname === '[::1]';
+
+  return window.isSecureContext && !isLocalhost;
+};
+
+if (canRegisterServiceWorker()) {
+  window.addEventListener('load', async () => {
+    try {
+      const baseUrl = String((import.meta as any)?.env?.BASE_URL || '/').replace(/\/+$/, '');
+      const serviceWorkerUrl = `${baseUrl || ''}/sw.js`;
+      const scope = `${baseUrl || ''}/`;
+      const registration = await navigator.serviceWorker.register(serviceWorkerUrl, { scope });
+      console.log('[PWA] SW registered', registration);
+
+      registration.addEventListener('updatefound', () => {
+        const installing = registration.installing;
+        if (!installing) {
+          return;
         }
-      })
-      .catch((error) => {
-        if (error.name === 'InvalidStateError') {
-          console.info('[PWA] Service Worker registration skipped (document state not supported)');
-        } else if (error.name === 'SecurityError') {
-          console.info('[PWA] Service Worker registration skipped (insecure context)');
-        } else {
-          console.warn('[PWA] Service Worker registration failed:', error.message);
-        }
+        installing.addEventListener('statechange', () => {
+          if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+            console.log('[PWA] Update available');
+          }
+        });
       });
+    } catch (error: any) {
+      console.error('[PWA] Service worker registration failed', error);
+    }
   });
 }
 
@@ -49,9 +70,7 @@ if (!rootElement) {
 
 const root = ReactDOM.createRoot(rootElement);
 root.render(
-  <React.StrictMode>
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
-  </React.StrictMode>
+  <ErrorBoundary>
+    <App />
+  </ErrorBoundary>
 );

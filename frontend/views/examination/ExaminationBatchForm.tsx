@@ -54,7 +54,7 @@ const ExaminationBatchForm: React.FC = () => {
     city: ''
   });
   const [addingCustomer, setAddingCustomer] = useState(false);
-  const CREATE_SUBMIT_TIMEOUT_MS = 30000;
+  const CREATE_SUBMIT_TIMEOUT_MS = 60000;
 
   useEffect(() => {
     if (companyConfig?.currencySymbol) {
@@ -96,7 +96,7 @@ const ExaminationBatchForm: React.FC = () => {
 
     setAddingCustomer(true);
     try {
-      const customerId = `CUS-${Date.now()}`;
+      const customerId = `CUS-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
       const customer: Customer = {
         id: customerId,
         name: newCustomer.name.trim(),
@@ -169,8 +169,6 @@ const ExaminationBatchForm: React.FC = () => {
         rounding_method: companyConfig?.pricingSettings?.defaultMethod || 'ALWAYS_UP_50',
         rounding_value: Number(companyConfig?.pricingSettings?.customStep || 50)
       };
-
-      console.log('[DEBUG] Submitting batch payload:', JSON.stringify(payload, null, 2));
 
       const newBatch = await Promise.race([
         createBatch(payload),

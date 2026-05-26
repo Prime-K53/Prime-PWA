@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { isFileProtocol } from '../utils/runtime';
 
 interface PwaInstallContextValue {
   isInstallable: boolean;
@@ -23,13 +24,21 @@ const PwaInstallContext = createContext<PwaInstallContextValue>({
 export const usePwaInstall = () => useContext(PwaInstallContext);
 
 export const PwaInstallProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const fileProtocol = isFileProtocol();
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [isInstalled, setIsInstalled] = useState(false);
+  const [isInstalled, setIsInstalled] = useState(fileProtocol);
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [updateRegistration, setUpdateRegistration] = useState<ServiceWorkerRegistration | null>(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   useEffect(() => {
+    if (fileProtocol) {
+      setIsInstalled(true);
+      setDeferredPrompt(null);
+      setUpdateAvailable(false);
+      return;
+    }
+
     const onBeforeInstall = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e);
@@ -73,7 +82,7 @@ export const PwaInstallProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
     };
-  }, []);
+  }, [fileProtocol]);
 
   const install = useCallback(async () => {
     if (!deferredPrompt) return;

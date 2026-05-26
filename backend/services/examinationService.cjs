@@ -1,4 +1,5 @@
-const { db } = require('../db.cjs');
+const { getDatabase } = require('../db.cjs');
+const getDb = () => getDatabase();
 const { randomUUID, createHash } = require('crypto');
 const pricingEngine = require('./examinationPricingEngine.cjs');
 const batchWorkflow = require('./examinationBatchWorkflow.cjs');
@@ -18,7 +19,7 @@ const DEFAULT_TONER_PAGES_PER_UNIT = TONER_PAGES_PER_KG;
 // Helper to run DB queries as promises
 const runQuery = (query, params = []) => {
   return new Promise((resolve, reject) => {
-    db.all(query, params, (err, rows) => {
+    getDb().all(query, params, (err, rows) => {
       if (err) reject(err);
       else resolve(rows);
     });
@@ -27,7 +28,7 @@ const runQuery = (query, params = []) => {
 
 const runGet = (query, params = []) => {
   return new Promise((resolve, reject) => {
-    db.get(query, params, (err, row) => {
+    getDb().get(query, params, (err, row) => {
       if (err) reject(err);
       else resolve(row);
     });
@@ -36,7 +37,7 @@ const runGet = (query, params = []) => {
 
 const runRun = (query, params = []) => {
   return new Promise((resolve, reject) => {
-    db.run(query, params, function (err) {
+    getDb().run(query, params, function (err) {
       if (err) reject(err);
       else resolve(this);
     });
@@ -392,8 +393,12 @@ const mapBackendInvoiceToFrontendPayload = ({ invoiceRow, batch, customerName, l
     materialTotal,
     adjustmentTotal,
     adjustmentSnapshots: adjustmentSnapshots.map((snapshot) => ({
+      id: snapshot.id,
       name: snapshot.name,
       type: snapshot.type,
+      total_amount: snapshot.total_amount,
+      application_count: snapshot.application_count,
+      is_rounding: Boolean(snapshot.is_rounding),
       value: snapshot.total_amount,
       calculatedAmount: snapshot.total_amount
     })),
@@ -1431,6 +1436,9 @@ const ensureCoreExaminationSchema = async () => {
       FOREIGN KEY (class_id) REFERENCES examination_classes(id) ON DELETE CASCADE
     )`);
 
+    await ensureColumnIfMissingCore('examination_classes', 'market_adjustment_total', 'REAL DEFAULT 0');
+    await ensureColumnIfMissingCore('examination_classes', 'rounding_adjustment', 'REAL DEFAULT 0');
+    await ensureColumnIfMissingCore('examination_classes', 'manual_override_amount', 'REAL DEFAULT 0');
     await ensureColumnIfMissingCore('examination_classes', 'calculated_total_pages', 'INTEGER DEFAULT 0');
     await ensureColumnIfMissingCore('examination_subjects', 'pages', 'INTEGER DEFAULT 0');
     await ensureColumnIfMissingCore('examination_subjects', 'extra_copies', 'INTEGER DEFAULT 0');
@@ -1662,6 +1670,7 @@ const ensureExaminationPricingSchema = async () => {
     await ensureColumnIfMissing('examination_batches', 'calculated_material_total', 'REAL DEFAULT 0');
     await ensureColumnIfMissing('examination_batches', 'calculated_adjustment_total', 'REAL DEFAULT 0');
     await ensureColumnIfMissing('examination_batches', 'adjustment_snapshots_json', 'TEXT');
+    await ensureColumnIfMissing('examination_batches', 'market_adjustment_total', 'REAL DEFAULT 0');
     await ensureColumnIfMissing('examination_batches', 'rounding_adjustment_total', 'REAL DEFAULT 0');
     await ensureColumnIfMissing('examination_batches', 'pre_rounding_total_amount', 'REAL DEFAULT 0');
     await ensureColumnIfMissing('examination_batches', 'rounding_method', "TEXT DEFAULT 'nearest_50'");
@@ -1696,6 +1705,9 @@ const ensureExaminationPricingSchema = async () => {
     await ensureColumnIfMissing('examination_classes', 'adjustment_total_cost', 'REAL DEFAULT 0');
     await ensureColumnIfMissing('examination_classes', 'adjustment_delta_percent', 'REAL DEFAULT 0');
     await ensureColumnIfMissing('examination_classes', 'cost_last_calculated_at', 'DATETIME');
+    await ensureColumnIfMissing('examination_classes', 'market_adjustment_total', 'REAL DEFAULT 0');
+    await ensureColumnIfMissing('examination_classes', 'rounding_adjustment', 'REAL DEFAULT 0');
+    await ensureColumnIfMissing('examination_classes', 'manual_override_amount', 'REAL DEFAULT 0');
 
     await ensureColumnIfMissing('examination_subjects', 'total_pages', 'INTEGER DEFAULT 0');
 
@@ -3536,6 +3548,7 @@ const examinationService = {
     let batchTotalAmount = 0;
     let batchMaterialTotal = 0;
     let batchAdjustmentTotal = 0;
+    let batchMarketAdjustmentTotal = 0;
     let batchRoundingAdjustmentTotal = 0;
     let batchLearnerCount = 0;
     let calculationDuration = 0;
@@ -3544,6 +3557,11 @@ const examinationService = {
     try {
       // Keep a single adjustment transaction snapshot per batch recalculation.
       await runRun('DELETE FROM market_adjustment_transactions WHERE sale_id = ?', [marketAdjustmentSaleRef]);
+
+      // Ensure the synthetic auto-rounding adjustment exists so the FK
+      // constraint on market_adjustment_transactions.adjustment_id is satisfied.
+      await runRun(`INSERT OR IGNORE INTO market_adjustments (id, name, type, value, applies_to, is_system_default, is_active, active, adjustment_category, sort_order)
+                    VALUES ('auto-rounding', 'Rounding Adjustment', 'FIXED', 0, 'COST', 1, 0, 0, 'Custom', 9999)`);
 
       for (const cls of batch.classes || []) {
         const learners = Math.max(1, Math.floor(Number(cls.number_of_learners) || 0));
@@ -3573,11 +3591,17 @@ const examinationService = {
         const classAdjustmentBreakdown = buildClassAdjustmentBreakdown(totalBomCost, classTotalPages, effectiveAdjustments);
         let roundingAdjustmentRow = null;
 
-        let totalAdjustments = pricingEngine.roundCurrency(classAdjustmentBreakdown.totalAdjustmentCost);
+        const marketAdjustmentCost = pricingEngine.roundCurrency(classAdjustmentBreakdown.totalAdjustmentCost);
+        let totalAdjustments = marketAdjustmentCost;
         let expectedTotal = pricingEngine.roundCurrency(totalBomCost + totalAdjustments);
+        
+        // Track separate market adjustment and rounding amounts for proper data separation
+        const marketAdjustmentTotal = marketAdjustmentCost;
+        let roundingAdjustmentTotal = 0;
         let expectedFeePerLearner = learners > 0
           ? pricingEngine.roundCurrency(expectedTotal / learners)
           : 0;
+        let roundingTotalForClass = 0;
 
         // Apply rounding only when there are active market adjustments.
         // This prevents showing non-zero adjustment totals caused solely by rounding.
@@ -3586,11 +3610,13 @@ const examinationService = {
           const roundedFeePerLearner = applyBatchRounding(expectedFeePerLearner, roundingConfig);
           const roundingDiffPerLearner = pricingEngine.roundCurrency(roundedFeePerLearner - expectedFeePerLearner);
           if (roundingDiffPerLearner > 0) {
-            const roundingTotalForClass = pricingEngine.roundCurrency(roundingDiffPerLearner * learners);
+            roundingTotalForClass = pricingEngine.roundCurrency(roundingDiffPerLearner * learners);
             batchRoundingAdjustmentTotal += roundingTotalForClass;
             totalAdjustments = pricingEngine.roundCurrency(totalAdjustments + roundingTotalForClass);
             expectedTotal = pricingEngine.roundCurrency(totalBomCost + totalAdjustments);
             expectedFeePerLearner = roundedFeePerLearner;
+            // Update the rounding adjustment total for this class
+            roundingAdjustmentTotal = roundingTotalForClass;
             roundingAdjustmentRow = {
               adjustmentId: 'auto-rounding',
               adjustmentName: 'Rounding Adjustment',
@@ -3655,6 +3681,13 @@ const examinationService = {
           ? pricingEngine.calculatePercentageDifference(finalCostPerLearner, expectedFeePerLearner)
           : 0;
 
+        // Track the manual override delta as a separate financial line item.
+        // This ensures the delta is visible in breakdowns and reports rather than
+        // silently absorbed into the total.
+        const manualOverrideAmount = isManualOverride
+          ? pricingEngine.roundCurrency(finalClassTotal - expectedTotal)
+          : 0;
+
         // Calculate the three critical financial metrics
         const finalFeePerLearner = finalCostPerLearner;
         const liveTotalPreview = finalClassTotal;
@@ -3674,28 +3707,34 @@ const examinationService = {
         });
 
         await runRun(
-          `UPDATE examination_classes
-           SET suggested_cost_per_learner = ?,
-               calculated_total_cost = ?,
-               material_total_cost = ?,
-               adjustment_total_cost = ?,
-               adjustment_delta_percent = ?,
-               price_per_learner = ?,
-               total_price = ?,
-               cost_last_calculated_at = CURRENT_TIMESTAMP,
-               updated_at = CURRENT_TIMESTAMP,
-               expected_fee_per_learner = ?,
-               final_fee_per_learner = ?,
-               live_total_preview = ?,
-               financial_metrics_source = ?,
-               financial_metrics_updated_at = CURRENT_TIMESTAMP,
-               financial_metrics_updated_by = ?
-           WHERE id = ?`,
+           `UPDATE examination_classes
+            SET suggested_cost_per_learner = ?,
+                calculated_total_cost = ?,
+                material_total_cost = ?,
+                adjustment_total_cost = ?,
+                market_adjustment_total = ?,
+                rounding_adjustment = ?,
+                manual_override_amount = ?,
+                adjustment_delta_percent = ?,
+                price_per_learner = ?,
+                total_price = ?,
+                cost_last_calculated_at = CURRENT_TIMESTAMP,
+                updated_at = CURRENT_TIMESTAMP,
+                expected_fee_per_learner = ?,
+                final_fee_per_learner = ?,
+                live_total_preview = ?,
+                financial_metrics_source = ?,
+                financial_metrics_updated_at = CURRENT_TIMESTAMP,
+                financial_metrics_updated_by = ?
+            WHERE id = ?`,
           [
             expectedFeePerLearner,
             expectedTotal,
             totalBomCost,
             totalAdjustments,
+            marketAdjustmentTotal,
+            roundingAdjustmentTotal,
+            manualOverrideAmount,
             adjustmentDeltaPercent,
             finalCostPerLearner,
             finalClassTotal,
@@ -3775,6 +3814,10 @@ const examinationService = {
         batchMaterialTotal += totalBomCost;
         batchAdjustmentTotal += totalAdjustments;
         batchLearnerCount += learners;
+        
+        // Track separate market adjustment and rounding totals at batch level
+        batchMarketAdjustmentTotal += marketAdjustmentTotal;
+        batchRoundingAdjustmentTotal += roundingAdjustmentTotal;
       }
 
       calculationDuration = Date.now() - startedAt;
@@ -3813,6 +3856,7 @@ const examinationService = {
          SET total_amount = ?,
              calculated_material_total = ?,
              calculated_adjustment_total = ?,
+             market_adjustment_total = ?,
              adjustment_snapshots_json = ?,
              rounding_adjustment_total = ?,
              pre_rounding_total_amount = ?,
@@ -3830,6 +3874,7 @@ const examinationService = {
           roundedBatchTotalAmount,
           roundedBatchMaterialTotal,
           roundedBatchAdjustmentTotal,
+          pricingEngine.roundCurrency(batchMarketAdjustmentTotal),
           serializeBatchAdjustmentSnapshots(normalizedAdjustmentSnapshots),
           persistedRoundingAdjustmentTotal,
           preRoundingTotalAmount,
@@ -3990,6 +4035,8 @@ const examinationService = {
       calculateSubjectConsumption: pricingEngine.calculateSubjectConsumption
     });
 
+    const warnings = [];
+
     await runRun('BEGIN TRANSACTION');
     try {
       for (const deduction of deductions) {
@@ -4002,6 +4049,16 @@ const examinationService = {
         const previousQuantity = toNumericValue(item.quantity) ?? 0;
         const newQuantity = previousQuantity - deduction.quantity_required;
         const totalCost = pricingEngine.roundCurrency(deduction.quantity_required * deduction.unit_cost);
+
+        if (newQuantity < 0) {
+          warnings.push({
+            item_id: deduction.item_id,
+            item_name: item.name,
+            available: previousQuantity,
+            required: deduction.quantity_required,
+            message: `Low inventory for ${item.name}: only ${previousQuantity} available, ${deduction.quantity_required} required. Stock will go negative.`
+          });
+        }
 
         await runRun(
           `UPDATE inventory
@@ -4043,7 +4100,7 @@ const examinationService = {
         action: 'APPROVE',
         entityType: 'ExaminationBatch',
         entityId: batchId,
-        details: 'Approved batch'
+        details: warnings.length > 0 ? `Approved batch with inventory warnings: ${warnings.map(w => w.message).join('; ')}` : 'Approved batch'
       });
 
       await runRun('COMMIT');
@@ -4056,7 +4113,8 @@ const examinationService = {
       throw error;
     }
 
-    return await examinationService.getBatchById(batchId);
+    const approvedBatch = await examinationService.getBatchById(batchId);
+    return { batch: approvedBatch, warnings };
   },
 
   generateInvoice: async (batchId, userId = 'System', options = {}) => {

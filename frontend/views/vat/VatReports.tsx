@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useVatStore } from '../../stores/vatStore';
-import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
 import { format, parseISO, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import {
     FileText, Download, CheckCircle, AlertCircle, Plus, Calendar
@@ -9,7 +9,7 @@ import { VatReturn } from '../../types';
 
 export const VatReports: React.FC = () => {
     const { returns, generateReturn, fileReturn, isLoading } = useVatStore();
-    const { companyConfig } = useData();
+    const { companyConfig } = useAuth();
     const currency = companyConfig?.currencySymbol || 'MK';
 
     const [isGenerating, setIsGenerating] = useState(false);

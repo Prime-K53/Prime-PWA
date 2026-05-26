@@ -94,9 +94,14 @@ const ExaminationBatchDetail: React.FC = () => {
       onConfirm: async () => {
         setIsApproving(true);
         try {
-          const updatedBatch = await approveBatch(batch.id);
+          const { batch: updatedBatch, warnings } = await approveBatch(batch.id);
           setBatch(updatedBatch);
-          notify('Batch approved successfully!', 'success');
+          if (warnings && warnings.length > 0) {
+            warnings.forEach(w => notify(w.message, 'warning'));
+            notify('Batch approved with inventory warnings.', 'warning');
+          } else {
+            notify('Batch approved successfully!', 'success');
+          }
         } catch (error) {
           console.error('Error approving batch:', error);
           notify('Failed to approve batch. Please check inventory levels.', 'error');
@@ -263,14 +268,6 @@ const ExaminationBatchDetail: React.FC = () => {
         throw new Error('Number of learners must be greater than 0');
       }
 
-      console.log('[DEBUG] handleAddClass - Adding class to batch:', {
-        batchId: batch.id,
-        batchNumber: batch.batch_number || batch.batchNumber,
-        batchName: batch.name,
-        className: data.class_name,
-        learnerCount: data.number_of_learners
-      });
-
       const createdClass = await examinationBatchService.addClass(batch.id, {
         ...data,
         currency: batch.currency
@@ -318,20 +315,13 @@ const ExaminationBatchDetail: React.FC = () => {
             3. Batch not synced to backend yet
             4. Wrong batch ID in URL (manual navigation?)
           `;
-          
-          console.error('[DEBUG] Batch not found error details:', {
-            batchId: batch.id,
-            batchNumber: batch.batch_number,
-            errorMessage: error.message,
-            stack: error.stack
-          });
         }
       } else if (typeof error === 'string') {
         errorMessage = error;
       }
 
       console.error('Error adding class:', error);
-      notify(errorMessage + debugInfo, 'error');
+      notify(errorMessage, 'error');
       throw new Error(errorMessage);
     }
   };
@@ -615,6 +605,8 @@ const ExaminationBatchDetail: React.FC = () => {
       return {
         production: 0,
         adjustment: 0,
+        marketAdjustment: 0,
+        roundingAdjustment: 0,
         total: 0,
         totalPages: 0,
         totalSheets: 0,
@@ -646,6 +638,7 @@ const ExaminationBatchDetail: React.FC = () => {
         adjustment: acc.adjustment + (Number(cls.adjustment_total_cost) || 0),
         marketAdjustment: acc.marketAdjustment + (Number(cls.market_adjustment_total ?? cls.adjustment_total_cost) || 0),
         roundingAdjustment: acc.roundingAdjustment + (Number(cls.rounding_adjustment) || 0),
+        manualOverride: acc.manualOverride + (Number(cls.manual_override_amount) || 0),
         total: acc.total + resolveClassTotalAmount(cls),
         totalPages: acc.totalPages + classTotalPages,
         totalSheets: acc.totalSheets + classTotalSheets,
@@ -657,6 +650,7 @@ const ExaminationBatchDetail: React.FC = () => {
       adjustment: 0,
       marketAdjustment: 0,
       roundingAdjustment: 0,
+      manualOverride: 0,
       total: 0,
       totalPages: 0,
       totalSheets: 0,
@@ -900,6 +894,12 @@ const ExaminationBatchDetail: React.FC = () => {
               <span className="text-slate-400">Rounding:</span>
               <span className="text-blue-600 font-medium">{batch.currency || 'MWK'} {batchTotals.roundingAdjustment.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
             </div>
+            {batchTotals.manualOverride !== 0 && (
+              <div className="flex justify-between text-[10px]">
+                <span className="text-slate-400">Manual Override:</span>
+                <span className="text-purple-600 font-medium">{batch.currency || 'MWK'} {batchTotals.manualOverride.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+              </div>
+            )}
           </div>
         </div>
         <div className="bg-white/70 backdrop-blur-xl p-4 rounded-2xl border border-white/60 shadow-sm">
@@ -1075,6 +1075,14 @@ const ExaminationBatchDetail: React.FC = () => {
                                         {batch.currency || 'MWK'} {(Number(cls.rounding_adjustment) || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                                       </span>
                                     </div>
+                                    {Number(cls.manual_override_amount) !== 0 && (
+                                      <div className="flex flex-col text-right">
+                                        <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Manual Override</span>
+                                        <span className="font-bold text-purple-600 finance-nums leading-none mt-1 text-sm">
+                                          {batch.currency || 'MWK'} {(Number(cls.manual_override_amount) || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                        </span>
+                                      </div>
+                                    )}
                                     <div className="flex flex-col text-right">
                                       <span className="text-xs uppercase font-bold text-slate-600 tracking-widest">Class Total</span>
                                       <span className="font-bold text-indigo-700 finance-nums leading-none mt-1.5 text-base">

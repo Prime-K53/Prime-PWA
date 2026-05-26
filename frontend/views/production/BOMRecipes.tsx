@@ -3,13 +3,15 @@ import {
     Plus, Trash2, Save, Layers,
     Search, Edit2, FileText, Clock
 } from 'lucide-react';
-import { useData } from '../../context/DataContext';
+import { useInventory } from '../../context/InventoryContext';
+import { useAuth } from '../../context/AuthContext';
 import { BOMTemplate, Item } from '../../types';
 import { dbService } from '../../services/db';
 import { repriceMasterInventoryFromAdjustments } from '../../services/masterInventoryPricingService';
 
 const BOMRecipes: React.FC = () => {
-    const { inventory, notify, companyConfig, updateCompanyConfig, addAuditLog } = useData();
+    const { inventory } = useInventory();
+    const { notify, companyConfig, updateCompanyConfig, addAuditLog } = useAuth();
     const [activeTab, setActiveTab] = useState<'Templates'>('Templates');
     const [templates, setTemplates] = useState<BOMTemplate[]>([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -44,7 +46,7 @@ const BOMRecipes: React.FC = () => {
         try {
             const template = {
                 ...editingTemplate,
-                id: editingTemplate.id || `tpl-${Date.now()}`,
+                id: editingTemplate.id || `tpl-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
                 components: editingTemplate.components || [],
                 lastUpdated: new Date().toISOString()
             } as BOMTemplate;

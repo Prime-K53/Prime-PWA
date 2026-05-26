@@ -3,7 +3,7 @@ import { useSalesStore } from '../stores/salesStore';
 import { useFinance } from './FinanceContext';
 import { useProductionStore } from '../stores/productionStore';
 import { useInventoryStore } from '../stores/inventoryStore';
-import { Sale, Quotation, JobOrder, HeldOrder, ZReport, CustomerPayment, Invoice, WorkOrder, LedgerEntry, RecurringInvoice, WalletTransaction, CartItem, Customer, SalesExchange, ReprintJob, SalesOrder } from '../types';
+import { Sale, Quotation, JobOrder, HeldOrder, ZReport, CustomerPayment, Invoice, WorkOrder, LedgerEntry, RecurringInvoice, WalletTransaction, CartItem, Customer, SalesExchange, ReprintJob, SalesOrder, Shipment } from '../types';
 import { generateNextId, roundFinancial, resolveCustomerPaymentPolicy, resolveCustomerPaymentTerms } from '../utils/helpers';
 import { useAuth } from './AuthContext';
 import { bomService } from '../services/bomService';
@@ -72,6 +72,7 @@ interface SalesContextType {
     salesOrders: SalesOrder[];
     salesExchanges: SalesExchange[];
     reprintJobs: ReprintJob[];
+    shipments: Shipment[];
     isLoading: boolean;
     isPosModalOpen: boolean;
     setIsPosModalOpen: (open: boolean) => void;
@@ -148,9 +149,6 @@ export const SalesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             runRecurringBilling();
         }).catch(err => {
             notify("Failed to load sales history.", "error");
-        });
-        productionStore.fetchProductionData().catch(err => {
-            // Production context initialization pending
         });
     }, [isInitialized]);
 
@@ -1118,7 +1116,7 @@ export const SalesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }, { total: 0, cash: 0, card: 0, other: 0 });
 
         return {
-            id: `Z-${Date.now()}`,
+            id: `Z-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
             date: today.toISOString(),
             cashierId,
             totalSales: roundFinancial(totals.total),
@@ -1145,6 +1143,7 @@ export const SalesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             processRefund,
             updateQuotation,
             deleteQuotation,
+            approveQuotation,
             isLoading: salesStore.isLoading,
             addSalesExchange: async (exchange: any) => {
                 try {

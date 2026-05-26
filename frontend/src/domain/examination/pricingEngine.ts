@@ -56,14 +56,9 @@ export interface BatchPricingResult {
   classes: ClassPricingResult[];
 }
 
-const roundMoney = (value: number) => Math.round((Number(value) || 0) * 100) / 100;
+import { roundMoney, roundUpToStep } from '../../../utils/roundingUtils';
 
-const roundUpTo50 = (value: number): number => {
-  const safeValue = Number(value) || 0;
-  // Rule: round the learner fee up to the next clean 50.
-  // Example: 2,080 → 2,100; 1,274 → 1,250
-  return Math.ceil(safeValue / 50) * 50;
-};
+const roundUpTo50 = (value: number): number => roundUpToStep(value, 50);
 
 const normalizeAdjustmentType = (value: string | undefined) => {
   const type = String(value || '').toUpperCase();
@@ -90,6 +85,33 @@ export const calculateSubjectConsumptionForLearners = (
   };
 };
 
+export const calculateExaminationBomCost = (
+  subjects: Array<{ pages?: number; extra_copies?: number }>,
+  learners: number,
+  paperUnitCost: number,
+  tonerUnitCost: number,
+  conversionRate: number,
+  tonerPagesPerUnit: number
+) => {
+  const safeLearners = Math.max(1, Math.floor(Number(learners) || 0));
+  let totalSheets = 0;
+  let totalPages = 0;
+
+  for (const subject of subjects || []) {
+    const consumption = calculateSubjectConsumptionForLearners(subject as PricingSubjectInput, safeLearners);
+    totalSheets += consumption.totalSheets;
+    totalPages += consumption.totalPages;
+  }
+
+  const paperQty = totalSheets / Math.max(1, Number(conversionRate) || 500);
+  const tonerQty = totalPages / Math.max(1, Number(tonerPagesPerUnit) || 20000);
+  const paperCost = roundMoney(paperQty * Math.max(0, Number(paperUnitCost) || 0));
+  const tonerCost = roundMoney(tonerQty * Math.max(0, Number(tonerUnitCost) || 0));
+  const totalBomCost = roundMoney(paperCost + tonerCost);
+
+  return { totalSheets, totalPages, paperCost, tonerCost, totalBomCost };
+};
+
 export const calculateExaminationBatchPricing = (
   batch: PricingBatchInput | null | undefined,
   settings: PricingSettingsInput | null,
@@ -107,20 +129,15 @@ export const calculateExaminationBatchPricing = (
 
   const classes = (batch.classes || []).map((cls, index) => {
     const learners = Math.max(1, Math.floor(Number(cls.number_of_learners) || 0));
-    let totalSheets = 0;
-    let totalPages = 0;
-
-    for (const subject of cls.subjects || []) {
-      const consumption = calculateSubjectConsumptionForLearners(subject, learners);
-      totalSheets += consumption.totalSheets;
-      totalPages += consumption.totalPages;
-    }
-
-    const paperQty = totalSheets / conversionRate;
-    const tonerQty = totalPages / tonerPagesPerUnit;
-    const paperCost = roundMoney(paperQty * (Number(settings.paper_unit_cost) || 0));
-    const tonerCost = roundMoney(tonerQty * (Number(settings.toner_unit_cost) || 0));
-    const totalBomCost = roundMoney(paperCost + tonerCost);
+    const bom = calculateExaminationBomCost(
+      cls.subjects || [],
+      learners,
+      Number(settings.paper_unit_cost) || 0,
+      Number(settings.toner_unit_cost) || 0,
+      conversionRate,
+      tonerPagesPerUnit
+    );
+    const { totalSheets, totalPages, totalBomCost } = bom;
 
     // 1. Compute adjustedCost = BOM + (BOM * adjustmentRate)
     const explicitAdjustmentRate = Number(settings.adjustment_rate ?? 0);

@@ -7,7 +7,8 @@ import {
   TrendingUp, Percent
 } from 'lucide-react';
 import { Quotation } from '../../../types';
-import { useData } from '../../../context/DataContext';
+import { useAuth } from '../../../context/AuthContext';
+import { useSales } from '../../../context/SalesContext';
 import { useDocumentPreview } from '../../../hooks/useDocumentPreview';
 
 import { AuditTimeline } from '../../shared/components/AuditTimeline';
@@ -21,9 +22,8 @@ interface QuotationDetailsProps {
 }
 
 export const QuotationDetails: React.FC<QuotationDetailsProps> = ({ quotation: initialQuotation, onClose, onEdit, onAction }) => {
-  const {
-    companyConfig, quotations = [], notify
-  } = useData();
+  const { companyConfig, notify } = useAuth();
+  const { quotations = [] } = useSales();
   const { handlePreview } = useDocumentPreview();
   const currency = companyConfig?.currencySymbol || '$';
 

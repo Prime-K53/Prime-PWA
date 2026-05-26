@@ -2,60 +2,34 @@
 import { Item, CompanyConfig } from '../types';
 import {
   extractConfiguredDocumentNumberValue,
-  formatConfiguredDocumentNumber,
-  normalizeNumberingKey,
   resolveBuiltInDocumentPrefix,
-  resolveEffectiveNumberingRule,
 } from './numbering';
-
-const isInvoiceNumberingType = (type: string) => {
-  const normalized = normalizeNumberingKey(type);
-  return normalized === 'invoice' || normalized.startsWith('inv') || normalized.includes('invoice') || normalized.includes('examination');
-};
-
-const resolveNumberingRules = (type: string, config?: CompanyConfig) => {
-  const cfg = config || getCompanyConfig();
-  const rules = cfg?.transactionSettings?.numbering as any;
-  const effectiveRule = resolveEffectiveNumberingRule(type, cfg);
-  return { rules, effectiveRule };
-};
-
-const resolveNumberingPadding = (type: string, config?: CompanyConfig) => {
-  const { effectiveRule } = resolveNumberingRules(type, config);
-  const padding = effectiveRule?.padding;
-  
-  // Fallback for legacy examination invoice format if no rule is found
-  if (padding == null && (type === 'examination_invoice' || type === 'examination')) {
-    return 6;
-  }
-  
-  if (padding == null) {
-    if (isInvoiceNumberingType(type)) {
-      throw new Error('Missing invoice padding configuration.');
-    }
-    return 4;
-  }
-  const parsed = Number(padding);
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    if (isInvoiceNumberingType(type)) {
-      throw new Error('Invalid invoice padding configuration.');
-    }
-    return 4;
-  }
-  return parsed;
-};
+import {
+  generateCategorySku,
+  generateNumericAccountNumber,
+  generateSequentialId,
+  isInvoiceNumberingType,
+  resolveSequentialNumberingPadding,
+  resolveSequentialNumberingRule,
+} from './idGeneration';
+import * as roundingUtils from './roundingUtils';
 
 export const assertInvoiceNumberFormat = (id: string, config?: CompanyConfig, type: string = 'invoice') => {
-  // Handle legacy examination invoice format with EXM prefix if not explicitly configured otherwise
-  if (String(id || '').toUpperCase().startsWith('EXM-') && type === 'examination_invoice') {
-    const numericPart = String(id || '').match(/EXM-\d{4}-(\d+)/)?.[1];
-    if (numericPart && numericPart.length === 6) {
-       return true;
+  // Handle examination invoice format with EXM prefix
+  if (String(id || '').toUpperCase().startsWith('EXM-')) {
+    // Accept EXM-<anything> format for examination invoices
+    if (type === 'examination_invoice') {
+      return true;
+    }
+    // For regular invoices with EXM prefix (e.g., mixed usage), also accept them
+    const originModule = String((config as any)?.originModule || '').toLowerCase();
+    if (originModule === 'examination') {
+      return true;
     }
   }
-  
-  const padding = resolveNumberingPadding(type, config);
-  const { effectiveRule } = resolveNumberingRules(type, config);
+
+  const padding = resolveSequentialNumberingPadding(type, config);
+  const { effectiveRule } = resolveSequentialNumberingRule(type, config);
   const numericValue = extractConfiguredDocumentNumberValue(String(id || ''), {
     prefix: effectiveRule?.prefix || resolveBuiltInDocumentPrefix(type),
     suffix: effectiveRule?.suffix || ''
@@ -75,78 +49,8 @@ export const assertInvoiceNumberFormat = (id: string, config?: CompanyConfig, ty
   return true;
 };
 
-export const generateNextId = (type: string, collection: any[], config?: CompanyConfig) => {
-  const { effectiveRule } = resolveNumberingRules(type, config);
-  const padding = resolveNumberingPadding(type, config);
-  let prefix = resolveBuiltInDocumentPrefix(type) || type;
-  let startNumber = 1;
-  let resetInterval = 'Never';
-  let extension = '';
-  let suffix = '';
-
-  if (effectiveRule) {
-    prefix = effectiveRule.prefix || prefix;
-    startNumber = effectiveRule.startNumber || 1;
-    resetInterval = effectiveRule.resetInterval || 'Never';
-    extension = effectiveRule.extension || '';
-    suffix = effectiveRule.suffix || '';
-  }
-
-  const activeRule = {
-    prefix,
-    padding,
-    extension,
-    suffix
-  };
-
-  if (!collection || collection.length === 0) {
-    const nextId = formatConfiguredDocumentNumber(activeRule, startNumber);
-    if (isInvoiceNumberingType(type)) {
-      assertInvoiceNumberFormat(nextId, config, type);
-    }
-    return nextId;
-  }
-
-  // Handle Reset Intervals (Monthly, Yearly)
-  let filteredCollection = collection;
-  if (resetInterval !== 'Never') {
-    const now = new Date();
-    filteredCollection = collection.filter(item => {
-      if (!item.date) return false;
-      const itemDate = new Date(item.date);
-      if (resetInterval === 'Daily') {
-        return itemDate.getDate() === now.getDate()
-          && itemDate.getMonth() === now.getMonth()
-          && itemDate.getFullYear() === now.getFullYear();
-      }
-      if (resetInterval === 'Monthly') {
-        return itemDate.getMonth() === now.getMonth() && itemDate.getFullYear() === now.getFullYear();
-      }
-      if (resetInterval === 'Yearly') {
-        return itemDate.getFullYear() === now.getFullYear();
-      }
-      return true;
-    });
-  }
-
-  if (filteredCollection.length === 0) {
-    const nextId = formatConfiguredDocumentNumber(activeRule, startNumber);
-    if (isInvoiceNumberingType(type)) {
-      assertInvoiceNumberFormat(nextId, config, type);
-    }
-    return nextId;
-  }
-
-  const maxId = filteredCollection.reduce((max, item) => {
-    if (!item.id) return max;
-    if (typeof item.id !== 'string') return max;
-
-    const num = extractConfiguredDocumentNumberValue(item.id, activeRule);
-    return num !== null ? Math.max(max, num) : max;
-  }, 0);
-
-  const nextNum = Math.max(maxId + 1, startNumber);
-  const nextId = formatConfiguredDocumentNumber(activeRule, nextNum);
+export const generateNextId = (type: string = 'ID', collection: any[] = [], config?: CompanyConfig) => {
+  const nextId = generateSequentialId(type, collection, config);
   if (isInvoiceNumberingType(type)) {
     assertInvoiceNumberFormat(nextId, config, type);
   }
@@ -154,21 +58,7 @@ export const generateNextId = (type: string, collection: any[], config?: Company
 };
 
 export const generateSku = (category: string, collection: any[]) => {
-  if (!category) return '';
-  const prefix = category.substring(0, 3).toUpperCase();
-  const matchingItems = collection.filter(item =>
-    item.sku && item.sku.startsWith(prefix + '-')
-  );
-  let maxNum = 0;
-  matchingItems.forEach(item => {
-    const parts = item.sku.split('-');
-    const lastPart = parts[parts.length - 1];
-    const num = parseInt(lastPart);
-    if (!isNaN(num) && num > maxNum) {
-      maxNum = num;
-    }
-  });
-  return `${prefix}-${String(maxNum + 1).padStart(4, '0')}`;
+  return generateCategorySku(category, collection);
 };
 
 export const parseTemplate = (template: string, variables: Record<string, any>): string => {
@@ -178,22 +68,21 @@ export const parseTemplate = (template: string, variables: Record<string, any>):
 };
 
 export const generateAccountNumber = (): string => {
-  return Math.floor(10000000 + Math.random() * 90000000).toString();
+  return generateNumericAccountNumber();
 };
 
-/**
- * Helper to get dynamic config from CompanyConfig (mirrored from transactionService)
- */
 const getCompanyConfig = (): CompanyConfig | null => {
+  if (typeof window === 'undefined' || !window.localStorage) return null;
+
   const saved = localStorage.getItem('nexus_company_config');
-  if (saved) {
-    try {
-      return JSON.parse(saved);
-    } catch (e) {
-      console.error("Failed to parse company config", e);
-    }
+  if (!saved) return null;
+
+  try {
+    return JSON.parse(saved) as CompanyConfig;
+  } catch (error) {
+    console.error('Failed to parse company config', error);
+    return null;
   }
-  return null;
 };
 
 export const formatNumber = (num: number): string => {
@@ -223,33 +112,13 @@ export const formatNumberCompact = (num: number): string => {
 export const roundFinancial = (amount: number, config?: CompanyConfig): number => {
   const cfg = config || getCompanyConfig();
   const rules = cfg?.roundingRules || { method: 'Nearest', precision: 2 };
-
-  const precision = rules.precision ?? 2;
-  const factor = Math.pow(10, precision);
-  let rounded: number;
-
-  switch (rules.method) {
-    case 'Up':
-      rounded = Math.ceil(amount * factor) / factor;
-      break;
-    case 'Down':
-      rounded = Math.floor(amount * factor) / factor;
-      break;
-    case 'Nearest':
-    default:
-      rounded = Math.round((amount + Number.EPSILON) * factor) / factor;
-      break;
-  }
-
-  return rounded;
+  return roundingUtils.roundFinancial(amount, rules.method, rules.precision ?? 2);
 };
 
 /**
  * Standard currency rounding to 2 decimal places.
  */
-export const roundToCurrency = (amount: number): number => {
-  return Math.round((amount + Number.EPSILON) * 100) / 100;
-};
+export const roundToCurrency = roundingUtils.roundMoney;
 
 /**
  * Calculates the total valuation of a stock collection
@@ -431,7 +300,7 @@ export const downloadBlob = (blob: Blob, filename: string) => {
 /**
  * Utility to export data to CSV and trigger download
  */
-export const exportToCSV = (filename: string, data: any[]) => {
+export const exportToCSV = (data: any[], filename: string) => {
   if (!data || !data.length) return;
 
   const headers = Object.keys(data[0]);

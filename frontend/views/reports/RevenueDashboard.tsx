@@ -1,5 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useData, REFRESH_INTERVAL } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
+import { useSales } from '../../context/SalesContext';
+import { useFinance } from '../../context/FinanceContext';
+import { useOrders } from '../../context/OrdersContext';
+import { useExamination } from '../../context/ExaminationContext';
 import { useModuleRefresh } from '../../hooks/useModuleRefresh';
 import {
   Activity,
@@ -21,16 +26,12 @@ import {
 } from '../../services/revenueReportingService';
 
 const RevenueDashboard: React.FC = () => {
-  const {
-    sales = [],
-    invoices = [],
-    orders = [],
-    expenses = [],
-    examinationBatches = [],
-    companyConfig,
-    refreshAllData,
-    isLoading,
-  } = useData();
+  const { companyConfig } = useAuth();
+  const { sales = [], isLoading } = useSales();
+  const { invoices = [], expenses = [] } = useFinance();
+  const { orders = [] } = useOrders();
+  const { batches: examinationBatches = [] } = useExamination();
+  const { refreshAllData } = useData();
 
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -355,6 +356,7 @@ const RevenueDashboard: React.FC = () => {
                 <th className="px-4 py-3 text-right">Revenue</th>
                 <th className="px-4 py-3 text-right">Adjustments</th>
                 <th className="px-4 py-3 text-right">Profit Margin</th>
+                <th className="px-4 py-3 text-right">Manual Override</th>
                 <th className="px-4 py-3 text-right">Rounding</th>
               </tr>
             </thead>
@@ -366,6 +368,10 @@ const RevenueDashboard: React.FC = () => {
                   <td className="px-4 py-3 text-right font-semibold text-slate-900 tabular-nums">{formatCurrency(source.revenue)}</td>
                   <td className="px-4 py-3 text-right text-indigo-700 font-semibold tabular-nums">{formatCurrency(source.adjustmentTotal)}</td>
                   <td className="px-4 py-3 text-right text-emerald-700 font-semibold tabular-nums">{formatCurrency(source.profitMargin)}</td>
+                  <td className={`px-4 py-3 text-right font-semibold tabular-nums ${source.manualOverrideAmount >= 0 ? 'text-amber-700' : 'text-rose-600'}`}>
+                    {source.manualOverrideAmount >= 0 ? '+' : ''}
+                    {formatCurrency(source.manualOverrideAmount)}
+                  </td>
                   <td className={`px-4 py-3 text-right font-semibold tabular-nums ${source.roundingTotal >= 0 ? 'text-blue-700' : 'text-rose-600'}`}>
                     {source.roundingTotal >= 0 ? '+' : ''}
                     {formatCurrency(source.roundingTotal)}
@@ -392,6 +398,7 @@ const RevenueDashboard: React.FC = () => {
                 <th className="px-4 py-3 text-right">Revenue</th>
                 <th className="px-4 py-3 text-right">Adjustments</th>
                 <th className="px-4 py-3 text-right">Profit Margin</th>
+                <th className="px-4 py-3 text-right">Manual Override</th>
                 <th className="px-4 py-3 text-right">Rounding</th>
               </tr>
             </thead>
@@ -410,6 +417,10 @@ const RevenueDashboard: React.FC = () => {
                   <td className="px-4 py-3 text-right font-semibold text-slate-900 tabular-nums">{formatCurrency(transaction.revenue)}</td>
                   <td className="px-4 py-3 text-right text-indigo-700 font-semibold tabular-nums">{formatCurrency(transaction.adjustmentTotal)}</td>
                   <td className="px-4 py-3 text-right text-emerald-700 font-semibold tabular-nums">{formatCurrency(transaction.profitMargin)}</td>
+                  <td className={`px-4 py-3 text-right font-semibold tabular-nums ${transaction.manualOverrideAmount >= 0 ? 'text-amber-700' : 'text-rose-600'}`}>
+                    {transaction.manualOverrideAmount >= 0 ? '+' : ''}
+                    {formatCurrency(transaction.manualOverrideAmount)}
+                  </td>
                   <td className={`px-4 py-3 text-right font-semibold tabular-nums ${transaction.roundingTotal >= 0 ? 'text-blue-700' : 'text-rose-600'}`}>
                     {transaction.roundingTotal >= 0 ? '+' : ''}
                     {formatCurrency(transaction.roundingTotal)}
@@ -418,7 +429,7 @@ const RevenueDashboard: React.FC = () => {
               ))}
               {report.transactions.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-slate-400">
+                  <td colSpan={8} className="px-4 py-12 text-center text-slate-400">
                     No revenue transactions found for the selected range.
                   </td>
                 </tr>

@@ -6,13 +6,17 @@ import {
   ChevronRight, ArrowLeft, MoreVertical, Search, Filter,
   Settings, User, Terminal, Cpu, Info
 } from 'lucide-react';
-import { useData } from '../../context/DataContext';
+import { useProduction } from '../../context/ProductionContext';
+import { useInventory } from '../../context/InventoryContext';
+import { useAuth } from '../../context/AuthContext';
 import { WorkOrder } from '../../types';
 import { OfflineImage } from '../../components/OfflineImage';
 import { format } from 'date-fns';
 
 const ShopFloor: React.FC = () => {
-  const { workOrders, updateWorkOrderStatus, logProductionStep, completeWorkOrder, user, inventory, boms, notify } = useData();
+  const { workOrders, updateWorkOrderStatus, logProductionStep, completeWorkOrder, boms } = useProduction();
+  const { inventory } = useInventory();
+  const { user, notify } = useAuth();
   const [selectedWo, setSelectedWo] = useState<WorkOrder | null>(null);
   const [qtyInput, setQtyInput] = useState(0);
   const [noteInput, setNoteInput] = useState('');

@@ -47,7 +47,7 @@ const SalesOrders: React.FC = () => {
       <h2 className="text-xl font-semibold mb-4">Sales Orders</h2>
       <div className="mb-4">
         {!editing ? (
-          <SalesOrderForm onCreate={(o: any) => { void addSalesOrder(o as any).then(() => fetchSalesData()); }} />
+          <SalesOrderForm onCreate={(o: any) => addSalesOrder(o as any).then(() => fetchSalesData())} />
         ) : (
           <div className="mb-4">
             <SalesOrderForm initial={editing} onDone={() => { setEditing(null); void fetchSalesData(); }} />

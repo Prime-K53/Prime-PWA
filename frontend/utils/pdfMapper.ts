@@ -165,7 +165,9 @@ export const mapToInvoiceData = (item: any, companyConfig: any, targetType?: str
         ? (item.invoiceNumber || item.id?.toString() || 'TBD')
         : ((docType === 'ORDER' || docType === 'SALES_ORDER' || docType === 'WORK_ORDER')
             ? (item.orderNumber || item.id?.toString() || 'TBD')
-            : (item.id?.toString() || item.invoiceNumber || item.orderNumber || 'TBD'));
+            : (docType === 'DELIVERY_NOTE'
+                ? (item.dnNumber || item.deliveryNoteNumber || item.id?.toString() || 'TBD')
+                : (item.id?.toString() || item.invoiceNumber || item.orderNumber || 'TBD')));
 
     const explicitConversionDetails = item.conversionDetails ? {
         sourceType: item.conversionDetails.sourceType || item.conversionDetails.source_type || 'Quotation',

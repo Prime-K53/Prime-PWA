@@ -299,7 +299,7 @@ const handleExaminationBatchToProduction = async (event: CustomEvent) => {
         const config = await transactionService.getCompanyConfig();
         const allowOverproduction = config?.productionSettings?.allowOverproduction ?? true;
 
-        const updatedLogs = [...(wo.logs || []), { ...log, id: `LOG-${Date.now()}` }];
+        const updatedLogs = [...(wo.logs || []), { ...log, id: `LOG-${Date.now()}-${Math.random().toString(36).substr(2, 5)}` }];
         const qtyProcessed = log.qtyProcessed || 0;
 
         if (log.action === 'Complete' && !allowOverproduction) {
@@ -323,7 +323,7 @@ const handleExaminationBatchToProduction = async (event: CustomEvent) => {
                     log.materialId,
                     wasteQty,
                     wasteCost,
-                    `WASTE-${wo.id}-${Date.now()}`,
+                    `WASTE-${wo.id}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
                     `Production Waste: ${material?.name} (WO: ${wo.id})`
                 );
             } catch (err: any) {
@@ -602,7 +602,7 @@ const handleExaminationBatchToProduction = async (event: CustomEvent) => {
             return;
         }
 
-        const id = a.id || `ALC-${Date.now()}`;
+        const id = a.id || `ALC-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
         storeAddAllocation({ ...a, id });
         notify("Resource scheduled", "success");
     };
@@ -660,7 +660,7 @@ const handleExaminationBatchToProduction = async (event: CustomEvent) => {
                 holdReason: reason,
                 holdStartedAt: new Date().toISOString(),
                 logs: [...wo.logs, {
-                    id: `LOG-${Date.now()}`,
+                    id: `LOG-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
                     timestamp: new Date().toISOString(),
                     action: 'Put On Hold',
                     user: user?.username || 'system',
@@ -706,7 +706,7 @@ const handleExaminationBatchToProduction = async (event: CustomEvent) => {
                 holdEndedAt,
                 totalHoldTime,
                 logs: [...wo.logs, {
-                    id: `LOG-${Date.now()}`,
+                    id: `LOG-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
                     timestamp: new Date().toISOString(),
                     action: 'Resumed',
                     user: user?.username || 'system',
@@ -753,7 +753,7 @@ const handleExaminationBatchToProduction = async (event: CustomEvent) => {
                 status: 'In Progress',
                 actualStartTime: new Date().toISOString(),
                 logs: [...wo.logs, {
-                    id: `LOG-${Date.now()}`,
+                    id: `LOG-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
                     timestamp: new Date().toISOString(),
                     action: 'Started',
                     user: user?.username || 'system'
@@ -794,7 +794,7 @@ const handleExaminationBatchToProduction = async (event: CustomEvent) => {
                 quantityCompleted: completed,
                 progressPercentage,
                 logs: [...wo.logs, {
-                    id: `LOG-${Date.now()}`,
+                    id: `LOG-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
                     timestamp: new Date().toISOString(),
                     action: 'Progress Update',
                     user: user?.username || 'system',
@@ -911,7 +911,7 @@ const handleExaminationBatchToProduction = async (event: CustomEvent) => {
                 ...wo,
                 assignedTo: userId,
                 logs: [...wo.logs, {
-                    id: `LOG-${Date.now()}`,
+                    id: `LOG-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
                     timestamp: new Date().toISOString(),
                     action: 'Assigned',
                     user: user?.username || 'system',
@@ -952,7 +952,7 @@ const handleExaminationBatchToProduction = async (event: CustomEvent) => {
                     { id: 'QA-3', name: 'Quality Standards', category: 'Functional', status: 'Pending' }
                 ],
                 logs: [...wo.logs, {
-                    id: `LOG-${Date.now()}`,
+                    id: `LOG-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
                     timestamp: new Date().toISOString(),
                     action: 'QA Pass',
                     user: inspector,
@@ -997,7 +997,7 @@ const handleExaminationBatchToProduction = async (event: CustomEvent) => {
                 ...wo,
                 qaChecks: updatedChecks,
                 logs: [...wo.logs, {
-                    id: `LOG-${Date.now()}`,
+                    id: `LOG-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
                     timestamp: new Date().toISOString(),
                     action: status === 'Fail' ? 'QA Fail' : 'QA Pass',
                     user: user?.username || 'system',
@@ -1037,7 +1037,7 @@ const handleExaminationBatchToProduction = async (event: CustomEvent) => {
                 qaCompletedAt: new Date().toISOString(),
                 status: finalStatus === 'Rework Required' ? 'In Progress' : 'QA',
                 logs: [...wo.logs, {
-                    id: `LOG-${Date.now()}`,
+                    id: `LOG-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
                     timestamp: new Date().toISOString(),
                     action: finalStatus === 'Failed' ? 'QA Fail' : 'QA Pass',
                     user: user?.username || 'system',

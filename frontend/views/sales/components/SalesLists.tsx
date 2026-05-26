@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useHighlight } from '../../../hooks/useHighlight';
 import { DocLink } from '../../../components/DocLink';
 import { useDocumentPreview } from '../../../hooks/useDocumentPreview';
-import { useData } from '../../../context/DataContext';
+import { useAuth } from '../../../context/AuthContext';
 import { Quotation, Invoice, JobOrder, RecurringInvoice, DeliveryNote, CartItem, SalesExchange, Order } from '../../../types';
 import { WhatsAppLogo } from '../../../components/Icons';
 import { usePagination } from '../../../hooks/usePagination';
@@ -50,7 +50,7 @@ export const HoverActionMenu: React.FC<{
     data: any,
     onAction?: (item: any, action: string) => void
 }> = ({ id, type, pos, data, onAction }) => {
-    const { companyConfig } = useData();
+    const { companyConfig } = useAuth();
     const currency = companyConfig.currencySymbol;
     const pricingSummary = useMemo(() => resolveTransactionPricingSummary(data), [data]);
     const hasPricingMetrics = Math.abs(pricingSummary.adjustmentTotal) > 0.0001
@@ -158,7 +158,7 @@ export const HoverActionMenu: React.FC<{
 
 
 export const SalesOrderList: React.FC<ListProps<JobOrder>> = (props) => {
-    const { companyConfig } = useData();
+    const { companyConfig } = useAuth();
     const { handlePreview } = useDocumentPreview();
     const { openMenuId, menuPos, activeSubmenu, setActiveSubmenu, menuRef, handleContextMenu, handleRowClick, setOpenMenuId } = useContextMenu();
     const { hoveredId, hoverPos, onMouseEnter, onMouseMove, onMouseLeave } = useHoverTimer(2000);
@@ -307,7 +307,7 @@ export const SalesOrderList: React.FC<ListProps<JobOrder>> = (props) => {
 };
 
 export const OrdersList: React.FC<ListProps<Order>> = (props) => {
-    const { companyConfig } = useData();
+    const { companyConfig } = useAuth();
     const { handlePreview } = useDocumentPreview();
     const { openMenuId, menuPos, activeSubmenu, setActiveSubmenu, menuRef, handleContextMenu, handleRowClick, setOpenMenuId } = useContextMenu();
     const { hoveredId, hoverPos, onMouseEnter, onMouseMove, onMouseLeave } = useHoverTimer(2000);
@@ -629,7 +629,7 @@ const LIST_ITEMS_PER_PAGE = 15;
 const CARD_ITEMS_PER_PAGE = 12;
 
 export const SalesExchangeList: React.FC<ListProps<SalesExchange>> = (props) => {
-    const { companyConfig } = useData();
+    const { companyConfig } = useAuth();
     const { handlePreview } = useDocumentPreview();
     const { openMenuId, menuPos, activeSubmenu, setActiveSubmenu, menuRef, handleContextMenu, handleRowClick, setOpenMenuId } = useContextMenu();
     const { hoveredId, hoverPos, onMouseEnter, onMouseMove, onMouseLeave } = useHoverTimer(2000);
@@ -824,7 +824,7 @@ export const SalesSkeletonLoader: React.FC<{ type: 'table' | 'grid' }> = ({ type
 };
 
 export const InvoiceList: React.FC<ListProps<Invoice>> = (props) => {
-    const { companyConfig, notify } = useData();
+    const { companyConfig, notify } = useAuth();
     const { handlePreview } = useDocumentPreview();
     const { openMenuId, menuPos, activeSubmenu, setActiveSubmenu, menuRef, handleContextMenu, handleRowClick, setOpenMenuId } = useContextMenu();
     const { hoveredId, hoverPos, onMouseEnter, onMouseMove, onMouseLeave } = useHoverTimer(2000);
@@ -1138,7 +1138,7 @@ export const InvoiceList: React.FC<ListProps<Invoice>> = (props) => {
 };
 
 export const QuotationList: React.FC<ListProps<Quotation>> = (props) => {
-    const { companyConfig } = useData();
+    const { companyConfig } = useAuth();
     const { handlePreview } = useDocumentPreview();
     const { openMenuId, menuPos, activeSubmenu, setActiveSubmenu, menuRef, handleContextMenu, handleRowClick, setOpenMenuId } = useContextMenu();
     const { hoveredId, hoverPos, onMouseEnter, onMouseMove, onMouseLeave } = useHoverTimer(2000);
@@ -1315,7 +1315,7 @@ export const QuotationList: React.FC<ListProps<Quotation>> = (props) => {
 };
 
 export const RecurringList: React.FC<ListProps<RecurringInvoice>> = (props) => {
-    const { companyConfig } = useData();
+    const { companyConfig } = useAuth();
     const { handlePreview } = useDocumentPreview();
     const { openMenuId, menuPos, activeSubmenu, setActiveSubmenu, menuRef, handleContextMenu, handleRowClick, setOpenMenuId } = useContextMenu();
     const { hoveredId, hoverPos, onMouseEnter, onMouseMove, onMouseLeave } = useHoverTimer(2000);

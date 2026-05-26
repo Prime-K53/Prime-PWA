@@ -1,10 +1,16 @@
 import React from 'react';
-import { WifiOff, Wifi } from 'lucide-react';
+import { WifiOff } from 'lucide-react';
 import { usePwaInstall } from '../context/PwaInstallContext';
 
 const OfflineBanner: React.FC = () => {
   const { isOnline } = usePwaInstall();
   const [dismissed, setDismissed] = React.useState(false);
+
+  React.useEffect(() => {
+    if (isOnline) {
+      setDismissed(false);
+    }
+  }, [isOnline]);
 
   if (isOnline || dismissed) return null;
 
@@ -13,7 +19,7 @@ const OfflineBanner: React.FC = () => {
       <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center justify-center gap-2 text-sm">
         <WifiOff className="w-4 h-4 text-amber-600 shrink-0" />
         <span className="text-amber-800 font-medium">
-          You are offline — showing cached data. Changes will sync automatically when reconnected.
+          You are offline - showing cached data. Changes will sync automatically when reconnected.
         </span>
         <button
           onClick={() => setDismissed(true)}

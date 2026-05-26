@@ -6,15 +6,18 @@ import type { PrimeDocData } from './schemas';
 import type { CompanyConfig } from '../../../../types';
 import { initializePrimePdfFonts } from './templateSettings';
 import { platform } from '../../../../services/platform';
+import { isPdfDebugLoggingEnabled } from '../../../../utils/debugFlags';
 
 export const DEFAULT_PDF_TIMEOUT_MS = 45000;
 const MIN_VALID_SIZE = 10240;
 const MAX_ITEM_WARN = 500;
 const PDF_HEADER = '%PDF-';
+const pdfDebugLoggingEnabled = isPdfDebugLoggingEnabled();
 
 const yieldToUi = () => new Promise<void>((r) => setTimeout(r, 0));
 
 const pdfLog = (event: string, meta?: Record<string, unknown>) => {
+  if (!pdfDebugLoggingEnabled) return;
   const entry = { ts: Date.now(), event, ...meta };
   if (platform.isDesktop) {
     platform.api.log({ message: `[PDF Gen] ${event}`, ...meta });

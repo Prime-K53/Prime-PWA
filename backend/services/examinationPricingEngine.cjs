@@ -1,5 +1,8 @@
+const { roundToCurrency, roundUpToStep } = require('../utils/mathUtils.cjs');
+
 const PAGES_PER_SHEET = 2;
-const TONER_PAGES_PER_KG = 20000;
+const TONER_MG_PER_SHEET = 20;  // Must match index.cjs
+const TONER_PAGES_PER_KG = Math.floor(1000000 / TONER_MG_PER_SHEET);  // 1kg = 1,000,000mg → 50,000 pages
 const SHEETS_PER_REAM = 500;
 
 const DEFAULT_FALLBACK_ADJUSTMENTS = [];
@@ -10,7 +13,7 @@ const toNumber = (value, fallback = 0) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
-const roundCurrency = (value) => Math.round(toNumber(value) * 100) / 100;
+const roundCurrency = (value) => roundToCurrency(value);
 
 const clampNonNegative = (value) => Math.max(0, roundCurrency(value));
 
@@ -286,15 +289,9 @@ const resolveClassPricing = ({
 
 /**
  * Rounds a value UP to the nearest multiple.
- * e.g. roundUpToNearest(123, 50) -> 150
- *      roundUpToNearest(100, 50) -> 100
+ * Delegates to shared mathUtils.roundUpToStep.
  */
-const roundUpToNearest = (value, nearest) => {
-  const safeValue = toNumber(value, 0);
-  const safeNearest = toNumber(nearest, 0);
-  if (safeNearest <= 0) return Math.ceil(safeValue);
-  return Math.ceil(safeValue / safeNearest) * safeNearest;
-};
+const roundUpToNearest = (value, nearest) => roundUpToStep(value, nearest);
 
 /**
  * Calculates a "Rounding Adjustment" to reach the rounded-up target.

@@ -14,7 +14,11 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import { useData } from '../context/DataContext';
+import { useAuth } from '../context/AuthContext';
+import { useSales } from '../context/SalesContext';
+import { useFinance } from '../context/FinanceContext';
+import { useOrders } from '../context/OrdersContext';
+import { useExamination } from '../context/ExaminationContext';
 import { useLocation, useNavigate } from 'react-router-dom';
 import SalesAudit from './reports/SalesAudit';
 import RevenueDashboard from './reports/RevenueDashboard';
@@ -41,14 +45,11 @@ type ReportCategory =
   | 'Health Diagnostic';
 
 const Reports: React.FC = () => {
-  const {
-    sales = [],
-    invoices = [],
-    orders = [],
-    customers = [],
-    examinationBatches = [],
-    companyConfig,
-  } = useData();
+  const { companyConfig } = useAuth();
+  const { sales = [], customers = [] } = useSales();
+  const { invoices = [] } = useFinance();
+  const { orders = [] } = useOrders();
+  const { batches: examinationBatches = [] } = useExamination();
   const location = useLocation();
   const navigate = useNavigate();
   const currency = companyConfig?.currencySymbol || '$';

@@ -1,6 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { ArrowUpRight, ArrowDownRight, Minus, Calendar, ChevronDown, RefreshCw, AlertCircle, Zap } from 'lucide-react';
-import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
+import { useSales } from '../../context/SalesContext';
+import { useFinance } from '../../context/FinanceContext';
+import { useOrders } from '../../context/OrdersContext';
+import { useExamination } from '../../context/ExaminationContext';
 import { buildRevenueReportingSnapshot } from '../../services/revenueReportingService';
 
 
@@ -26,14 +30,11 @@ const fmt = (n: number, currency = 'K') =>
 
 // ── Component ──────────────────────────────────────────────────────────────
 const RoundingAnalytics: React.FC = () => {
-  const {
-    sales = [],
-    invoices = [],
-    orders = [],
-    examinationBatches = [],
-    companyConfig,
-    isLoading,
-  } = useData();
+  const { companyConfig } = useAuth();
+  const { sales = [], isLoading } = useSales();
+  const { invoices = [] } = useFinance();
+  const { orders = [] } = useOrders();
+  const { batches: examinationBatches = [] } = useExamination();
 
   const currency = companyConfig?.currencySymbol || 'K';
   const [period, setPeriod] = useState<Period>('week');

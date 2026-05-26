@@ -12,8 +12,10 @@ import {
     Factory, Box, Cloud, Bell, Mail, MessageSquare, ShieldAlert, Webhook, Sun, Moon, Laptop, Info, Undo2,
     TrendingUp, Package, PlusCircle, Trash, Printer, Usb
 } from 'lucide-react';
-import { useData } from '../context/DataContext';
-import { CompanyConfig, NumberingRule, PricingRoundingMethod } from '../types';
+import { useAuth } from '../context/AuthContext';
+import { useFinance } from '../context/FinanceContext';
+import { useInventory } from '../context/InventoryContext';
+import { CompanyConfig, InvoiceTemplatesConfig, NumberingRule, PricingRoundingMethod, RoundingRulesConfig } from '../types';
 import { OfflineImage } from '../components/OfflineImage';
 import { localFileStorage } from '../services/localFileStorage';
 import { DEFAULT_PRICING_SETTINGS, ROUNDING_METHOD_OPTIONS, getRoundingAnalytics } from '../services/pricingRoundingService';import { PricingSettingsValidator, PricingSettingsValidationResult } from '../services/pricingSettingsValidation';
@@ -91,7 +93,9 @@ const Settings: React.FC = () => {
         return () => { document.head.removeChild(style); };
     }, []);
 
-    const { companyConfig, updateCompanyConfig, validatePasswordStrength, manageUser, notify, resetSystem, manualDownloadBackup, inventory, ledger, auditLogs, allUsers } = useData();
+    const { companyConfig, updateCompanyConfig, validatePasswordStrength, manageUser, notify, resetSystem, manualDownloadBackup, auditLogs, allUsers } = useAuth();
+    const { ledger } = useFinance();
+    const { inventory } = useInventory();
     const location = useLocation();
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('General');
@@ -141,7 +145,9 @@ const Settings: React.FC = () => {
                     mobileMoneyAccounts: []
                 },
                 photocopyPrice: 0,
-                typePrintingPrice: 0,
+                photocopyCostPerPage: 0.50,
+
+                typePrintingCostPerPage: 1.20,
                 staplePrice: 0,
                 receiptFooter: ''
             },
@@ -306,7 +312,7 @@ const Settings: React.FC = () => {
                 ...DEFAULT_PRICING_SETTINGS,
                 ...(companyConfig?.pricingSettings || {})
             }
-        }));
+        }) as CompanyConfig);
     }, [companyConfig]);
 
     useEffect(() => {
@@ -1028,10 +1034,10 @@ const Settings: React.FC = () => {
                                         <div className="col-span-2 pt-4 border-t border-slate-50">
                                             <label className="settings-label">Rounding Rule</label>
                                             <div className="grid grid-cols-3 gap-4">
-                                                {['Nearest', 'Up', 'Down'].map(method => (
+                                                {(['Nearest', 'Up', 'Down'] as const).map(method => (
                                                     <button
                                                         key={method}
-                                                        onClick={() => setConfig({ ...config, roundingRules: { method: method , precision: config.roundingRules?.precision || 2 } })}
+                                                        onClick={() => setConfig({ ...config, roundingRules: { method: method as RoundingRulesConfig['method'], precision: config.roundingRules?.precision || 2 } })}
                                                         className={`py-3 rounded-lg text-xs font-bold border transition-all ${config.roundingRules?.method === method ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-slate-200 text-slate-600 hover:border-blue-200'}`}
                                                     >
                                                         Round {method}
@@ -1434,7 +1440,7 @@ const Settings: React.FC = () => {
                                 <section className="white-card p-0 overflow-hidden">
                                     <div className="px-8 py-5 border-b border-slate-100 bg-slate-50/30">
                                         <h3 className="text-sm font-bold text-slate-800">POS Service Pricing</h3>
-                                        <p className="text-[11px] text-slate-500 mt-0.5">Set default prices for common retail services.</p>
+                                        <p className="text-[11px] text-slate-500 mt-0.5">Set default prices and material costs for common retail services. Profit margin = selling price − cost.</p>
                                     </div>
                                     <div className="p-8 grid grid-cols-2 gap-12">
                                         <div>
@@ -1451,7 +1457,21 @@ const Settings: React.FC = () => {
                                             </div>
                                         </div>
                                         <div>
-                                            <label className="settings-label">Type & Printing ({currency})</label>
+                                            <label className="settings-label">Photocopy Cost per Page ({currency})</label>
+                                            <div className="relative">
+                                                <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-300 text-xs">{currency}</span>
+                                                <input
+                                                    type="number"
+                                                    className="settings-input pl-10"
+                                                    placeholder="e.g. 1.00 (material cost)"
+                                                    value={config.transactionSettings?.pos?.photocopyCostPerPage ?? ''}
+                                                    onChange={e => setConfig({ ...config, transactionSettings: { ...config.transactionSettings, pos: { ...config.transactionSettings?.pos, photocopyCostPerPage: parseFloat(e.target.value) || 0 } } as any })}
+                                                />
+                                            </div>
+                                            <p className="text-[10px] text-slate-400 mt-1">Paper + toner cost per page. Profit = selling price − this cost.</p>
+                                        </div>
+                                        <div>
+                                            <label className="settings-label">Type & Printing Price ({currency})</label>
                                             <div className="relative">
                                                 <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-300 text-xs">{currency}</span>
                                                 <input
@@ -1462,6 +1482,20 @@ const Settings: React.FC = () => {
                                                     onChange={e => setConfig({ ...config, transactionSettings: { ...config.transactionSettings, pos: { ...config.transactionSettings?.pos, typePrintingPrice: parseFloat(e.target.value) || 0 } } as any })}
                                                 />
                                             </div>
+                                        </div>
+                                        <div>
+                                            <label className="settings-label">Type & Printing Cost per Page ({currency})</label>
+                                            <div className="relative">
+                                                <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-300 text-xs">{currency}</span>
+                                                <input
+                                                    type="number"
+                                                    className="settings-input pl-10"
+                                                    placeholder="e.g. 2.50 (material + labor cost)"
+                                                    value={config.transactionSettings?.pos?.typePrintingCostPerPage ?? ''}
+                                                    onChange={e => setConfig({ ...config, transactionSettings: { ...config.transactionSettings, pos: { ...config.transactionSettings?.pos, typePrintingCostPerPage: parseFloat(e.target.value) || 0 } } as any })}
+                                                />
+                                            </div>
+                                            <p className="text-[10px] text-slate-400 mt-1">Material + labor cost per page. Profit = selling price − this cost.</p>
                                         </div>
                                         <div>
                                             <label className="settings-label">Stapling Price per Copy ({currency})</label>
@@ -1660,10 +1694,10 @@ const Settings: React.FC = () => {
                                         <div>
                                             <label className="settings-label">Template Engine</label>
                                             <div className="grid grid-cols-4 gap-3">
-                                                {['Classic', 'Modern', 'Professional', 'Clean'].map(engine => (
+                                                {(['Classic', 'Modern', 'Professional', 'Clean'] as const).map(engine => (
                                                     <button
                                                         key={engine}
-                                                        onClick={() => setConfig({ ...config, invoiceTemplates: { ...config.invoiceTemplates, engine } })}
+                                                        onClick={() => setConfig({ ...config, invoiceTemplates: { ...config.invoiceTemplates, engine: engine as InvoiceTemplatesConfig['engine'] } })}
                                                         className={`py-3 rounded-md text-[11px] font-bold border transition-all ${config.invoiceTemplates?.engine === engine ? 'bg-[#2CA01C] border-[#2CA01C] text-white shadow-sm' : 'bg-white border-[#D4D7DC] text-[#6B6C6F] hover:border-[#2CA01C]'}`}
                                                     >
                                                         {engine}
@@ -1861,7 +1895,7 @@ const Settings: React.FC = () => {
                                             <button
                                                 onClick={() => {
                                                     const newAccount = {
-                                                        id: Date.now().toString(),
+                                                        id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                                                         bankName: '',
                                                         accountName: '',
                                                         accountNumber: '',
@@ -1965,7 +1999,7 @@ const Settings: React.FC = () => {
                                             <button
                                                 onClick={() => {
                                                     const newAccount = {
-                                                        id: Date.now().toString(),
+                                                        id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                                                         network: 'Airtel',
                                                         accountName: '',
                                                         phoneNumber: ''
@@ -2275,8 +2309,8 @@ const Settings: React.FC = () => {
                                             <button 
                                                 onClick={() => {
                                                     const newApi = { 
-                                                        id: `api-${Date.now()}`, 
-                                                        name: 'New API Connection', 
+                                                         id: `api-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, 
+                                                         name: 'New API Connection',
                                                         enabled: false, 
                                                         baseUrl: 'https://' 
                                                     };
@@ -2333,8 +2367,8 @@ const Settings: React.FC = () => {
                                             <button 
                                                 onClick={() => {
                                                     const newWebhook = { 
-                                                        id: `webhook-${Date.now()}`, 
-                                                        url: 'https://', 
+id: `webhook-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, 
+                                                         url: 'https://', 
                                                         enabled: false, 
                                                         events: ['document.created', 'document.updated'] 
                                                     };
@@ -2768,7 +2802,7 @@ const Settings: React.FC = () => {
                                             ))}
                                             <button
                                                 onClick={() => {
-                                                    const newApis = [...(config.integrationSettings?.externalApis || []), { id: `api-${Date.now()}`, name: 'New API Connection', enabled: false, baseUrl: 'https://' }];
+                                                    const newApis = [...(config.integrationSettings?.externalApis || []), { id: `api-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, name: 'New API Connection', enabled: false, baseUrl: 'https://' }];
                                                     setConfig({ ...config, integrationSettings: { ...config.integrationSettings, externalApis: newApis } as any });
                                                 }}
                                                 className="w-full py-6 border-2 border-dashed border-[#D4D7DC] rounded-lg text-[#6B6C6F] font-bold uppercase text-xs tracking-widest hover:border-[#2CA01C] hover:text-[#2CA01C] hover:bg-green-50 transition-all flex items-center justify-center gap-3 active:scale-[0.98]"
@@ -2850,7 +2884,7 @@ const Settings: React.FC = () => {
                                             ))}
                                             <button
                                                 onClick={() => {
-                                                    const newHooks = [...(config.integrationSettings?.webhooks || []), { id: `hook-${Date.now()}`, url: 'https://', events: [], enabled: false }];
+                                                    const newHooks = [...(config.integrationSettings?.webhooks || []), { id: `hook-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, url: 'https://', events: [], enabled: false }];
                                                     setConfig({ ...config, integrationSettings: { ...config.integrationSettings, webhooks: newHooks } as any });
                                                 }}
                                                 className="w-full py-6 border-2 border-dashed border-[#D4D7DC] rounded-lg text-[#6B6C6F] font-bold uppercase text-xs tracking-widest hover:border-[#2CA01C] hover:text-[#2CA01C] hover:bg-green-50 transition-all flex items-center justify-center gap-3 active:scale-[0.98]"

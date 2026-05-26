@@ -3,7 +3,9 @@ import React, { useMemo } from 'react';
 /* Fix: Added missing BarChart3 to imports */
 import { X, TrendingUp, DollarSign, PieChart, AlertTriangle, ArrowRight, Recycle, BarChart3, ShieldCheck } from 'lucide-react';
 import { Invoice, WorkOrder } from '../../../types';
-import { useData } from '../../../context/DataContext';
+import { useAuth } from '../../../context/AuthContext';
+import { useInventory } from '../../../context/InventoryContext';
+import { useProduction } from '../../../context/ProductionContext';
 
 interface ProfitAnalysisModalProps {
   invoice: Invoice;
@@ -11,7 +13,7 @@ interface ProfitAnalysisModalProps {
 }
 
 export const ProfitAnalysisModal: React.FC<ProfitAnalysisModalProps> = ({ invoice, onClose }) => {
-  const { companyConfig, boms = [], inventory = [], workOrders = [] } = useData();
+  const { companyConfig } = useAuth(); const { boms = [], workOrders = [] } = useProduction(); const { inventory = [] } = useInventory();
   const currency = companyConfig?.currencySymbol || '$';
 
   const analysis = useMemo(() => {

@@ -39,7 +39,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       const user = savedUser ? JSON.parse(savedUser) : null;
       
       const logEntry: AuditLogEntry = {
-        id: `CRASH-${Date.now()}`,
+        id: `CRASH-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
         date: new Date().toISOString(),
         action: 'SYSTEM_CRASH',
         entityType: 'Application',

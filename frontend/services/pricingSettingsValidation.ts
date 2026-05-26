@@ -87,7 +87,7 @@ export class PricingSettingsValidator {
       if (error instanceof z.ZodError) {
         return {
           valid: false,
-          errors: error.errors.map(err => ({
+          errors: error.issues.map(err => ({
             path: err.path.join('.'),
             message: err.message
           }))

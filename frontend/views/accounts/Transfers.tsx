@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Transfer } from '../../types';
 import { useFinance } from '../../context/FinanceContext';
 import { useData, REFRESH_INTERVAL } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
 import { useModuleRefresh } from '../../hooks/useModuleRefresh';
 import { useBankingStore } from '../../context/BankingContext';
 import {
@@ -21,7 +22,7 @@ const Transfers: React.FC = () => {
     fetchBankingData,
     createTransaction: createBankTransaction
   } = useBankingStore();
-  const { notify, companyConfig } = useData();
+  const { notify, companyConfig } = useAuth();
   const currency = companyConfig?.currencySymbol || '$';
   
   // State

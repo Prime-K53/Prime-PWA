@@ -8,7 +8,7 @@ import { ExchangeRequestModal } from './components/ExchangeRequestModal';
 import { ExchangeDetailsModal } from './components/ExchangeDetailsModal';
 import { SalesExchangeList } from './components/SalesLists';
 import { useDocumentPreview } from '../../hooks/useDocumentPreview';
-import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../../components/Dialog';
 
 const SalesExchanges: React.FC = () => {
@@ -17,7 +17,7 @@ const SalesExchanges: React.FC = () => {
     deleteSalesExchange, approveSalesExchange, cancelSalesExchange,
     bulkCancelSalesExchanges 
   } = useSalesStore();
-  const { notify } = useData();
+  const { notify } = useAuth();
   const { handlePreview } = useDocumentPreview();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');

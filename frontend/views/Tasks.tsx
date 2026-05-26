@@ -6,12 +6,12 @@ import {
   X, AlignLeft, Calendar, Flag, Save, MoreVertical, Edit2,
   RefreshCw, ChevronRight, UserPlus, Info, Play, Bell
 } from 'lucide-react';
-import { useData } from '../context/DataContext';
+import { useAuth } from '../context/AuthContext';
 import { CRMTask } from '../types';
 import { OfflineImage } from '../components/OfflineImage';
 
 const Tasks: React.FC = () => {
-  const { tasks, addTask, updateTask, deleteTask, user, allUsers, notify } = useData();
+  const { user, allUsers, notify } = useAuth();
   const location = useLocation();
   const [viewMode, setViewMode] = useState<'Board' | 'List'>('Board');
   const [filter, setFilter] = useState<'All' | 'My Tasks'>('All');

@@ -1,9 +1,9 @@
 import React from 'react';
-import { useData } from '../context/DataContext';
+import { useAuth } from '../context/AuthContext';
 import { AuditTimeline } from './shared/components/AuditTimeline';
 
 const AuditLogs: React.FC = () => {
-    const { auditLogs = [] } = useData();
+    const { auditLogs = [] } = useAuth();
 
     return (
         <div className="p-6 max-w-[1600px] mx-auto h-[calc(100vh-4rem)] flex flex-col font-sans">

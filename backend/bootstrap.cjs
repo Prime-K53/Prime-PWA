@@ -109,7 +109,11 @@ async function bootstrap() {
       }
       if (row.count === 0) {
         console.log('First run detected. Seeding default data...');
-        seedDefaultData();
+        try {
+          seedDefaultData();
+        } catch (seedErr) {
+          console.error('Failed to seed default data (non-fatal):', seedErr);
+        }
       }
       console.log('--- PRIME ERP OFFLINE BOOTSTRAP COMPLETE ---');
       resolve();
@@ -124,18 +128,18 @@ function seedDefaultData() {
       ['Sample Academy', 'margin-based', 0.3],
       ['City Primary', 'per-sheet', 15.0]
     ];
-    const stmt = db.prepare("INSERT INTO schools (name, pricing_type, pricing_value) VALUES (?, ?, ?)");
-    schools.forEach(s => stmt.run(s));
-    stmt.finalize();
+    for (const s of schools) {
+      db.run("INSERT INTO schools (name, pricing_type, pricing_value) VALUES (?, ?, ?)", s);
+    }
 
     // Seed Classes
     const defaultClasses = [
       "Standard 1", "Standard 2", "Standard 3", "Standard 4",
       "Standard 5", "Standard 6", "Standard 7", "Standard 8"
     ];
-    const classStmt = db.prepare("INSERT OR IGNORE INTO classes (name) VALUES (?)");
-    defaultClasses.forEach(c => classStmt.run(c));
-    classStmt.finalize();
+    for (const c of defaultClasses) {
+      db.run("INSERT OR IGNORE INTO classes (name) VALUES (?)", [c]);
+    }
 
     // Seed Subjects
     const defaultSubjects = [
@@ -144,20 +148,18 @@ function seedDefaultData() {
       ["Mathematics", "MATH"], ["P / Science", "PSCI"], ["Social studies", "SS"],
       ["Ulimi Sayansi", "USAY"], ["Arts and Life", "ALIFE"], ["Social & BK", "SBK"]
     ];
-    const subjectStmt = db.prepare("INSERT OR IGNORE INTO subjects (name, code) VALUES (?, ?)");
-    defaultSubjects.forEach(s => subjectStmt.run(s));
-    subjectStmt.finalize();
+    for (const s of defaultSubjects) {
+      db.run("INSERT OR IGNORE INTO subjects (name, code) VALUES (?, ?)", s);
+    }
 
     // Seed Inventory
     const materials = [
       ['INV-PAPER', 'Paper', 'Paper', 5000, 35.0],
       ['INV-TONER', 'Toner', 'Toner', 1000, 0.25]
     ];
-    const invStmt = db.prepare("INSERT OR IGNORE INTO inventory (id, name, material, quantity, cost_per_unit) VALUES (?, ?, ?, ?, ?)");
-    materials.forEach(m => {
-      invStmt.run(m[0], m[1], m[2], m[3], m[4]);
-    });
-    invStmt.finalize();
+    for (const m of materials) {
+      db.run("INSERT OR IGNORE INTO inventory (id, name, material, quantity, cost_per_unit) VALUES (?, ?, ?, ?, ?)", m);
+    }
 
     // Seed Work Centers
     const workCenters = [
@@ -165,9 +167,9 @@ function seedDefaultData() {
       ['WC-BND-01', 'Perfect Binding Station', 'Paper binding and finishing', 35.00, 8, 'Active'],
       ['WC-CUT-01', 'Hydraulic Cutting Station', 'Precision paper cutting', 25.00, 8, 'Active']
     ];
-    const wcStmt = db.prepare("INSERT OR IGNORE INTO work_centers (id, name, description, hourly_rate, capacity_per_day, status) VALUES (?, ?, ?, ?, ?, ?)");
-    workCenters.forEach(wc => wcStmt.run(wc));
-    wcStmt.finalize();
+    for (const wc of workCenters) {
+      db.run("INSERT OR IGNORE INTO work_centers (id, name, description, hourly_rate, capacity_per_day, status) VALUES (?, ?, ?, ?, ?, ?)", wc);
+    }
 
     // Seed Production Resources
     const resources = [
@@ -175,10 +177,10 @@ function seedDefaultData() {
       ['RES-BND-01', 'Horizon Binder', 'WC-BND-01', 'Active'],
       ['RES-CUT-01', 'Polar Cutter', 'WC-CUT-01', 'Active']
     ];
-    const resStmt = db.prepare("INSERT OR IGNORE INTO production_resources (id, name, work_center_id, status) VALUES (?, ?, ?, ?)");
-    resources.forEach(r => resStmt.run(r));
-    resStmt.finalize();
-    
+    for (const r of resources) {
+      db.run("INSERT OR IGNORE INTO production_resources (id, name, work_center_id, status) VALUES (?, ?, ?, ?)", r);
+    }
+
     console.log('Default data seeded (schools, classes, subjects, inventory, work centers, resources).');
   });
 }

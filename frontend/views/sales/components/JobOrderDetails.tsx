@@ -11,7 +11,8 @@ import {
     Info, FileCheck, TrendingUp, RefreshCw, Sparkles, Gauge, Loader2, Droplet, Download
 } from 'lucide-react';
 import { JobOrder, Attachment, InvoiceAllocation, InkCoverage } from '../../../types';
-import { useData } from '../../../context/DataContext';
+import { useAuth } from '../../../context/AuthContext';
+import { useSales } from '../../../context/SalesContext';
 import ReactMarkdown from 'react-markdown';
 import { generateAIResponse } from '../../../services/geminiService';
 import InkDensityAnalyzer from '../../production/components/InkDensityAnalyzer';
@@ -27,7 +28,8 @@ interface JobOrderDetailsProps {
 }
 
 export const JobOrderDetails: React.FC<JobOrderDetailsProps> = ({ jobOrder, onClose, onEdit, onAction }) => {
-    const { companyConfig, customers = [], updateJobOrder, notify, convertJobOrderToInvoice, isOnline } = useData();
+    const { companyConfig, notify, isOnline } = useAuth();
+    const { customers = [], updateJobOrder, convertJobOrderToInvoice } = useSales();
     const currency = companyConfig.currencySymbol;
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState<'Overview' | 'Financials' | 'Pre-Press' | 'Quality Control'>('Overview');

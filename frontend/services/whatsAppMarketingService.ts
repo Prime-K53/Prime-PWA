@@ -218,7 +218,7 @@ class WhatsAppMarketingService {
 
   async saveTemplate(template: Partial<WhatsAppTemplate>): Promise<string> {
     const newTemplate: WhatsAppTemplate = {
-      id: template.id || `tpl-${Date.now()}`,
+      id: template.id || `tpl-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
       name: template.name || 'Untitled Template',
       content: template.content || '',
       category: template.category || 'General',
@@ -248,7 +248,7 @@ class WhatsAppMarketingService {
 
   async createChat(chat: Partial<WhatsAppChat>): Promise<string> {
     const newChat: WhatsAppChat = {
-      id: chat.id || `chat-${Date.now()}`,
+      id: chat.id || `chat-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
       customerId: chat.customerId || '',
       customerName: chat.customerName || '',
       customerPhone: chat.customerPhone || '',
@@ -271,7 +271,7 @@ class WhatsAppMarketingService {
     if (!chat) throw new Error('Chat not found');
 
     const message: WhatsAppMessage = {
-      id: `msg-${Date.now()}`,
+      id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
       chatId,
       content,
       type,
@@ -298,7 +298,7 @@ class WhatsAppMarketingService {
     if (!chat) throw new Error('Chat not found');
 
     const message: WhatsAppMessage = {
-      id: `msg-${Date.now()}`,
+      id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
       chatId,
       content,
       type,
@@ -341,7 +341,7 @@ class WhatsAppMarketingService {
 
   async createCampaign(campaign: Partial<WhatsAppCampaign>): Promise<string> {
     const newCampaign: WhatsAppCampaign = {
-      id: campaign.id || `camp-${Date.now()}`,
+      id: campaign.id || `camp-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
       name: campaign.name || 'Untitled Campaign',
       description: campaign.description || '',
       templateId: campaign.templateId,
@@ -384,7 +384,7 @@ class WhatsAppMarketingService {
 
   async createAutomation(flow: Partial<AutomationFlow>): Promise<string> {
     const newFlow: AutomationFlow = {
-      id: flow.id || `flow-${Date.now()}`,
+      id: flow.id || `flow-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
       name: flow.name || 'Untitled Flow',
       description: flow.description || '',
       trigger: flow.trigger || 'hello',

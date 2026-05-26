@@ -1,11 +1,13 @@
 
 import React, { useState } from 'react';
 import { Briefcase, DollarSign, Clock, UserPlus, Trash2, Edit2, FileText, Save, X, Printer, Eye, Loader2, Download } from 'lucide-react';
-import { useData } from '../../context/DataContext';
+import { useFinance } from '../../context/FinanceContext';
+import { useAuth } from '../../context/AuthContext';
 import { Employee, PayrollRun, Payslip } from '../../types';
 
 const Payroll: React.FC = () => {
-  const { employees, payrollRuns, payslips, addEmployee, updateEmployee, deleteEmployee, runPayroll, companyConfig } = useData();
+  const { employees, payrollRuns, payslips, addEmployee, updateEmployee, deleteEmployee, runPayroll } = useFinance();
+  const { companyConfig } = useAuth();
   const currency = companyConfig.currencySymbol;
 
   const [activeTab, setActiveTab] = useState<'Run' | 'Employees' | 'History'>('Run');

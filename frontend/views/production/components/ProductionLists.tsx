@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Eye, Trash2, Play, CheckCircle, Clock, AlertCircle, MoreHorizontal, Edit2, GripVertical, XCircle, FileText, Package, FileCheck, Recycle, ShieldCheck } from 'lucide-react';
 import { BillOfMaterial, WorkOrder } from '../../../types';
-import { useData } from '../../../context/DataContext';
+import { useAuth } from '../../../context/AuthContext';
+import { useInventory } from '../../../context/InventoryContext';
 import { OfflineImage } from '../../../components/OfflineImage';
 
 // --- BOM LIST ---
@@ -12,7 +13,8 @@ interface BOMListProps {
 }
 
 export const BOMList: React.FC<BOMListProps> = ({ boms, onDelete, onEdit }) => {
-    const { companyConfig, inventory } = useData();
+    const { companyConfig } = useAuth();
+    const { inventory } = useInventory();
     const currency = companyConfig.currencySymbol;
 
     return (
@@ -113,7 +115,7 @@ const useContextMenu = () => {
 };
 
 export const WorkOrderKanban: React.FC<WorkOrderKanbanProps> = ({ orders, onUpdateStatus, onView, onPreview, onCancel, onDelete, onConvertInvoice }) => {
-    const { inventory } = useData();
+    const { inventory } = useInventory();
     const columns: WorkOrder['status'][] = ['Scheduled', 'In Progress', 'QA', 'Completed'];
     const [draggedId, setDraggedId] = useState<string | null>(null);
     const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);

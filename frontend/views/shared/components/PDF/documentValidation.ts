@@ -93,8 +93,10 @@ export const validateDocumentData = (type: DocType | string, data: any): Validat
   }
 
   if (type === 'DELIVERY_NOTE') {
-    const r1 = requireFields(data, ['number', 'clientName'], 'Delivery Note', ['Note number', 'Client name']);
-    if (r1) return { valid: false, error: r1 };
+    const noteNumber = data.number || data.dnNumber || data.deliveryNoteNumber || data.id?.toString() || data.invoiceId;
+    const clientName = data.clientName || data.customerName;
+    if (!noteNumber) return { valid: false, error: 'Delivery Note is missing required field: Note number' };
+    if (!clientName) return { valid: false, error: 'Delivery Note is missing required field: Client name' };
     const r2 = checkArray(data, 'items', 'Delivery Note', 'delivery items');
     if (r2) return { valid: false, error: r2 };
     return { valid: true };
@@ -133,9 +135,14 @@ export const validateDocumentData = (type: DocType | string, data: any): Validat
     if (resolveAmount(data) === undefined) return { valid: false, error: `${label} is missing a total or subtotal amount` };
     const r2 = checkArray(data, 'items', label, 'line items');
     if (r2) return { valid: false, error: r2 };
-    // Check at least one item has content
+    // Check at least one item has content. Consider common field names used across payloads.
     const items: any[] = data.items || [];
-    const allEmpty = items.every((it: any) => !it.desc && !it.name);
+    const itemHasText = (it: any) => {
+      if (!it) return false;
+      const candidates = [it.desc, it.name, it.productName, it.product_name, it.description, it.title, it.label];
+      return candidates.some(c => c !== undefined && c !== null && String(c).trim() !== '');
+    };
+    const allEmpty = items.every((it: any) => !itemHasText(it));
     if (items.length > 0 && allEmpty) {
       return { valid: false, error: `${label} items have no descriptions — document will render blank` };
     }

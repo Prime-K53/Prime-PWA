@@ -2,8 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Plus, ArrowRightLeft, Warehouse as WarehouseIcon, ClipboardCheck, AlertCircle, Sparkles, Loader2, Settings, RefreshCw } from 'lucide-react';
 import { useData, REFRESH_INTERVAL } from '../context/DataContext';
 import { useModuleRefresh } from '../hooks/useModuleRefresh';
+import { useAuth } from '../context/AuthContext';
 import { useFinance } from '../context/FinanceContext';
+import { useSales } from '../context/SalesContext';
 import { useInventory } from '../context/InventoryContext';
+import { useProcurement } from '../context/ProcurementContext';
+import { usePricingCalculator } from '../context/PricingCalculatorContext';
 import { Item, Warehouse } from '../types';
 import { ItemTable, WarehouseGrid, SkeletonLoader } from './inventory/components/InventoryViews';
 
@@ -31,7 +35,8 @@ const Inventory: React.FC = () => {
     }, { interval: null }); // Disable polling to avoid race condition with lazy loading
     const { inventory, warehouses, addItem, updateItem, transferStock, updateStock, addWarehouse, deleteItem, isLoading, reconcileInventory } = useInventory();
     const { postJournalEntry } = useFinance();
-    const { companyConfig, addAuditLog, notify, suppliers } = useData();
+    const { companyConfig, addAuditLog, notify } = useAuth();
+    const { suppliers } = useProcurement();
     const currency = companyConfig.currencySymbol;
 
     // Inventory Statistics
@@ -69,7 +74,7 @@ const Inventory: React.FC = () => {
     const [restockSuggestions, setRestockSuggestions] = useState<any[]>([]);
     const [showRestockPanel, setShowRestockPanel] = useState(false);
 
-    const { sales } = useData();
+    const { sales } = useSales();
 
     const handleSmartRestock = async () => {
         setIsRestockLoading(true);
@@ -87,7 +92,8 @@ const Inventory: React.FC = () => {
 
     const [initialSearch, setInitialSearch] = useState('');
     const [isRepairing, setIsRepairing] = useState(false);
-    const { marketAdjustments, bomTemplates } = useData();
+    const { marketAdjustments } = useInventory();
+    const { bomTemplates } = usePricingCalculator();
 
     const handleRepairPricing = async () => {
         if (!window.confirm("This will scan your entire inventory for variants with missing or zero prices and attempt to fix them based on current SmartPricing rules. Proceed?")) return;

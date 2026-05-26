@@ -9,9 +9,12 @@ import {
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 import { useData, REFRESH_INTERVAL } from '../../context/DataContext';
 import { useModuleRefresh } from '../../hooks/useModuleRefresh';
+import { useAuth } from '../../context/AuthContext';
 import { useFinance } from '../../context/FinanceContext';
 import { useSales } from '../../context/SalesContext';
 import { useOrders } from '../../context/OrdersContext';
+import { useInventory } from '../../context/InventoryContext';
+import { useProduction } from '../../context/ProductionContext';
 import { Quotation, Invoice, DeliveryNote, RecurringInvoice, CartItem, Order, JobOrder } from '../../types';
 import { OrderForm } from './components/OrderForm';
 import { InvoiceDetails } from './components/InvoiceDetails';
@@ -130,15 +133,12 @@ const buildRecurringDraftFromTemplate = (item: RecurringInvoice): RecurringInvoi
 };
 
 const Orders: React.FC = () => {
-    const {
-        quotations = [], invoices = [], recurringInvoices = [], jobOrders = [], customers = [], inventory = [], companyConfig, isOnline,
-        addQuotation, updateQuotation, deleteQuotation, approveQuotation, convertQuotationToInvoice,
-        addInvoice, updateInvoice, deleteInvoice,
-        addRecurringInvoice, deleteRecurringInvoice, updateRecurringInvoice,
-        addJobOrder, updateJobOrder, deleteJobOrder, convertJobOrderToInvoice,
-        salesExchanges = [], deleteSalesExchange, approveSalesExchange, cancelSalesExchange,
-        notify, user, boms = [], isLoading, refreshAllData
-    } = useData();
+    const { refreshAllData } = useData();
+    const { companyConfig, isOnline, notify, user } = useAuth();
+    const { invoices, recurringInvoices, addInvoice, updateInvoice, deleteInvoice, addRecurringInvoice, deleteRecurringInvoice, updateRecurringInvoice } = useFinance();
+    const { quotations, customers, addQuotation, updateQuotation, deleteQuotation, approveQuotation, convertQuotationToInvoice, jobOrders, addJobOrder, updateJobOrder, deleteJobOrder, convertJobOrderToInvoice, salesExchanges, deleteSalesExchange, approveSalesExchange, cancelSalesExchange, isLoading } = useSales();
+    const { inventory } = useInventory();
+    const { boms } = useProduction();
 
     const { createDeliveryNote, checkAndApplyLateFees } = useFinance();
     const { convertQuotationToWorkOrder, convertQuotationToJobTicket } = useSales();
@@ -1062,7 +1062,7 @@ const Orders: React.FC = () => {
                         const amount = amountStr ? parseFloat(amountStr) : order.remainingBalance;
                         if (amount > 0) {
                             await recordPayment(id, {
-                                id: `PAY - BLK - ${Date.now()} -${id} `,
+                                id: `PAY - BLK - ${Date.now()} -${id} -${Math.random().toString(36).substr(2, 5)}`,
                                 orderId: id,
                                 amountPaid: amount,
                                 paymentDate: new Date().toISOString(),

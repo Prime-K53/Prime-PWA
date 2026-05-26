@@ -16,7 +16,9 @@ import {
 } from 'lucide-react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useSales } from '../context/SalesContext';
 import { useData } from '../context/DataContext';
+import { resolveAppAssetUrl } from '../utils/runtime';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -29,7 +31,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, isCollapsed, toggle, toggleCo
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout, companyConfig } = useAuth();
-  const { setIsPosModalOpen, refreshAllData } = useData();
+  const { setIsPosModalOpen } = useSales();
+  const { refreshAllData } = useData();
   const getTabletViewport = () => {
     if (typeof window === 'undefined') return false;
     return window.innerWidth <= 1024 && window.innerWidth >= 768;
@@ -335,7 +338,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, isCollapsed, toggle, toggleCo
             onClick={toggleCollapse}
             className="w-9 h-9 shrink-0 cursor-pointer hover:opacity-80 transition-all"
           >
-            <img src="/pwa-icon-192x192.png" alt="Prime ERP" className="w-full h-full rounded-lg" />
+            <img src={resolveAppAssetUrl('/pwa-icon-192x192.png')} alt="Prime ERP" className="w-full h-full rounded-lg" />
           </div>
           {!isCompressed && (
             <div className="flex-1 flex flex-col overflow-hidden">
@@ -522,6 +525,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, isCollapsed, toggle, toggleCo
                         <button onClick={() => { navigate('/audit'); setIsSettingsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 rounded-lg text-sm font-medium text-white/80 transition-colors group">
                           <div className="p-1.5 text-emerald-400 bg-emerald-500/10 rounded-md group-hover:bg-emerald-500/20 transition-colors"><ShieldCheck size={16} /></div>
                           Security Log
+                        </button>
+                        <button onClick={() => { navigate('/admin/migration-health'); setIsSettingsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 rounded-lg text-sm font-medium text-white/80 transition-colors group">
+                          <div className="p-1.5 text-cyan-400 bg-cyan-500/10 rounded-md group-hover:bg-cyan-500/20 transition-colors"><Database size={16} /></div>
+                          Migration Health
                         </button>
                         <button onClick={() => { navigate('/settings'); setIsSettingsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 rounded-lg text-sm font-medium text-white/80 transition-colors group">
                           <div className="p-1.5 text-amber-400 bg-amber-500/10 rounded-md group-hover:bg-amber-500/20 transition-colors"><Settings size={16} /></div>

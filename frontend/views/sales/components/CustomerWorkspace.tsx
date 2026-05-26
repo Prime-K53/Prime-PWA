@@ -35,13 +35,13 @@ interface CustomerWorkspaceProps {
 
 export const CustomerWorkspace: React.FC<CustomerWorkspaceProps> = ({ customer, onBack, onEdit }) => {
   const navigate = useNavigate();
-  const { invoices, ledger, accounts, walletTransactions, notify, refreshAllData } = useData();
+  const { invoices, ledger, accounts, walletTransactions } = useFinance();
+  const { refreshAllData } = useData();
   
   // 5-minute poll + focus refresh
   useModuleRefresh(refreshAllData, { interval: REFRESH_INTERVAL });
   const { customerPayments = [], sales, quotations, updateCustomer } = useSales();
-  const { addAuditLog } = useAuth();
-  const { companyConfig, auditLogs } = useData();
+  const { addAuditLog, companyConfig, auditLogs, notify } = useAuth();
   const currency = companyConfig?.currencySymbol || '$';
 
   const [activeTab, setActiveTab] = useState<'Overview' | 'Timeline' | 'Invoices' | 'Payments' | 'Ledger' | 'Accounting' | 'Wallet' | 'Documents' | 'Settings' | 'Security Audit'>('Overview');
@@ -197,15 +197,18 @@ export const CustomerWorkspace: React.FC<CustomerWorkspaceProps> = ({ customer, 
 
   const handleExportLedger = () => {
     const headers = ['Date', 'Reference', 'Description', 'Account', 'Debit', 'Credit', 'Balance'];
-    const rows = ledgerEntries.map(entry => [
-      entry.date,
-      entry.id,
-      entry.memo,
-      entry.subAccountId ? (customer.subAccounts?.find(s => s.id === entry.subAccountId)?.name || 'Sub-account') : 'Main Account',
-      entry.totalAmount || 0,
-      entry.amount || 0,
-      entry.balance
-    ]);
+    const rows = ledgerEntries.map(entry => {
+      const labeledEntry = entry as typeof entry & { debit: number; credit: number; runningBalance: number; accountName: string };
+      return [
+        labeledEntry.date,
+        labeledEntry.id,
+        labeledEntry.memo,
+        labeledEntry.subAccountId ? (customer.subAccounts?.find(s => s.id === labeledEntry.subAccountId)?.name || 'Sub-account') : 'Main Account',
+        labeledEntry.debit || 0,
+        labeledEntry.credit || 0,
+        labeledEntry.runningBalance || 0
+      ];
+    });
 
     const csvContent = [
       headers.join(','),

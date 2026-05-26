@@ -1,10 +1,12 @@
 
 import React, { useState, useMemo } from 'react';
 import { Scale, CheckCircle, AlertTriangle, Search, Calendar } from 'lucide-react';
-import { useData } from '../../context/DataContext';
+import { useFinance } from '../../context/FinanceContext';
+import { useAuth } from '../../context/AuthContext';
 
 const Reconciliation: React.FC = () => {
-  const { accounts, ledger, toggleReconciled, companyConfig } = useData();
+  const { accounts, ledger, toggleReconciled } = useFinance();
+  const { companyConfig } = useAuth();
   const currency = companyConfig.currencySymbol;
 
   // State

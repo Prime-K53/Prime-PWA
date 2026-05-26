@@ -90,7 +90,7 @@ export const useVatStore = create<VatState>((set, get) => ({
             .reduce((sum, t) => sum + t.amount, 0);
 
         const newReturn: VatReturn = {
-            id: generateNextId(),
+            id: generateNextId('VATR', get().returns),
             periodStart,
             periodEnd,
             totalInputTax: totalInput,

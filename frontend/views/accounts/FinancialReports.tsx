@@ -8,8 +8,11 @@ import {
     RefreshCw, ChevronDown, CheckCircle2, Wallet, ArrowRight, ExternalLink,
     Eye
 } from 'lucide-react';
-import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
 import { useFinance } from '../../context/FinanceContext';
+import { useSales } from '../../context/SalesContext';
+import { useInventory } from '../../context/InventoryContext';
+import { useProcurement } from '../../context/ProcurementContext';
 import { useDocumentStore } from '../../stores/documentStore';
 import { AccountType, LedgerEntry, Account } from '../../types';
 import { format, startOfYear, endOfYear, startOfMonth, endOfMonth, isWithinInterval, parseISO, isBefore, isAfter, differenceInDays } from 'date-fns';
@@ -70,8 +73,11 @@ const ReportRow: React.FC<ReportRowProps> = ({
 };
 
 const FinancialReports: React.FC = () => {
-    const { accounts = [], ledger = [], budgets = [], companyConfig, notify, invoices = [], purchases = [], inventory = [], customers = [] } = useData();
-    const { runMonthEndClosing, syncInventoryValuation } = useFinance();
+    const { companyConfig, notify } = useAuth();
+    const { accounts, ledger, budgets, invoices, runMonthEndClosing, syncInventoryValuation } = useFinance();
+    const { customers } = useSales();
+    const { inventory } = useInventory();
+    const { purchases } = useProcurement();
     const { safeOpenPreview } = useDocumentStore();
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();

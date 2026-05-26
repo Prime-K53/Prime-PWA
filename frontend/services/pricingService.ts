@@ -2,6 +2,8 @@ import { Item, BOMTemplate, ConsumptionSnapshot, MarketAdjustment, ProductVarian
 import { pagesToReams, pagesToTonerKg } from '../utils/printConversions';
 import { roundToCurrency } from '../utils/helpers';
 import { calculateItemFinancials } from '../utils/pricing';
+import { generateOpaqueId } from '../utils/idGeneration';
+import { resolveVolumeMarginValue } from '../utils/pricingEngineShared';
 import { SafeFormulaEngine } from './formulaEngine';
 import { applyProductPriceRounding } from './pricingRoundingService';
 import { dbService } from './db';
@@ -72,7 +74,7 @@ export interface TransactionContext {
  * Generate a unique ID for adjustment snapshots
  */
 const generateAdjustmentId = () => {
-    return `ADJ-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    return generateOpaqueId('ADJ');
 };
 
 const getCompanyConfig = () => {
@@ -202,11 +204,14 @@ export const pricingService = {
                 cost = bomCost / quantity; // Unit cost
 
                 consumption = {
-                    id: `SNAP-${Date.now()}`,
+                    id: generateOpaqueId('SNAP'),
                     saleId: '',
                     itemId: item.id,
                     variantId: variantId,
                     pages: totalPages,
+                    quantity,
+                    cost,
+                    totalCost: cost * quantity,
                     paperConsumed,
                     tonerConsumed,
                     costPerUnit: cost,
@@ -266,6 +271,7 @@ export const pricingService = {
                     timestamp: new Date().toISOString(),
                     name: adj.name,
                     type: adj.type as 'PERCENTAGE' | 'FIXED' | 'PERCENT',
+                    amount: roundToCurrency(amount * quantity),
                     value: adj.value,
                     calculatedAmount: amount,
                     category: adj.adjustmentCategory || adj.category,
@@ -480,6 +486,14 @@ export const pricingService = {
         const finalUnitPricePerPage = safePages > 0 ? (finalUnitPricePerCopy / safePages) : finalUnitPricePerCopy;
 
         const serviceDetails: DynamicServiceDetails = {
+            materials: components.map(c => ({
+                itemId: c.itemId,
+                quantity: c.quantity,
+                cost: c.unitCost,
+                totalCost: c.totalCost,
+                name: c.name,
+            })),
+            adjustments: [],
             pages: safePages,
             copies: safeCopies,
             totalPages,
@@ -519,7 +533,7 @@ export const pricingService = {
         saleId: string
     ): MarketAdjustmentTransaction[] {
         return snapshots.map(snap => ({
-            id: `MAT-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            id: generateOpaqueId('MAT'),
             saleId: saleId,
             itemId: snap.itemId,
             variantId: snap.variantId,
@@ -887,10 +901,7 @@ export const calculateAutoPrice = async ({
     // Volume Discount Logic
     if (globalMargin.apply_volume_margins) {
         const pages = (companyConfig as any)?.pages || 0;
-        if (pages >= 500) marginValue = 25;
-        else if (pages >= 250) marginValue = 15;
-        else if (pages >= 180) marginValue = 10;
-        else marginValue = 0;
+        marginValue = resolveVolumeMarginValue(pages);
         marginType = 'percentage';
     }
 

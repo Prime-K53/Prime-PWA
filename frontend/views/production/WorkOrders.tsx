@@ -2,9 +2,10 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 /* Added Play to the lucide-react imports */
 import { Plus, LayoutGrid, List as ListIcon, Eye, Receipt, XCircle, Trash2, Edit, RefreshCw, ChevronRight, CheckSquare, Zap, Target, History, MoreVertical, MonitorPlay, FileText, Settings, Calendar, AlertTriangle, ShieldCheck, Clock, Play, Printer, X, Download, FileDown } from 'lucide-react';
-import { useData } from '../../context/DataContext';
 import { useInventory } from '../../context/InventoryContext';
 import { useProduction } from '../../context/ProductionContext';
+import { useSales } from '../../context/SalesContext';
+import { useAuth } from '../../context/AuthContext';
 import { WorkOrderKanban } from './components/ProductionLists';
 import { WorkOrderModal, MaterialReconciliationModal } from './components/ProductionForms';
 import { WorkOrder, CartItem, Invoice } from '../../types';
@@ -69,8 +70,10 @@ const JobHoverCard: React.FC<{
 };
 
 const WorkOrders: React.FC = () => {
-    const { workOrders = [], boms = [], customers = [], deleteWorkOrder, notify, inventory = [], convertJobOrderToInvoice, createWorkOrder, updateWorkOrder, companyConfig } = useData();
-    const { updateWorkOrderStatus } = useProduction();
+    const { workOrders = [], boms = [], deleteWorkOrder, createWorkOrder, updateWorkOrder, updateWorkOrderStatus } = useProduction();
+    const { customers = [], convertJobOrderToInvoice } = useSales();
+    const { inventory = [] } = useInventory();
+    const { notify, companyConfig } = useAuth();
     const { handlePreview } = useDocumentPreview();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [viewType, setViewType] = useState<'Kanban' | 'List'>('List');

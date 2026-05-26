@@ -97,4 +97,65 @@ describe('revenueAnalysisService', () => {
     expect(report.transactions[0].source).toBe('EXAMINATION');
     expect(report.transactions[0].subAccountName).toBe('Campus A');
   });
+
+  it('uses batch class pricing when invoice adjustment totals already include rounding', () => {
+    const report = buildRevenueReportingSnapshot({
+      invoices: [
+        {
+          id: 'EXM-INV-002',
+          date: '2026-05-23T09:30:00.000Z',
+          status: 'Unpaid',
+          originModule: 'examination',
+          batchId: 'BATCH-002',
+          customerName: 'Mankhamba LEA School',
+          totalAmount: 5000,
+          materialTotal: 2511,
+          adjustmentTotal: 1178.7,
+          profitMarginTotal: 1310.3,
+          roundingTotal: 0,
+          adjustmentSnapshots: [
+            { name: 'Transport/Logistics', type: 'FIXED', value: 1049.6, calculatedAmount: 1049.6 },
+            { name: 'Rounding', type: 'FIXED', value: 129.1, calculatedAmount: 129.1 },
+          ],
+          items: [
+            { id: 'EXAM-LINE-1', name: 'Examination Service', quantity: 1, price: 5000, total: 5000 },
+          ],
+        },
+      ],
+      batches: [
+        {
+          id: 'BATCH-002',
+          school_name: 'Mankhamba LEA School',
+          sub_account_name: 'Main Campus',
+          classes: [
+            {
+              id: 'CLS-1',
+              class_name: 'Form 4',
+              number_of_learners: 1,
+              live_total_preview: 5000,
+              material_total_cost: 2511,
+              market_adjustment_total: 1049.6,
+              adjustment_total_cost: 1178.7,
+              rounding_adjustment: 129.1,
+              margin_amount: 1310.3,
+            },
+          ],
+          adjustmentSnapshots: [
+            { id: 'transport', name: 'Transport/Logistics', type: 'FIXED', total_amount: 1049.6, calculatedAmount: 1049.6 },
+            { id: 'auto-rounding', name: 'Rounding', type: 'FIXED', total_amount: 129.1, calculatedAmount: 129.1, is_rounding: true },
+          ],
+        },
+      ],
+    });
+
+    expect(report.totals.revenue).toBe(5000);
+    expect(report.totals.materialCost).toBe(2511);
+    expect(report.totals.adjustmentTotal).toBe(1049.6);
+    expect(report.totals.profitMargin).toBe(1310.3);
+    expect(report.totals.roundingTotal).toBe(129.1);
+    expect(report.transactions).toHaveLength(1);
+    expect(report.transactions[0].adjustmentTotal).toBe(1049.6);
+    expect(report.transactions[0].roundingTotal).toBe(129.1);
+    expect(report.transactions[0].subAccountName).toBe('Main Campus');
+  });
 });

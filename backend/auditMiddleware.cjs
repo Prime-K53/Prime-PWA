@@ -9,7 +9,8 @@
  */
 
 const { auditService } = require('./auditService.cjs');
-const { db } = require('./db.cjs');
+const { getDatabase } = require('./db.cjs');
+const getDb = () => getDatabase();
 
 // Generate a new correlation ID
 const generateCorrelationId = () => {
@@ -49,13 +50,23 @@ const auditCrudMiddleware = (entityType) => {
 
     if (entityId && (req.method === 'PUT' || req.method === 'PATCH' || req.method === 'DELETE')) {
       try {
-        const tableName = entityType === 'invoice' ? 'documents' :
-                         entityType === 'examination_batch' ? 'examination_batches' :
-                         entityType === 'customer' ? 'customers' :
-                         entityType === 'inventory_item' ? 'inventory' : entityType;
+        const TABLE_WHITELIST = {
+          'invoice': 'documents',
+          'examination_batch': 'examination_batches',
+          'customer': 'customers',
+          'inventory_item': 'inventory',
+          'document': 'documents',
+          'sale': 'sales',
+          'exchange': 'sales_exchanges',
+          'payment': 'customer_payments',
+          'supplier': 'suppliers',
+          'purchase': 'purchases',
+        };
+        const tableName = TABLE_WHITELIST[entityType] || null;
+        if (!tableName) return next();
 
         await new Promise((resolve, reject) => {
-          db.get(`SELECT * FROM ${tableName} WHERE id = ? OR logical_number = ?`, [entityId, entityId], (err, row) => {
+          getDb().get(`SELECT * FROM ${tableName} WHERE id = ? OR logical_number = ?`, [entityId, entityId], (err, row) => {
             if (err) reject(err);
             else {
               oldValue = row;

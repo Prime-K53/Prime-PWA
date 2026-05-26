@@ -1,6 +1,7 @@
 const path = require('path');
 const fs = require('fs');
-const { db } = require('../db.cjs');
+const { getDatabase } = require('../db.cjs');
+const getDb = () => getDatabase();
 const { detectIdentifierType, ResolutionError } = require('./resolverUtils.cjs');
 const { LayoutEngine } = require('../../frontend/services/layoutEngine.cjs');
 const { ConsistencyService } = require('../../frontend/services/consistencyService.cjs');
@@ -57,7 +58,7 @@ class DocumentService {
         return resolve(null);
       }
 
-      db.get(query, params, (err, doc) => {
+      getDb().get(query, params, (err, doc) => {
         if (err) {
           console.error(`[DocumentService] Database error during resolution of ${id}:`, err);
           return reject(err);
@@ -162,7 +163,7 @@ class DocumentService {
     `;
     
     return new Promise((resolve, reject) => {
-      db.run(query, [uuid, displayId, type, JSON.stringify(payload), userId], function(err) {
+      getDb().run(query, [uuid, displayId, type, JSON.stringify(payload), userId], function(err) {
         if (err) return reject(err);
         resolve({ id: uuid, logicalNumber: displayId, type, status: 'draft' });
       });
@@ -175,7 +176,7 @@ class DocumentService {
   async updateDocument(id, payload, userId) {
     return new Promise((resolve, reject) => {
       // 1. Check if document exists and is in draft status
-      db.get("SELECT status FROM documents WHERE id = ?", [id], (err, doc) => {
+      getDb().get("SELECT status FROM documents WHERE id = ?", [id], (err, doc) => {
         if (err) return reject(err);
         if (!doc) return reject(new Error('Document not found'));
         if (doc.status !== 'draft') {
@@ -188,7 +189,7 @@ class DocumentService {
           SET payload = ?, updated_at = CURRENT_TIMESTAMP 
           WHERE id = ?
         `;
-        db.run(query, [JSON.stringify(payload), id], (err) => {
+        getDb().run(query, [JSON.stringify(payload), id], (err) => {
           if (err) return reject(err);
           resolve({ id, success: true });
         });
@@ -201,7 +202,7 @@ class DocumentService {
    */
   async finalizeDocument(id, layoutBlueprint, userId) {
     return new Promise((resolve, reject) => {
-      db.get("SELECT * FROM documents WHERE id = ?", [id], async (err, doc) => {
+      getDb().get("SELECT * FROM documents WHERE id = ?", [id], async (err, doc) => {
         if (err) return reject(err);
         if (!doc) return reject(new Error('Document not found'));
         if (doc.status !== 'draft') {
@@ -241,7 +242,7 @@ class DocumentService {
                 finalized_at = CURRENT_TIMESTAMP 
             WHERE id = ?
           `;
-          db.run(query, [JSON.stringify(renderModel), validation.fingerprint, id], (err) => {
+          getDb().run(query, [JSON.stringify(renderModel), validation.fingerprint, id], (err) => {
             if (err) return reject(err);
             resolve({ id, status: 'finalized', fingerprint: validation.fingerprint });
           });
@@ -281,7 +282,7 @@ class DocumentService {
    */
   async verifySignature(id) {
     return new Promise((resolve, reject) => {
-      db.get("SELECT render_model, fingerprint FROM documents WHERE id = ?", [id], (err, doc) => {
+      getDb().get("SELECT render_model, fingerprint FROM documents WHERE id = ?", [id], (err, doc) => {
         if (err) return reject(err);
         if (!doc) return reject(new Error('Document not found'));
         if (!doc.fingerprint) return reject(new Error('Document is not finalized/signed'));
@@ -307,7 +308,7 @@ class DocumentService {
   }
   async voidDocument(id, userId) {
     return new Promise((resolve, reject) => {
-      db.run("UPDATE documents SET status = 'voided' WHERE id = ?", [id], (err) => {
+      getDb().run("UPDATE documents SET status = 'voided' WHERE id = ?", [id], (err) => {
         if (err) return reject(err);
         resolve({ id, status: 'voided' });
       });
@@ -498,7 +499,7 @@ class DocumentService {
       VALUES (?, ?, ?, ?, ?)
     `;
     return new Promise((resolve, reject) => {
-      db.run(query, [userId, action, entityType, entityId, JSON.stringify(details)], function(err) {
+      getDb().run(query, [userId, action, entityType, entityId, JSON.stringify(details)], function(err) {
         if (err) {
           console.error('[DocumentService] Audit log insert failed:', err);
           return reject(err);

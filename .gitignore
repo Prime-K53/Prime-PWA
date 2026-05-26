@@ -35,6 +35,28 @@ release/
 skills-lock.json
 Microsoft/
 
+# Database files
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+
+# Storage (contains runtime data)
+backend/storage/
+
+# Debug/test scripts
+backend/check_*.cjs
+backend/debug_*.cjs
+backend/test_*.cjs
+
+# Scratch/temp files
+frontend/scratch/
+.kilo/
+
+# Installer output
+installer-output/
+windows-installer/
+
 # Test artifacts
 test_node.js
 .opencode

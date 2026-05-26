@@ -129,7 +129,7 @@ const ExaminationBatchModal: React.FC<ExaminationBatchModalProps> = ({ isOpen, o
 
     setAddingCustomer(true);
     try {
-      const customerId = `CUS-${Date.now()}`;
+      const customerId = `CUS-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
       const customer: Customer = {
         id: customerId,
         name: newCustomer.name.trim(),

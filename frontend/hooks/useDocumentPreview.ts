@@ -2,7 +2,7 @@ import { createElement } from 'react';
 import { pdf } from '@react-pdf/renderer';
 import { useDocumentStore, DocType } from '../stores/documentStore';
 import { useAuth } from '../context/AuthContext';
-import { useData } from '../context/DataContext';
+import { useSales } from '../context/SalesContext';
 import { mapToInvoiceData } from '../utils/pdfMapper';
 import { enrichDocumentCustomerData } from '../utils/documentCustomerData';
 import { PrimeDocument } from '../views/shared/components/PDF/PrimeDocument';
@@ -15,7 +15,7 @@ import { validateDocumentData } from '../views/shared/components/PDF/documentVal
 export const useDocumentPreview = () => {
   const { safeOpenPreview } = useDocumentStore();
   const { notify, companyConfig } = useAuth();
-  const { customers } = useData();
+  const { customers } = useSales();
 
   const prepareDocument = async (
     openMode: 'preview' | 'print',

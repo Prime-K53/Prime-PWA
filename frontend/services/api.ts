@@ -1,7 +1,9 @@
 import axios from 'axios';
 import { dbService } from './db.ts';
-import { getUrl, API_BASE_URL } from '@/config/api.js';
+import { productionDb } from './productionDb.ts';
+import { getUrl, API_BASE_URL, HAS_REMOTE_BACKEND } from '@/config/api.js';
 import { platform } from './platform';
+import { isVerboseApiLoggingEnabled } from '../utils/debugFlags';
 import {
   Item, Warehouse, Purchase, Sale, Quotation, JobOrder,
   CustomerPayment, ProductionBatch, WorkOrder, WorkCenter,
@@ -46,6 +48,10 @@ apiClient.interceptors.response.use(
   (error) => {
     if (error?.response) {
       const status = error.response.status;
+      if (!verboseApiLoggingEnabled && status < 500) {
+        return Promise.reject(error);
+      }
+
       const method = error.config?.method?.toUpperCase() || 'UNKNOWN';
       const url = error.config?.url || 'unknown';
       const requestData = error.config?.data ? (() => { try { return JSON.parse(error.config.data); } catch { return error.config.data; } })() : undefined;
@@ -69,10 +75,15 @@ apiClient.interceptors.response.use(
 
 const isProd = false; // Always false to prevent production-only sync enforcement
 const PASSWORD_BYPASS_USER_ID = 'USR-PASSWORD-BYPASS';
+const verboseApiLoggingEnabled = isVerboseApiLoggingEnabled();
 
 export const ensureBackendInProd = (context: string, error: unknown) => {
-  // Local-first mode: Log warning but never block local fallback
-  console.warn(`[${context}] Local backend unavailable, using fallback`, error);
+  if (!isProd && !verboseApiLoggingEnabled) {
+    return;
+  }
+
+  const detail = error instanceof Error ? error.message : String(error || 'Unknown backend error');
+  console.warn(`[${context}] Local backend unavailable, using fallback`, detail);
 };
 
 const getRequestMethod = (method?: string) => String(method || 'GET').toUpperCase();
@@ -127,6 +138,7 @@ const isJsonContent = (contentType: string) => {
 
 const logger = {
   info: (msg: string, extra?: any) => {
+    if (!verboseApiLoggingEnabled) return;
     const formatted = `[FRONTEND] ${msg}`;
     console.log(formatted, extra || '');
     if (platform.isDesktop) {
@@ -154,9 +166,9 @@ const handleUnauthorizedResponse = (fullUrl: string) => {
   if (typeof window !== 'undefined') {
     const shouldRedirect = String((import.meta as any)?.env?.VITE_REDIRECT_ON_401 || '').toLowerCase() === 'true';
     if (shouldRedirect) {
-      const currentPath = String(window.location?.pathname || '');
-      if (!currentPath.includes('/login')) {
-        window.location.assign('/login');
+      const currentHash = String(window.location?.hash || '');
+      if (!currentHash.includes('/login')) {
+        window.location.hash = '#/login';
       }
     }
   }
@@ -178,7 +190,7 @@ apiClient.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    if (isHtmlContent(contentType, response.data)) {
+    if (isHtmlContent(String(contentType), response.data)) {
       const error = new Error(`Wrong endpoint for API request: ${method} ${fullUrl} returned HTML instead of JSON (HTTP ${response.status})`);
       (error as any).status = response.status;
       logger.error(`Error Wrong endpoint detected for ${method} ${fullUrl}`, { status: response.status, contentType });
@@ -245,6 +257,7 @@ apiClient.interceptors.request.use((config) => {
       config.headers['x-user-role'] = config.headers['x-user-role'] || 'Admin';
       config.headers['x-user-is-super-admin'] = config.headers['x-user-is-super-admin'] || 'true';
     }
+    config.headers['x-dev-bypass'] = 'true';
   } catch (e) {
     (config as any).headers = config.headers || {};
     config.headers['x-user-id'] = config.headers['x-user-id'] || 'USR-0001';
@@ -264,8 +277,6 @@ apiClient.interceptors.request.use((config) => {
       config.headers['x-user-id'] = 'dev';
       config.headers['x-user-role'] = 'Admin';
       config.headers['x-user-is-super-admin'] = 'true';
-      // Mark requests that used the dev fallback
-      config.headers['x-dev-bypass'] = 'true';
     }
   } catch (e) {
     // ignore
@@ -317,7 +328,7 @@ const toNum = (value: any, fallback = 0) => {
 };
 
 const normalizeSalesExchange = (exchange: any) => {
-  const fallbackId = exchange?.id || exchange?.exchange_number || Date.now().toString();
+  const fallbackId = exchange?.id || exchange?.exchange_number || `fallback-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const rawItems = Array.isArray(exchange?.items) ? exchange.items : [];
 
   const items = rawItems.map((item: any, index: number) => {
@@ -539,6 +550,10 @@ export const api = {
 
   sales: {
     getAllSales: () => handle(async () => {
+      if (shouldPreferLocalReadModels()) {
+        return dbService.getAll<Sale>('sales');
+      }
+
       try {
         const response = await apiClient.get('/sales');
         const remoteSales = Array.isArray(response.data) ? response.data : [];
@@ -712,10 +727,13 @@ export const api = {
             // Preserve locally cached items if backend payload is missing them.
             if (!Array.isArray(hydrated?.items) || hydrated.items.length === 0) {
               const localCached =
-                (await dbService.get('salesExchanges', exchange.id)) ||
-                (await dbService.get('salesExchanges', String(exchange.id)));
-              if (Array.isArray(localCached?.items) && localCached.items.length > 0) {
-                hydrated = { ...hydrated, items: localCached.items };
+                (await dbService.get<Record<string, unknown>>('salesExchanges', exchange.id)) ||
+                (await dbService.get<Record<string, unknown>>('salesExchanges', String(exchange.id)));
+              if (localCached) {
+                const cachedItems = localCached.items;
+                if (Array.isArray(cachedItems) && cachedItems.length > 0) {
+                  hydrated = { ...hydrated, items: cachedItems };
+                }
               }
             }
 
@@ -824,15 +842,15 @@ export const api = {
       // In a real audit-compliant system, we just update status
       try {
         await apiClient.patch(getApiPath(`sales-exchanges/${id}`), { status: 'Deleted' });
-        const existing = await dbService.get('salesExchanges', id);
-        if (existing) {
+        const existing = await dbService.get<Record<string, unknown>>('salesExchanges', id);
+        if (existing && typeof existing === 'object') {
           await dbService.put('salesExchanges', { ...existing, status: 'Deleted' });
         }
         return { success: true };
       } catch (err) {
         ensureBackendInProd('Sales.DeleteExchange', err);
-        const existing = await dbService.get('salesExchanges', id);
-        if (existing) {
+        const existing = await dbService.get<Record<string, unknown>>('salesExchanges', id);
+        if (existing && typeof existing === 'object') {
           await dbService.put('salesExchanges', { ...existing, status: 'Deleted' });
         }
         return { success: true, localOnly: true };
@@ -843,15 +861,15 @@ export const api = {
       checkAuth(['Admin', 'Manager', 'Clerk'], 'Sales.CancelExchange');
       try {
         const response = await apiClient.patch(getApiPath(`sales-exchanges/${id}`), { status: 'Cancelled' });
-        const existing = await dbService.get('salesExchanges', id);
-        if (existing) {
+        const existing = await dbService.get<Record<string, unknown>>('salesExchanges', id);
+        if (existing && typeof existing === 'object') {
           await dbService.put('salesExchanges', { ...existing, status: 'Cancelled' });
         }
         return response.data;
       } catch (err) {
         ensureBackendInProd('Sales.CancelExchange', err);
-        const existing = await dbService.get('salesExchanges', id);
-        if (existing) {
+        const existing = await dbService.get<Record<string, unknown>>('salesExchanges', id);
+        if (existing && typeof existing === 'object') {
           await dbService.put('salesExchanges', { ...existing, status: 'Cancelled' });
         }
         return { success: true, localOnly: true };
@@ -861,22 +879,22 @@ export const api = {
     // Orders Section
     getAllOrders: () => handle(() => dbService.getAll<Order>('orders'), 'Orders.GetAll'),
     getOrderById: (id: string) => handle(() => dbService.get<Order>('orders', id), 'Orders.GetById'),
-    createOrder: (order: Order) => handle(() => {
+    createOrder: (order: Order) => handle(async () => {
       checkAuth(['Admin', 'Accountant', 'Clerk'], 'Orders.Create');
       return transactionService.createOrder(order);
-    }),
-    recordOrderPayment: (orderId: string, payment: OrderPayment) => handle(() => {
+    }, 'Orders.Create'),
+    recordOrderPayment: (orderId: string, payment: OrderPayment) => handle(async () => {
       checkAuth(['Admin', 'Accountant', 'Clerk'], 'Orders.RecordPayment');
       return transactionService.recordOrderPayment(orderId, payment);
-    }),
-    updateOrderStatus: (orderId: string, status: Order['status']) => handle(() => {
+    }, 'Orders.RecordPayment'),
+    updateOrderStatus: (orderId: string, status: Order['status']) => handle(async () => {
       checkAuth(['Admin', 'Accountant', 'Clerk'], 'Orders.UpdateStatus');
       return transactionService.updateOrderStatus(orderId, status);
-    }),
-    cancelOrder: (orderId: string, reason: string) => handle(() => {
+    }, 'Orders.UpdateStatus'),
+    cancelOrder: (orderId: string, reason: string) => handle(async () => {
       checkAuth(['Admin', 'Accountant', 'Clerk'], 'Orders.Cancel');
       return transactionService.cancelOrder(orderId, reason);
-    }),
+    }, 'Orders.Cancel'),
   },
 
   procurement: {
@@ -903,38 +921,48 @@ export const api = {
   },
 
   production: {
-    getBatches: () => handle(() => dbService.getAll<ProductionBatch>('batches'), 'Production.GetBatches'),
-    saveBatch: (b: ProductionBatch) => handle(() => {
+    getBatches: () => handle(async () => {
+      try { return await productionDb.batches.toArray(); } catch { return dbService.getAll<ProductionBatch>('batches'); }
+    }, 'Production.GetBatches'),
+    saveBatch: (b: ProductionBatch) => handle(async () => {
       checkAuth(['Admin', 'Accountant'], 'Production.SaveBatch');
-      return dbService.put('batches', b);
+      try { await productionDb.batches.put(b); } catch { await dbService.put('batches', b); }
     }, 'Production.SaveBatch'),
 
-    getWorkOrders: () => handle(() => dbService.getAll<WorkOrder>('workOrders'), 'Production.GetWorkOrders'),
-    saveWorkOrder: (w: WorkOrder) => handle(() => {
+    getWorkOrders: () => handle(async () => {
+      try { return await productionDb.workOrders.toArray(); } catch { return dbService.getAll<WorkOrder>('workOrders'); }
+    }, 'Production.GetWorkOrders'),
+    saveWorkOrder: (w: WorkOrder) => handle(async () => {
       checkAuth(['Admin', 'Accountant'], 'Production.SaveWorkOrder');
-      return dbService.put('workOrders', w);
+      try { await productionDb.workOrders.put(w); } catch { await dbService.put('workOrders', w); }
     }, 'Production.SaveWorkOrder'),
-    deleteWorkOrder: (id: string) => handle(() => {
+    deleteWorkOrder: (id: string) => handle(async () => {
       checkAuth(['Admin'], 'Production.DeleteWorkOrder');
-      return dbService.delete('workOrders', id);
+      try { await productionDb.workOrders.delete(id); } catch { await dbService.delete('workOrders', id); }
     }, 'Production.DeleteWorkOrder'),
 
-    getWorkCenters: () => handle(() => dbService.getAll<WorkCenter>('workCenters'), 'Production.GetWorkCenters'),
-    saveWorkCenter: (wc: WorkCenter) => handle(() => {
+    getWorkCenters: () => handle(async () => {
+      try { return await productionDb.workCenters.toArray(); } catch { return dbService.getAll<WorkCenter>('workCenters'); }
+    }, 'Production.GetWorkCenters'),
+    saveWorkCenter: (wc: WorkCenter) => handle(async () => {
       checkAuth(['Admin'], 'Production.SaveWorkCenter');
-      return dbService.put('workCenters', wc);
+      try { await productionDb.workCenters.put(wc); } catch { await dbService.put('workCenters', wc); }
     }, 'Production.SaveWorkCenter'),
 
-    getResources: () => handle(() => dbService.getAll<ProductionResource>('resources'), 'Production.GetResources'),
-    saveResource: (r: ProductionResource) => handle(() => {
+    getResources: () => handle(async () => {
+      try { return await productionDb.resources.toArray(); } catch { return dbService.getAll<ProductionResource>('resources'); }
+    }, 'Production.GetResources'),
+    saveResource: (r: ProductionResource) => handle(async () => {
       checkAuth(['Admin'], 'Production.SaveResource');
-      return dbService.put('resources', r);
+      try { await productionDb.resources.put(r); } catch { await dbService.put('resources', r); }
     }, 'Production.SaveResource'),
 
-    getAllocations: () => handle(() => dbService.getAll<ResourceAllocation>('resourceAllocations'), 'Production.GetAllocations'),
-    saveAllocation: (a: ResourceAllocation) => handle(() => {
+    getAllocations: () => handle(async () => {
+      try { return await productionDb.resourceAllocations.toArray(); } catch { return dbService.getAll<ResourceAllocation>('resourceAllocations'); }
+    }, 'Production.GetAllocations'),
+    saveAllocation: (a: ResourceAllocation) => handle(async () => {
       checkAuth(['Admin', 'Accountant'], 'Production.SaveAllocation');
-      return dbService.put('resourceAllocations', a);
+      try { await productionDb.resourceAllocations.put(a); } catch { await dbService.put('resourceAllocations', a); }
     }, 'Production.SaveAllocation'),
 
     getExaminations: () => handle(() => dbService.getAll<ExamPaper>('examPapers'), 'Production.GetExaminations'),
@@ -1034,7 +1062,7 @@ export const api = {
         return response.data;
       } catch (err) {
         ensureBackendInProd('Production.SaveClass', err);
-        const id = `local-class-${Date.now()}`;
+        const id = `local-class-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
         await dbService.put('classes', { id, name });
         return { id, name };
       }
@@ -1074,7 +1102,7 @@ export const api = {
         return response.data;
       } catch (err) {
         ensureBackendInProd('Production.SaveSubject', err);
-        const id = `local-subj-${Date.now()}`;
+        const id = `local-subj-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
         await dbService.put('subjects', { id, name, code });
         return { id, name, code };
       }
@@ -1463,29 +1491,33 @@ export const api = {
       return { success: true };
     }, 'Production.DeleteExamBatch'),
 
-    deleteAllocation: (id: string) => handle(() => {
+    deleteAllocation: (id: string) => handle(async () => {
       checkAuth(['Admin', 'Accountant'], 'Production.DeleteAllocation');
-      return dbService.delete('resourceAllocations', id);
+      try { await productionDb.resourceAllocations.delete(id); } catch { await dbService.delete('resourceAllocations', id); }
     }, 'Production.DeleteAllocation'),
 
-    getMaintenanceLogs: () => handle(() => dbService.getAll<MaintenanceLog>('maintenanceLogs'), 'Production.GetMaint'),
-    saveMaintenanceLog: (l: MaintenanceLog) => handle(() => {
+    getMaintenanceLogs: () => handle(async () => {
+      try { return await productionDb.maintenanceLogs.toArray(); } catch { return dbService.getAll<MaintenanceLog>('maintenanceLogs'); }
+    }, 'Production.GetMaint'),
+    saveMaintenanceLog: (l: MaintenanceLog) => handle(async () => {
       checkAuth(['Admin', 'Accountant'], 'Production.SaveMaint');
-      return dbService.put('maintenanceLogs', l);
+      try { await productionDb.maintenanceLogs.put(l); } catch { await dbService.put('maintenanceLogs', l); }
     }, 'Production.SaveMaint'),
-    deleteMaintenanceLog: (id: string) => handle(() => {
+    deleteMaintenanceLog: (id: string) => handle(async () => {
       checkAuth(['Admin'], 'Production.DeleteMaint');
-      return dbService.delete('maintenanceLogs', id);
+      try { await productionDb.maintenanceLogs.delete(id); } catch { await dbService.delete('maintenanceLogs', id); }
     }, 'Production.DeleteMaint'),
 
-    getBOMs: () => handle(() => dbService.getAll<BillOfMaterial>('boms'), 'Production.GetBOMs'),
-    saveBOM: (bom: BillOfMaterial) => handle(() => {
+    getBOMs: () => handle(async () => {
+      try { return await productionDb.boms.toArray(); } catch { return dbService.getAll<BillOfMaterial>('boms'); }
+    }, 'Production.GetBOMs'),
+    saveBOM: (bom: BillOfMaterial) => handle(async () => {
       checkAuth(['Admin', 'Accountant'], 'Production.SaveBOM');
-      return dbService.put('boms', bom);
+      try { await productionDb.boms.put(bom); } catch { await dbService.put('boms', bom); }
     }, 'Production.SaveBOM'),
-    deleteBOM: (id: string) => handle(() => {
+    deleteBOM: (id: string) => handle(async () => {
       checkAuth(['Admin'], 'Production.DeleteBOM');
-      return dbService.delete('boms', id);
+      try { await productionDb.boms.delete(id); } catch { await dbService.delete('boms', id); }
     }, 'Production.DeleteBOM'),
   },
 
@@ -1804,16 +1836,18 @@ export const api = {
   },
 
   pricing: {
-    getTemplates: () => handle(() => dbService.getAll<BOMTemplate>('bomTemplates'), 'Pricing.GetTemplates'),
+    getTemplates: () => handle(async () => {
+      try { return await productionDb.bomTemplates.toArray(); } catch { return dbService.getAll<BOMTemplate>('bomTemplates'); }
+    }, 'Pricing.GetTemplates'),
     saveTemplate: (tpl: BOMTemplate) => handle(async () => {
       checkAuth(['Admin'], 'Pricing.SaveTemplate');
-      await dbService.put('bomTemplates', tpl);
+      try { await productionDb.bomTemplates.put(tpl); } catch { await dbService.put('bomTemplates', tpl); }
       await repriceMasterInventoryFromAdjustments();
       return;
     }, 'Pricing.SaveTemplate'),
     deleteTemplate: (id: string) => handle(async () => {
       checkAuth(['Admin'], 'Pricing.DeleteTemplate');
-      await dbService.delete('bomTemplates', id);
+      try { await productionDb.bomTemplates.delete(id); } catch { await dbService.delete('bomTemplates', id); }
       await repriceMasterInventoryFromAdjustments();
       return;
     }, 'Pricing.DeleteTemplate'),
@@ -1828,9 +1862,11 @@ export const api = {
   system: {
     getLicenseInfo: () => handle(async () => {
       // Offline/Local mock for license info
+      const storedLicense = await dbService.getSetting<any>('license');
+      const parsedLicense = storedLicense?.data || storedLicense?.license || null;
       return {
         fingerprint: 'OFFLINE-DEV-FINGERPRINT',
-        license: {
+        license: parsedLicense || {
           status: 'Active',
           type: 'Ultimate',
           expires: '2099-12-31',
@@ -1841,9 +1877,12 @@ export const api = {
     activateLicense: (licenseContent: string) => handle(async () => {
       // Store license content in IndexedDB for persistence
       try {
-        await dbService.put('system_config', { key: 'license', value: licenseContent });
-        // Parse license content to validate format (basic check)
         const licenseData = JSON.parse(licenseContent);
+        await dbService.saveSetting('license', {
+          value: licenseContent,
+          data: licenseData,
+          activatedAt: new Date().toISOString()
+        });
         return { 
           success: true, 
           message: 'License activated successfully',
@@ -1858,23 +1897,69 @@ export const api = {
     }, 'System.ActivateLicense'),
 
     initializeWorkspace: (companyName: string) => handle(async () => {
+      if (!HAS_REMOTE_BACKEND) {
+        const workspaceConfig = {
+          mode: 'offline-file',
+          companyName,
+          initializedAt: new Date().toISOString(),
+        };
+        await dbService.saveSetting('workspaceConfig', workspaceConfig);
+        return { success: true, workspace: workspaceConfig, savedLocally: true };
+      }
       const response = await apiClient.post('/system/workspace/initialize', { companyName });
       return response.data;
     }, 'System.InitializeWorkspace'),
 
     getWorkspaceConfig: () => handle(async () => {
+      if (!HAS_REMOTE_BACKEND) {
+        return (await dbService.getSetting<any>('workspaceConfig')) || {
+          mode: 'offline-file',
+          companyName: 'Prime ERP System',
+          initializedAt: new Date().toISOString(),
+        };
+      }
       const response = await apiClient.get('/system/workspace/config');
       return response.data;
     }, 'System.GetWorkspaceConfig'),
 
     saveToWorkspace: (folder: string, filename: string, data: any) => handle(async () => {
+      if (!HAS_REMOTE_BACKEND) {
+        const key = `workspaceDocument:${folder}/${filename}`;
+        await dbService.saveSetting(key, {
+          folder,
+          filename,
+          data,
+          savedAt: new Date().toISOString(),
+        });
+        return { success: true, savedLocally: true, path: `${folder}/${filename}` };
+      }
       const response = await apiClient.post('/system/workspace/save-document', { folder, filename, data });
       return response.data;
     }, 'System.SaveToWorkspace'),
 
     syncToWorkspace: (filename: string, data: any) => handle(async () => {
+      if (!HAS_REMOTE_BACKEND) {
+        const key = `workspaceSync:${filename}`;
+        await dbService.saveSetting(key, {
+          filename,
+          data,
+          syncedAt: new Date().toISOString(),
+        });
+        return { success: true, syncedLocally: true, filename };
+      }
       const response = await apiClient.post('/system/workspace/sync', { filename, data });
       return response.data;
-    }, 'System.SyncToWorkspace')
+    }, 'System.SyncToWorkspace'),
+
+    triggerCloudSync: () => handle(async () => {
+      if (!HAS_REMOTE_BACKEND) {
+        await dbService.saveSetting('cloudSync:lastSync', {
+          syncedAt: new Date().toISOString(),
+        });
+        return { success: true, syncedLocally: true };
+      }
+      const response = await apiClient.post('/cloud/sync', {});
+      return response.data;
+    }, 'Cloud.TriggerSync')
   }
 };

@@ -359,8 +359,13 @@ const ExaminationHub: React.FC = () => {
   const handleApprove = async (batchId: string) => {
     setActionLoading(batchId);
     try {
-      await approveBatch(batchId);
-      toast.success('Batch approved successfully');
+      const { warnings } = await approveBatch(batchId);
+      if (warnings && warnings.length > 0) {
+        warnings.forEach(w => toast.warning(w.message));
+        toast.warning('Batch approved with inventory warnings.');
+      } else {
+        toast.success('Batch approved successfully');
+      }
       loadAllData();
     } catch (error) {
       toast.error('Failed to approve batch');

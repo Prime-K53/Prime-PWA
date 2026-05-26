@@ -168,7 +168,7 @@ export const OrdersProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const handleCreateOrder = async (data: any) => {
     try {
-      const orderNumber = `ORD-${Date.now()}`;
+      const orderNumber = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
 
       const subtotal = data.items.reduce((sum: number, it: any) => sum + (toNum(it.subtotal || (toNum(it.quantity || it.qty) * toNum(it.unitPrice || it.price || it.cost)))), 0);
       const discount = toNum(data.discount);

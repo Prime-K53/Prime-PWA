@@ -1,6 +1,7 @@
 import { ExaminationBatchNotification, NotificationAuditLog, NotificationType, NotificationPriority } from '../types';
 import { getUrl, API_BASE_URL } from '../config/api.js';
 import { dbService } from './db';
+import { examinationDb } from './examinationDb';
 import { getHeaders, joinPath, safeJson, toServiceError, isLikelyNetworkError } from './examinationServiceUtils';
 
 const REQUEST_TIMEOUT_MS = 30000;
@@ -19,7 +20,12 @@ const getLocalNotificationsForUser = async (
   userId: string,
   limit: number
 ): Promise<ExaminationBatchNotification[]> => {
-  const localNotifications = await dbService.getAll<ExaminationBatchNotification>('examinationBatchNotifications');
+  let localNotifications: ExaminationBatchNotification[];
+  try {
+    localNotifications = await examinationDb.examinationBatchNotifications.toArray();
+  } catch {
+    localNotifications = await dbService.getAll<ExaminationBatchNotification>('examinationBatchNotifications');
+  }
   console.debug('[NotificationService] Using cached notifications from local storage');
   return (localNotifications || [])
     .filter(n => n.user_id === userId)
@@ -38,6 +44,7 @@ const clearBackendUnavailable = () => {
 const shouldUseLocalNotificationsOnly = (userId?: string) => {
   const currentUserId = String(userId || '').trim();
   if (currentUserId === PASSWORD_BYPASS_USER_ID) return true;
+  if (API_BASE_CANDIDATES().length === 0) return true;
   return Boolean(import.meta.env?.DEV)
     && String(import.meta.env?.VITE_USE_REMOTE_EXAM_NOTIFICATION_API || '').toLowerCase() !== 'true';
 };
@@ -49,6 +56,9 @@ const fetchWithTimeout = async (
 ) => {
   let lastError: Error | null = null;
   const baseCandidates = API_BASE_CANDIDATES();
+  if (baseCandidates.length === 0) {
+    throw new Error('Failed to fetch: backend disabled in offline mode');
+  }
 
   for (let index = 0; index < baseCandidates.length; index += 1) {
     const base = baseCandidates[index];
@@ -169,7 +179,11 @@ export const examinationNotificationService = {
     };
 
     if (shouldUseLocalNotificationsOnly(user)) {
-      await dbService.put('examinationBatchNotifications', notification as any);
+      try {
+        await examinationDb.examinationBatchNotifications.put(notification as any);
+      } catch {
+        await dbService.put('examinationBatchNotifications', notification as any);
+      }
       await this.createLocalAuditLog(notification.id || this.generateId(), user, 'CREATED', {
         notificationType,
         batchId,
@@ -209,7 +223,11 @@ export const examinationNotificationService = {
           ...notification,
           id: `local-${notification.id}`
         };
-        await dbService.put('examinationBatchNotifications', localNotification as any);
+        try {
+          await examinationDb.examinationBatchNotifications.put(localNotification as any);
+        } catch {
+          await dbService.put('examinationBatchNotifications', localNotification as any);
+        }
 
         // Still create audit log locally
         await this.createLocalAuditLog(localNotification.id, user, 'CREATED', {
@@ -301,12 +319,21 @@ export const examinationNotificationService = {
     }
 
     if (shouldUseLocalNotificationsOnly(user)) {
-      const notifications = await dbService.getAll<ExaminationBatchNotification>('examinationBatchNotifications');
+      let notifications: ExaminationBatchNotification[];
+      try {
+        notifications = await examinationDb.examinationBatchNotifications.toArray();
+      } catch {
+        notifications = await dbService.getAll<ExaminationBatchNotification>('examinationBatchNotifications');
+      }
       const notification = notifications.find(n => n.id === notificationId || n.id === `local-${notificationId}`);
       if (notification) {
         notification.is_read = true;
         notification.read_at = new Date().toISOString();
-        await dbService.put('examinationBatchNotifications', notification as any);
+        try {
+          await examinationDb.examinationBatchNotifications.put(notification as any);
+        } catch {
+          await dbService.put('examinationBatchNotifications', notification as any);
+        }
       }
 
       await this.createLocalAuditLog(notificationId, user, 'READ', { source: 'local_only_mode' });
@@ -330,12 +357,21 @@ export const examinationNotificationService = {
 
       // Fallback: update local storage
       try {
-        const notifications = await dbService.getAll<ExaminationBatchNotification>('examinationBatchNotifications');
+        let notifications: ExaminationBatchNotification[];
+        try {
+          notifications = await examinationDb.examinationBatchNotifications.toArray();
+        } catch {
+          notifications = await dbService.getAll<ExaminationBatchNotification>('examinationBatchNotifications');
+        }
         const notification = notifications.find(n => n.id === notificationId || n.id === `local-${notificationId}`);
         if (notification) {
           notification.is_read = true;
           notification.read_at = new Date().toISOString();
-          await dbService.put('examinationBatchNotifications', notification as any);
+          try {
+            await examinationDb.examinationBatchNotifications.put(notification as any);
+          } catch {
+            await dbService.put('examinationBatchNotifications', notification as any);
+          }
         }
 
         await this.createLocalAuditLog(notificationId, user, 'READ', {
@@ -359,9 +395,17 @@ export const examinationNotificationService = {
 
     if (shouldUseLocalNotificationsOnly(user)) {
       try {
-        await dbService.delete('examinationBatchNotifications', notificationId);
+        await examinationDb.examinationBatchNotifications.delete(notificationId);
       } catch {
-        await dbService.delete('examinationBatchNotifications', `local-${notificationId}`);
+        try {
+          await examinationDb.examinationBatchNotifications.delete(`local-${notificationId}`);
+        } catch {
+          try {
+            await dbService.delete('examinationBatchNotifications', notificationId);
+          } catch {
+            await dbService.delete('examinationBatchNotifications', `local-${notificationId}`);
+          }
+        }
       }
 
       await this.createLocalAuditLog(notificationId, user, 'DISMISSED', { source: 'local_only_mode' });
@@ -385,7 +429,11 @@ export const examinationNotificationService = {
       // Fallback: remove from local storage
       try {
         const idToDelete = notificationId.startsWith('local-') ? notificationId : `local-${notificationId}`;
-        await dbService.delete('examinationBatchNotifications', idToDelete);
+        try {
+          await examinationDb.examinationBatchNotifications.delete(idToDelete);
+        } catch {
+          await dbService.delete('examinationBatchNotifications', idToDelete);
+        }
 
         await this.createLocalAuditLog(notificationId, user, 'DISMISSED', {
           error: error instanceof Error ? error.message : 'Backend unavailable'
@@ -476,7 +524,11 @@ export const examinationNotificationService = {
         created_at: new Date().toISOString()
       };
 
-      await dbService.put('notificationAuditLogs', auditLog as any);
+      try {
+        await examinationDb.notificationAuditLogs.put(auditLog as any);
+      } catch {
+        await dbService.put('notificationAuditLogs', auditLog as any);
+      }
     } catch (error) {
       console.warn('[NotificationService] Failed to create local audit log:', error);
     }

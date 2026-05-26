@@ -7,6 +7,11 @@
 
 import { WorkOrder, ConsumptionSnapshot, QACheck } from '../types';
 import { dbService } from './db';
+import { productionDb } from './productionDb';
+
+const getWorkOrders = async (): Promise<WorkOrder[]> => {
+  try { return await productionDb.workOrders.toArray(); } catch { return dbService.getAll<WorkOrder>('workOrders'); }
+};
 
 export interface WasteAnalysisReport {
   period: { start: string; end: string };
@@ -147,7 +152,7 @@ class ProductionReportService {
    * Generate waste analysis report
    */
   async generateWasteReport(startDate: string, endDate: string): Promise<WasteAnalysisReport> {
-    const workOrders = await dbService.getAll<WorkOrder>('workOrders');
+    const workOrders = await getWorkOrders();
     const snapshots = await dbService.getAll<ConsumptionSnapshot>('consumptionSnapshots');
     
     const filteredWOs = workOrders.filter(wo => {
@@ -250,7 +255,7 @@ class ProductionReportService {
    * Generate efficiency report
    */
   async generateEfficiencyReport(startDate: string, endDate: string): Promise<EfficiencyReport> {
-    const workOrders = await dbService.getAll<WorkOrder>('workOrders');
+    const workOrders = await getWorkOrders();
     
     const filteredWOs = workOrders.filter(wo => {
       const woDate = new Date(wo.date);
@@ -336,7 +341,7 @@ class ProductionReportService {
    * Generate cost analysis report
    */
   async generateCostReport(startDate: string, endDate: string): Promise<CostAnalysisReport> {
-    const workOrders = await dbService.getAll<WorkOrder>('workOrders');
+    const workOrders = await getWorkOrders();
     
     const filteredWOs = workOrders.filter(wo => {
       const woDate = new Date(wo.date);
@@ -397,7 +402,7 @@ class ProductionReportService {
    * Generate QA report
    */
   async generateQAReport(startDate: string, endDate: string): Promise<QAReport> {
-    const workOrders = await dbService.getAll<WorkOrder>('workOrders');
+    const workOrders = await getWorkOrders();
     
     const filteredWOs = workOrders.filter(wo => {
       const woDate = new Date(wo.date);
@@ -462,7 +467,7 @@ class ProductionReportService {
    * Get dashboard metrics
    */
   async getDashboardMetrics(): Promise<ProductionDashboardMetrics> {
-    const workOrders = await dbService.getAll<WorkOrder>('workOrders');
+    const workOrders = await getWorkOrders();
     
     const today = new Date().toISOString().split('T')[0];
     const activeStatuses = ['Scheduled', 'In Progress', 'On Hold', 'QA'];

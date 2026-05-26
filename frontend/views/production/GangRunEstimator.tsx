@@ -5,10 +5,12 @@ import {
   Trash2, Plus, Info, Scale, CheckCircle, RefreshCw,
   Layers, Package, ChevronRight, FileText, Save, X
 } from 'lucide-react';
-import { useData } from '../../context/DataContext';
+import { useProduction } from '../../context/ProductionContext';
+import { useAuth } from '../../context/AuthContext';
 
 const GangRunEstimator: React.FC = () => {
-    const { companyConfig, workOrders, updateWorkOrder, notify } = useData();
+    const { workOrders, updateWorkOrder } = useProduction();
+    const { companyConfig, notify } = useAuth();
     const currency = companyConfig.currencySymbol;
 
     // State

@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { MessageCircle, Send, Search, User, Sparkles, Phone, Mail, MoreVertical, Smile, Paperclip, X, ArrowLeft, WifiOff, FileText } from 'lucide-react';
-import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
+import { useFinance } from '../../context/FinanceContext';
+import { useSales } from '../../context/SalesContext';
+import { useInventory } from '../../context/InventoryContext';
 import { generateAIResponse } from '../../services/geminiService';
 import { useNavigate } from 'react-router-dom';
 
@@ -19,7 +22,10 @@ const STATIC_TEMPLATES = [
 ];
 
 const ChatApp: React.FC = () => {
-  const { invoices, customerPayments, purchases, user, isOnline } = useData();
+  const { user, isOnline } = useAuth();
+  const { invoices } = useFinance();
+  const { customerPayments } = useSales();
+  const { purchases } = useInventory();
   const navigate = useNavigate();
   
   const [activeContact, setActiveContact] = useState<Contact | null>(null);

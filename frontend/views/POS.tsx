@@ -1,8 +1,11 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 // PRICING RULE: Do NOT implement pricing logic here. All pricing MUST go through pricingEngine.ts
-import { useData } from '../context/DataContext';
+import { useAuth } from '../context/AuthContext';
 import { useFinance } from '../context/FinanceContext';
+import { useSales } from '../context/SalesContext';
+import { useInventory } from '../context/InventoryContext';
+import { useProduction } from '../context/ProductionContext';
 import { CartItem, Item, Sale, PaymentDetail, HeldOrder, ZReport, BOMTemplate } from '../types';
 import { ProductGrid } from './pos/components/ProductGrid';
 import { CartSidebar } from './pos/components/CartSidebar';
@@ -30,7 +33,11 @@ import { calculateSellingPrice, calculateServicePrice } from '../utils/pricing/p
 import { aggregateMarketAdjustmentSnapshots, attachPricingBreakdown, getMarketAdjustmentSnapshots, getSnapshotCalculatedAmount, resolveItemAdjustmentSnapshots, summarizePricingBreakdown } from '../utils/pricingBreakdown';
 
 const POS: React.FC = () => {
-  const { inventory, user, sales, invoices, customers, parkOrder, heldOrders, retrieveOrder, notify, addAlert, companyConfig, generateZReport, accounts, addBOM, fetchSalesData, updateReservedStock, marketAdjustments = [], updateCompanyConfig } = useData();
+  const { companyConfig, user, notify, addAlert, updateCompanyConfig } = useAuth();
+  const { sales, customers, parkOrder, heldOrders, retrieveOrder, generateZReport, fetchSalesData } = useSales();
+  const { invoices, accounts } = useFinance();
+  const { inventory, updateReservedStock, marketAdjustments } = useInventory();
+  const { addBOM } = useProduction();
   const { postZReportToLedger, fetchFinanceData } = useFinance();
   const currency = companyConfig.currencySymbol;
 
@@ -68,7 +75,7 @@ const POS: React.FC = () => {
   });
 
   const getPosReceiptFooter = () =>
-    companyConfig.transactionSettings?.pos?.receiptFooter || companyConfig.footer?.receiptFooter;
+    companyConfig.transactionSettings?.pos?.receiptFooter || companyConfig.receiptFooter || '';
 
   const buildValidatedPosReceipt = (sale: Sale) => {
     const receipt = buildPosReceiptDoc({
@@ -125,6 +132,7 @@ const POS: React.FC = () => {
       type: adj.type,
       value: adj.value,
       percentage: adj.percentage ?? adj.value,
+      calculatedAmount: adj.value,
       adjustmentId: adj.id,
       isActive: true
     }));
@@ -503,12 +511,18 @@ const handleQuickPrintConfirm = (quantity: number, pagesPerCopy: number, total: 
           ? (companyConfig.transactionSettings?.pos?.photocopyPrice || 2.00)
           : (companyConfig.transactionSettings?.pos?.typePrintingPrice || 5.00);
 
-        // For quick print, we use the total FROM THE MODAL (which includes stapling if configured)
-        // This ensures the cart calculation matches the modal total
+        const costPerPage = isPhotocopy
+          ? (companyConfig.transactionSettings?.pos?.photocopyCostPerPage ?? 0.50)
+          : (companyConfig.transactionSettings?.pos?.typePrintingCostPerPage ?? 1.20);
+
+        const totalPages = pagesPerCopy * quantity;
+        const materialCost = costPerPage * totalPages;
+
         const finalPrice = total;
+        const unitCostPerCopy = totalPages > 0 ? materialCost : 0;
 
         const quickItem: CartItem = {
-          id: `QUICK-${isPhotocopy ? 'PHOTO' : 'PRINT'}-${Date.now()}`,
+          id: `QUICK-${isPhotocopy ? 'PHOTO' : 'PRINT'}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
           itemId: isPhotocopy ? 'SVC-PHOTOCOPY' : 'SVC-TYPE-PRINT',
           name: isPhotocopy ? 'Quick Photocopy' : 'Type & Printing',
           sku: isPhotocopy ? 'QUICK-PHOTO' : 'QUICK-PRINT',
@@ -516,6 +530,8 @@ const handleQuickPrintConfirm = (quantity: number, pagesPerCopy: number, total: 
             ? `Quick Photocopy (${pagesPerCopy} pages × ${quantity} copies)`
             : `Type & Printing (${pagesPerCopy} pages × ${quantity} copies)`,
           price: finalPrice,
+          cost: materialCost,
+          cost_price: materialCost,
           quantity: 1,
           pagesOverride: pagesPerCopy,
           category: 'Service',
@@ -527,6 +543,7 @@ const handleQuickPrintConfirm = (quantity: number, pagesPerCopy: number, total: 
           adjustedPrice: finalPrice,
           priceLocked: true,
           lockedUnitPricePerCopy: finalPrice,
+          lockedUnitCostPerCopy: unitCostPerCopy,
           serviceDetails: {
             pages: pagesPerCopy,
             copies: quantity,
@@ -594,6 +611,7 @@ const handleQuickPrintConfirm = (quantity: number, pagesPerCopy: number, total: 
         type: adj.type,
         value: adj.value,
         percentage: adj.percentage ?? adj.value,
+        calculatedAmount: adj.value,
         adjustmentId: adj.id,
         isActive: true
       }));
@@ -805,6 +823,7 @@ const handleQuickPrintConfirm = (quantity: number, pagesPerCopy: number, total: 
         type: adj.type,
         value: adj.value,
         percentage: adj.percentage ?? adj.value,
+        calculatedAmount: adj.value,
         adjustmentId: adj.id,
         isActive: true
       }));
@@ -1152,7 +1171,7 @@ const handleQuickPrintConfirm = (quantity: number, pagesPerCopy: number, total: 
       setShowPaymentModal(false);
 
       await addAlert?.({
-        id: `ALERT-SALE-${saleId}-${Date.now()}`,
+        id: `ALERT-SALE-${saleId}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
         title: 'POS Sale Completed',
         message: `Sale #${saleId} posted for ${receiptSale.customerName || 'Walk-in Customer'} (${currency}${formatNumber(payableTotal)}).`,
         type: 'SUCCESS',
@@ -1231,7 +1250,7 @@ const handleQuickPrintConfirm = (quantity: number, pagesPerCopy: number, total: 
 
       await fetchSalesData?.();
       await addAlert?.({
-        id: `ALERT-REFUND-${saleId}-${Date.now()}`,
+        id: `ALERT-REFUND-${saleId}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
         title: 'Refund Processed',
         message: `Refund posted for Sale #${saleId} (${currency}${formatNumber(calculatedRefundAmount)}).`,
         type: 'INFO',
@@ -1469,6 +1488,9 @@ const handleQuickPrintConfirm = (quantity: number, pagesPerCopy: number, total: 
           pricePerPage={quickPrintModal.type === 'photocopy'
             ? (companyConfig.transactionSettings?.pos?.photocopyPrice || 2.00)
             : (companyConfig.transactionSettings?.pos?.typePrintingPrice || 5.00)}
+          costPerPage={quickPrintModal.type === 'photocopy'
+            ? (companyConfig.transactionSettings?.pos?.photocopyCostPerPage ?? 0.50)
+            : (companyConfig.transactionSettings?.pos?.typePrintingCostPerPage ?? 1.20)}
           currency={currency}
           staplePrice={companyConfig.transactionSettings?.pos?.staplePrice}
           pinningItem={(() => {

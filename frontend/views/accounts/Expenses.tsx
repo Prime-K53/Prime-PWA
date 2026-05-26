@@ -8,7 +8,8 @@ import {
 import { 
   PieChart as RePieChart, Pie, Cell, ResponsiveContainer, Tooltip as ReTooltip, Legend 
 } from 'recharts';
-import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
+import { useFinance } from '../../context/FinanceContext';
 import { useBankingStore } from '../../context/BankingContext';
 import { Expense } from '../../types';
 import { exportToCSV } from '../../services/excelService';
@@ -21,7 +22,8 @@ import ReactMarkdown from 'react-markdown';
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#6366f1'];
 
 const Expenses: React.FC = () => {
-  const { expenses, addExpense, approveExpense, user, companyConfig, checkPermission, notify, isOnline } = useData();
+  const { user, companyConfig, checkPermission, notify, isOnline } = useAuth();
+  const { expenses, addExpense, approveExpense } = useFinance();
   const { accounts: bankAccounts, fetchBankingData } = useBankingStore();
   
   React.useEffect(() => {

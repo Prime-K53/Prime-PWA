@@ -1,11 +1,9 @@
 import { useCallback } from 'react';
-import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { AuditLogEntry } from '../types';
 
 export const useAuditLogs = () => {
-  const { auditLogs = [], setAuditLogs } = useData();
-  const { user } = useAuth();
+  const { auditLogs = [], addAuditLog, user } = useAuth();
 
   const captureAudit = useCallback(async (
     action: 'CREATE' | 'UPDATE' | 'DELETE' | 'VOID' | 'REVERSE' | 'RESTORE',
@@ -28,17 +26,17 @@ export const useAuditLogs = () => {
       oldValue,
       newValue,
       reason,
-      correlationId: `cid-${Date.now()}`
+      correlationId: `cid-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`
     };
 
     // In a real system, this would be an API call
     console.log('Capture Audit Log:', newEntry);
     
-    // Optimistic update
-    setAuditLogs?.((prev: AuditLogEntry[]) => [newEntry, ...(prev || [])]);
+    // Persist via AuthContext
+    addAuditLog(newEntry);
     
     return newEntry;
-  }, [user, setAuditLogs]);
+  }, [user, addAuditLog]);
 
   const getFilteredLogs = useCallback((filter: {
     entityId?: string;

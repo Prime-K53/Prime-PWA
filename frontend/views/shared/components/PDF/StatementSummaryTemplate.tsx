@@ -117,11 +117,16 @@ export const StatementSummaryTemplate: React.FC<{ data: StatementDoc; configOver
           </View>
         ))}
 
-        {/* Static Bottom Disclaimer */}
-        <View style={s.legalBottom} fixed>
-          <Text style={{ fontSize: 7, fontWeight: 'bold', marginBottom: 2 }}>Computer Generated Statement</Text>
-          <Text style={{ marginTop: 4, fontSize: 7, color: '#94a3b8' }}>All accounts are subject to Prime ERP Terms of Service.</Text>
-        </View>
+         {/* Static Bottom Disclaimer */}
+         <View style={s.legalBottom} fixed>
+           <Text style={{ fontSize: 7, fontWeight: 'bold', marginBottom: 2 }}>Computer Generated Statement</Text>
+           <Text style={{ marginTop: 4, fontSize: 7, color: '#94a3b8' }}>
+             This is a computer-generated document. For enquiries contact:
+           </Text>
+           <Text style={{ marginTop: 2, fontSize: 7, color: '#94a3b8' }}>
+             {`${config?.companyName || 'PRIME PRINTING INC'}, ${config?.addressLine1 || ''}, ${config?.phone || ''}`}
+           </Text>
+         </View>
       </Page>
     </Document>
   );

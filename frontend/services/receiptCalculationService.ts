@@ -5,13 +5,11 @@ import {
   Sale,
   SupplierPayment
 } from '../types';
+import { roundMoney } from '../utils/roundingUtils';
 
 const EPSILON = 0.000001;
 
-const round2 = (value: number): number => {
-  const n = Number(value || 0);
-  return Math.round((n + Number.EPSILON) * 100) / 100;
-};
+const round2 = roundMoney;
 
 const toIsoDate = (date?: string): string => {
   if (!date) return new Date().toISOString();

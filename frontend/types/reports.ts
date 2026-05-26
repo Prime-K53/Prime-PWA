@@ -166,6 +166,7 @@ export interface ReportColumn {
   groupable?: boolean;
   hidden?: boolean;
   formula?: string; // For calculated columns
+  decimals?: number;
   conditionalFormatting?: ConditionalFormat[];
 }
 

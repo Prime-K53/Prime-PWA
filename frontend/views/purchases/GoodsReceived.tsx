@@ -5,7 +5,8 @@ import {
   ClipboardCheck, Barcode, Scale, AlertCircle, Eye, Package, Sparkles, Loader2,
   Ship, ArrowDownRight, Landmark, FileText, Download
 } from 'lucide-react';
-import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
+import { useProcurement } from '../../context/ProcurementContext';
 import { useInventory } from '../../context/InventoryContext';
 import { GoodsReceipt, Purchase, Item, LandingCostItem } from '../../types';
 import { useNavigate } from 'react-router-dom';
@@ -20,7 +21,7 @@ import { attachDocumentSecurity } from '../../utils/documentSecurity';
 const GoodsReceived: React.FC = () => {
   const { purchases, goodsReceipts, inventory, warehouses, saveGoodsReceipt, processGoodsReceipt, deleteGoodsReceipt } = useInventory();
   // Fixed: Added 'user' to destructured properties from useData to resolve the error on line 154
-  const { suppliers, notify, companyConfig, isOnline, user } = useData();
+  const { suppliers } = useProcurement(); const { notify, companyConfig, isOnline, user } = useAuth();
   const navigate = useNavigate();
   const currency = companyConfig.currencySymbol;
 

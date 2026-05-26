@@ -290,7 +290,7 @@ class CurrencyService {
 
       // Save the rate
       await this.saveExchangeRate({
-        id: `${this.getRateKey(from, to)}_${Date.now()}`,
+        id: `${this.getRateKey(from, to)}_${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
         fromCurrency: from,
         toCurrency: to,
         rate,
@@ -530,7 +530,7 @@ class CurrencyService {
     const gainLossType = gainLossAmount >= 0 ? 'gain' : 'loss';
 
     return {
-      id: `GL-${Date.now()}`,
+      id: `GL-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
       transactionId: invoiceId,
       transactionType: 'invoice',
       originalAmount,
@@ -606,7 +606,7 @@ class CurrencyService {
     }
 
     return {
-      id: `REV-${Date.now()}`,
+      id: `REV-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
       period,
       evaluatedAt: new Date(),
       totalGain,

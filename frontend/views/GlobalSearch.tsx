@@ -2,7 +2,10 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Package, ShoppingCart, Users, Truck, Search, ArrowRight, Sparkles, Loader2, MessageSquare, X } from 'lucide-react';
-import { useData } from '../context/DataContext';
+import { useAuth } from '../context/AuthContext';
+import { useSales } from '../context/SalesContext';
+import { useInventory } from '../context/InventoryContext';
+import { useProcurement } from '../context/ProcurementContext';
 import { OfflineImage } from '../components/OfflineImage';
 import { askBusinessQuestion } from '../services/geminiService';
 import ReactMarkdown from 'react-markdown';
@@ -16,7 +19,10 @@ const GlobalSearch: React.FC = () => {
   const [searchParams] = useSearchParams();
   const query = searchParams.get('q') || '';
   const navigate = useNavigate();
-  const { inventory, sales, customers, suppliers, purchases, isOnline } = useData();
+  const { isOnline } = useAuth();
+  const { sales, customers } = useSales();
+  const { inventory, purchases } = useInventory();
+  const { suppliers } = useProcurement();
 
   const [aiAnswer, setAiAnswer] = useState<string | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);

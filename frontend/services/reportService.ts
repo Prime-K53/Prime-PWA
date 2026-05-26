@@ -27,6 +27,7 @@ import {
 import { logger } from './logger';
 import { dbService } from './db';
 import { extractProfitMargin } from '@/utils/financial/extractors';
+import { settingsBackplane } from './dexie/settings-backplane';
 
 // Storage keys
 const REPORT_DEFINITIONS_KEY = 'nexus_report_definitions';
@@ -43,6 +44,15 @@ class ReportService {
   private reportHistory: Map<string, ReportResult> = new Map();
   private initialized: boolean = false;
   private scheduleInterval: NodeJS.Timeout | null = null;
+
+  private async loadStoredArray<T>(key: string): Promise<T[]> {
+    const stored = await settingsBackplane.getJson<T[]>(key, { exactKey: true });
+    return Array.isArray(stored) ? stored : [];
+  }
+
+  private async saveStoredArray<T>(key: string, value: T[]): Promise<void> {
+    await settingsBackplane.setJson(key, value, { exactKey: true });
+  }
 
   /**
    * Initialize the report service
@@ -83,11 +93,8 @@ class ReportService {
    */
   private async loadDefinitions(): Promise<void> {
     try {
-      const saved = localStorage.getItem(REPORT_DEFINITIONS_KEY);
-      if (saved) {
-        const definitions: ReportDefinition[] = JSON.parse(saved);
-        definitions.forEach(def => this.definitions.set(def.id, def));
-      }
+      const definitions = await this.loadStoredArray<ReportDefinition>(REPORT_DEFINITIONS_KEY);
+      definitions.forEach(def => this.definitions.set(def.id, def));
     } catch (error) {
       logger.error('Failed to load report definitions', error as Error);
     }
@@ -99,7 +106,7 @@ class ReportService {
   private async saveDefinitions(): Promise<void> {
     try {
       const definitions = Array.from(this.definitions.values());
-      localStorage.setItem(REPORT_DEFINITIONS_KEY, JSON.stringify(definitions));
+      await this.saveStoredArray(REPORT_DEFINITIONS_KEY, definitions);
     } catch (error) {
       logger.error('Failed to save report definitions', error as Error);
     }
@@ -110,11 +117,8 @@ class ReportService {
    */
   private async loadSchedules(): Promise<void> {
     try {
-      const saved = localStorage.getItem(REPORT_SCHEDULES_KEY);
-      if (saved) {
-        const schedules: ReportSchedule[] = JSON.parse(saved);
-        schedules.forEach(sched => this.schedules.set(sched.id, sched));
-      }
+      const schedules = await this.loadStoredArray<ReportSchedule>(REPORT_SCHEDULES_KEY);
+      schedules.forEach(sched => this.schedules.set(sched.id, sched));
     } catch (error) {
       logger.error('Failed to load report schedules', error as Error);
     }
@@ -126,7 +130,7 @@ class ReportService {
   private async saveSchedules(): Promise<void> {
     try {
       const schedules = Array.from(this.schedules.values());
-      localStorage.setItem(REPORT_SCHEDULES_KEY, JSON.stringify(schedules));
+      await this.saveStoredArray(REPORT_SCHEDULES_KEY, schedules);
     } catch (error) {
       logger.error('Failed to save report schedules', error as Error);
     }
@@ -137,11 +141,8 @@ class ReportService {
    */
   private async loadSavedViews(): Promise<void> {
     try {
-      const saved = localStorage.getItem(REPORT_SAVED_VIEWS_KEY);
-      if (saved) {
-        const views: ReportSavedView[] = JSON.parse(saved);
-        views.forEach(view => this.savedViews.set(view.id, view));
-      }
+      const views = await this.loadStoredArray<ReportSavedView>(REPORT_SAVED_VIEWS_KEY);
+      views.forEach(view => this.savedViews.set(view.id, view));
     } catch (error) {
       logger.error('Failed to load saved views', error as Error);
     }
@@ -153,7 +154,7 @@ class ReportService {
   private async saveSavedViews(): Promise<void> {
     try {
       const views = Array.from(this.savedViews.values());
-      localStorage.setItem(REPORT_SAVED_VIEWS_KEY, JSON.stringify(views));
+      await this.saveStoredArray(REPORT_SAVED_VIEWS_KEY, views);
     } catch (error) {
       logger.error('Failed to save saved views', error as Error);
     }
@@ -164,11 +165,8 @@ class ReportService {
    */
   private async loadDashboards(): Promise<void> {
     try {
-      const saved = localStorage.getItem(REPORT_DASHBOARDS_KEY);
-      if (saved) {
-        const dashboards: ReportDashboard[] = JSON.parse(saved);
-        dashboards.forEach(dash => this.dashboards.set(dash.id, dash));
-      }
+      const dashboards = await this.loadStoredArray<ReportDashboard>(REPORT_DASHBOARDS_KEY);
+      dashboards.forEach(dash => this.dashboards.set(dash.id, dash));
     } catch (error) {
       logger.error('Failed to load report dashboards', error as Error);
     }
@@ -180,7 +178,7 @@ class ReportService {
   private async saveDashboards(): Promise<void> {
     try {
       const dashboards = Array.from(this.dashboards.values());
-      localStorage.setItem(REPORT_DASHBOARDS_KEY, JSON.stringify(dashboards));
+      await this.saveStoredArray(REPORT_DASHBOARDS_KEY, dashboards);
     } catch (error) {
       logger.error('Failed to save report dashboards', error as Error);
     }
@@ -191,11 +189,8 @@ class ReportService {
    */
   private async loadHistory(): Promise<void> {
     try {
-      const saved = localStorage.getItem(REPORT_HISTORY_KEY);
-      if (saved) {
-        const history: ReportResult[] = JSON.parse(saved);
-        history.forEach(result => this.reportHistory.set(result.id, result));
-      }
+      const history = await this.loadStoredArray<ReportResult>(REPORT_HISTORY_KEY);
+      history.forEach(result => this.reportHistory.set(result.id, result));
     } catch (error) {
       logger.error('Failed to load report history', error as Error);
     }
@@ -209,7 +204,7 @@ class ReportService {
       const history = Array.from(this.reportHistory.values());
       // Keep only last 100 reports
       const trimmed = history.slice(-100);
-      localStorage.setItem(REPORT_HISTORY_KEY, JSON.stringify(trimmed));
+      await this.saveStoredArray(REPORT_HISTORY_KEY, trimmed);
     } catch (error) {
       logger.error('Failed to save report history', error as Error);
     }
@@ -269,7 +264,7 @@ class ReportService {
   ): Promise<ReportDefinition> {
     const newDefinition: ReportDefinition = {
       ...definition,
-      id: `RPT-${Date.now()}`,
+      id: `RPT-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
       version: 1,
       createdBy: userId,
       createdAt: new Date(),
@@ -423,7 +418,7 @@ class ReportService {
       const paginatedData = this.applyPagination(flatData, page, pageSize);
 
       const result: ReportResult = {
-        id: `RPT-RESULT-${Date.now()}`,
+        id: `RPT-RESULT-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
         reportDefinitionId: definitionId,
         reportName: definition.name,
         rows: paginatedData,
@@ -806,7 +801,7 @@ class ReportService {
   ): Promise<ReportSchedule> {
     const newSchedule: ReportSchedule = {
       ...schedule,
-      id: `SCHED-${Date.now()}`,
+      id: `SCHED-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
       createdBy: userId,
       createdAt: new Date(),
       nextRun: this.calculateNextRun(schedule),
@@ -938,7 +933,7 @@ class ReportService {
   ): Promise<ReportSavedView> {
     const newView: ReportSavedView = {
       ...view,
-      id: `VIEW-${Date.now()}`,
+      id: `VIEW-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
       userId,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -1021,7 +1016,7 @@ class ReportService {
   ): Promise<ReportDashboard> {
     const newDashboard: ReportDashboard = {
       ...dashboard,
-      id: `DASH-${Date.now()}`,
+      id: `DASH-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
       createdBy: userId,
       createdAt: new Date(),
       updatedAt: new Date(),

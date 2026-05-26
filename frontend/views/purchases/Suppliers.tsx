@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useProcurement } from '../../context/ProcurementContext';
-import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
 import { Supplier, Purchase } from '../../types';
 import { SupplierModal } from './components/SupplierModal';
 import { SupplierWorkspace } from './components/SupplierWorkspace';
@@ -17,7 +17,7 @@ import { useFinance } from '../../context/FinanceContext';
 const Suppliers: React.FC = () => {
   const { suppliers, addSupplier, updateSupplier, deleteSupplier, isLoading, purchases } = useProcurement();
   const { supplierPayments = [] } = useFinance();
-  const { companyConfig } = useData();
+  const { companyConfig } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const currency = companyConfig?.currencySymbol || '$';
@@ -196,7 +196,7 @@ const Suppliers: React.FC = () => {
         </div>
         <div className="flex items-center gap-3">
           <button 
-            onClick={() => exportToCSV('Suppliers', suppliers)}
+            onClick={() => exportToCSV(suppliers, 'Suppliers')}
             className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-700 font-semibold hover:bg-slate-50 transition-all shadow-sm text-[13px]"
           >
             <Download size={16} />

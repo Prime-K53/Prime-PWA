@@ -1,12 +1,14 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Target, Save, AlertCircle, TrendingUp, ArrowRight, FileText, ChevronRight, X } from 'lucide-react';
-import { useData } from '../../context/DataContext';
+import { useFinance } from '../../context/FinanceContext';
+import { useAuth } from '../../context/AuthContext';
 import { Budget } from '../../types';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 const Budgets: React.FC = () => {
-  const { accounts, ledger, budgets, saveBudget, companyConfig } = useData();
+  const { accounts, ledger, budgets, saveBudget } = useFinance();
+  const { companyConfig } = useAuth();
   const currency = companyConfig.currencySymbol;
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();

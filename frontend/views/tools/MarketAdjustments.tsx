@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { TrendingUp, Plus, Trash2, Edit2, Save, X, Percent, DollarSign, BarChart3, Clock } from 'lucide-react';
 import { dbService } from '../../services/db';
 import { MarketAdjustment, MarketAdjustmentTransaction } from '../../types';
-import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
+import { useInventory } from '../../context/InventoryContext';
 import { useInventoryStore } from '../../stores/inventoryStore';
 import { repriceMasterInventoryFromAdjustments } from '../../services/masterInventoryPricingService';
 import { syncMarketAdjustmentsToBackend } from '../../services/examinationSyncService';
@@ -10,7 +11,8 @@ import { syncMarketAdjustmentsToBackend } from '../../services/examinationSyncSe
 const MARKET_ADJUSTMENTS_CHANGED_EVENT = 'market-adjustments:changed';
 
 const MarketAdjustments: React.FC = () => {
-    const { notify, refreshMarketAdjustments, companyConfig } = useData();
+    const { notify, companyConfig } = useAuth();
+    const { refreshMarketAdjustments } = useInventory();
     const currency = companyConfig?.currencySymbol || '$';
     const refreshInventory = useInventoryStore(state => state.fetchInventory);
     const [adjustments, setAdjustments] = useState<MarketAdjustment[]>([]);

@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Calculator, ChevronDown, ChevronUp, X, Info, Copy, RefreshCw, Save, Printer, Package, Settings, Plus, TrendingUp } from 'lucide-react';
-import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
 import { useSales } from '../../context/SalesContext';
 import { applyProductPriceRounding } from '../../services/pricingRoundingService';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { dbService } from '../../services/db';
 import { getGlobalDefaultMargin } from '../../services/pricingService';
 import { Item, MarketAdjustment, BOMTemplate, FinishingOption } from '../../types';
+import { resolveVolumeMarginValue } from '../../utils/pricingEngineShared';
 
 const defaultFinishingOptions: FinishingOption[] = [
     { id: 'binding', name: 'Binding', enabled: false, price: 150, description: 'Book binding - comb or spiral', items: [] },
@@ -18,7 +19,7 @@ const defaultFinishingOptions: FinishingOption[] = [
 ];
 
 const SmartPricing: React.FC = () => {
-    const { companyConfig } = useData();
+    const { companyConfig } = useAuth();
 
     // Global Default Margin for auto-pricing
     const [globalMargin, setGlobalMargin] = useState<{ margin_type: 'percentage' | 'fixed_amount'; margin_value: number; apply_volume_margins?: boolean } | null>(null);
@@ -145,15 +146,9 @@ const SmartPricing: React.FC = () => {
     const selectedToner = useMemo(() => inventory.find(i => i.id === selectedTonerId), [inventory, selectedTonerId]);
 
     const editableInventoryProducts = useMemo(
-        () => inventory.filter(item =>
-            (item.type === 'Product' || item.type === 'Service') &&
-            (
-                item.smartPricing ||
-                item.pricingConfig?.paperId ||
-                item.pricingConfig?.tonerId ||
-                item.pricingConfig?.finishingOptions?.length
-            )
-        ),
+        () => inventory
+            .filter(item => item.type === 'Product' || item.type === 'Service')
+            .sort((left, right) => String(left.name || '').localeCompare(String(right.name || ''))),
         [inventory]
     );
 
@@ -231,10 +226,7 @@ const SmartPricing: React.FC = () => {
 
         // Volume Discount Logic
         if (globalMargin.apply_volume_margins) {
-            if (pages >= 500) marginValue = 25;
-            else if (pages >= 250) marginValue = 15;
-            else if (pages >= 180) marginValue = 10;
-            else marginValue = 0;
+            marginValue = resolveVolumeMarginValue(pages);
             marginType = 'percentage';
         }
 
@@ -321,21 +313,40 @@ const SmartPricing: React.FC = () => {
             ...((smartPricing.finishingEnabled || []) as string[]),
             ...(((product.pricingConfig?.finishingOptions || []) as FinishingOption[]).map(option => option.id))
         ]);
+        const savedFinishingCostMap = {
+            ...Object.fromEntries(
+                (((smartPricing.finishingSelections || []) as FinishingOption[]).map(option => [
+                    option.id,
+                    Number(option.price) || 0
+                ]))
+            ),
+            ...((smartPricing.finishingOptionCosts || {}) as Record<string, number>)
+        };
         const hasSavedAdjustments = Array.isArray(smartPricing.marketAdjustments)
             ? smartPricing.marketAdjustments.length > 0
             : Boolean(product.pricingConfig?.selectedAdjustmentIds?.length);
+        const hasExistingPricingConfig = Boolean(
+            product.smartPricing
+            || product.pricingConfig?.paperId
+            || product.pricingConfig?.tonerId
+            || product.pricingConfig?.finishingOptions?.length
+            || product.pricingConfig?.selectedAdjustmentIds?.length
+        );
+        const resolvedPaperId = savedPaperId || paperItems[0]?.id || selectedPaperId || '';
+        const resolvedTonerId = savedTonerId || tonerItems[0]?.id || selectedTonerId || '';
 
         setPages(Math.max(1, Number(smartPricing.pages ?? product.pages ?? 1) || 1));
         setCopies(Math.max(1, Number(smartPricing.copies ?? 1) || 1));
-        setSelectedPaperId(savedPaperId);
-        setSelectedTonerId(savedTonerId);
+        setSelectedPaperId(resolvedPaperId);
+        setSelectedTonerId(resolvedTonerId);
         setFinishingOptions(prev => prev.map(option => ({
             ...option,
+            price: Number(savedFinishingCostMap[option.id] ?? option.price) || option.price,
             enabled: savedFinishingIds.has(option.id)
         })));
-        setMarketAdjustmentEnabled(hasSavedAdjustments);
+        setMarketAdjustmentEnabled(hasSavedAdjustments || !hasExistingPricingConfig);
         setEditingProductId(product.id);
-        setEditingBomId(String(smartPricing.bomTemplateId || `BOM-${Date.now()}`));
+        setEditingBomId(String(smartPricing.bomTemplateId || `BOM-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`));
         setSelectedInventoryProductId(product.id);
         setProductName(product.name || '');
         setItemType((product.type as 'Product' | 'Service') || 'Product');
@@ -351,14 +362,19 @@ const SmartPricing: React.FC = () => {
 
         try {
             const existingProduct = editingProductId ? inventory.find(item => item.id === editingProductId) : null;
-            const productId = editingProductId || `PROD-${Date.now()}`;
-            const bomId = editingBomId || existingProduct?.smartPricing?.bomTemplateId || `BOM-${Date.now()}`;
+            const productId = editingProductId || `PROD-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+            const bomId = editingBomId || existingProduct?.smartPricing?.bomTemplateId || `BOM-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+            const enabledFinishingOptions = finishingOptions.filter(option => option.enabled);
+            const finishingOptionCosts = enabledFinishingOptions.reduce<Record<string, number>>((acc, option) => {
+                acc[option.id] = Number(option.price) || 0;
+                return acc;
+            }, {});
 
             const newProduct: Item = {
                 ...(existingProduct || {}),
                 id: productId,
                 name: productName.trim(),
-                sku: existingProduct?.sku || `SKU-${Date.now()}`,
+                sku: existingProduct?.sku || `SKU-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
                 type: itemType,
                 category: existingProduct?.category || (itemType === 'Service' ? 'Services' : 'Printed Products'),
                 unit: existingProduct?.unit || 'Booklet',
@@ -375,7 +391,7 @@ const SmartPricing: React.FC = () => {
                     ...(existingProduct?.pricingConfig || {}),
                     paperId: selectedPaperId,
                     tonerId: selectedTonerId,
-                    finishingOptions: finishingOptions.filter(option => option.enabled),
+                    finishingOptions: enabledFinishingOptions,
                     selectedAdjustmentIds: marketAdjustmentEnabled ? marketAdjustments.map(adj => adj.id) : [],
                     manualOverride: false,
                     marketAdjustment: marketAdjustmentTotal
@@ -385,7 +401,12 @@ const SmartPricing: React.FC = () => {
                     copies,
                     paperItemId: selectedPaperId,
                     tonerItemId: selectedTonerId,
-                    finishingEnabled: finishingOptions.filter(o => o.enabled).map(o => o.id),
+                    finishingEnabled: enabledFinishingOptions.map(o => o.id),
+                    finishingSelections: enabledFinishingOptions.map(option => ({
+                        ...option,
+                        items: [...(option.items || [])]
+                    })),
+                    finishingOptionCosts,
                     roundingMethod: roundingResult?.methodUsed,
                     roundedPrice: displayTotal,
                     originalPrice: finalPrice,
@@ -393,6 +414,7 @@ const SmartPricing: React.FC = () => {
                     paperCost,
                     tonerCost,
                     finishingCost,
+                    finishingInventoryCost,
                     baseCost,
                     marketAdjustmentTotal,
                     marketAdjustments: marketAdjustmentEnabled
@@ -429,7 +451,7 @@ const SmartPricing: React.FC = () => {
                     unit: selectedToner.unit || 'unit'
                 });
             }
-            finishingOptions.filter(o => o.enabled).forEach(opt => {
+            enabledFinishingOptions.forEach(opt => {
                 components.push({
                     itemId: opt.id,
                     name: opt.name,
@@ -557,18 +579,18 @@ const SmartPricing: React.FC = () => {
                     <div className="px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-blue-50 via-white to-indigo-50">
                         <div className="flex flex-col gap-1">
                             <h2 className="text-lg font-bold text-slate-800">Load from Inventory</h2>
-                            <p className="text-sm text-slate-500">Pick an existing Smart Pricing item, edit it here, then save it back to inventory.</p>
+                            <p className="text-sm text-slate-500">Pick any existing product or service, configure it here, then save it back with its Smart Pricing BOM.</p>
                         </div>
                     </div>
                     <div className="px-6 py-5 grid grid-cols-1 lg:grid-cols-[1fr_auto_auto] gap-3 items-end">
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-2">Load Existing {itemType}</label>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">Load Existing Product or Service</label>
                             <select
                                 value={selectedInventoryProductId}
                                 onChange={(e) => setSelectedInventoryProductId(e.target.value)}
                                 className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
                             >
-                                <option value="">Select a Smart Pricing item...</option>
+                                <option value="">Select a product or service...</option>
                                 {editableInventoryProducts.map(product => (
                                     <option key={product.id} value={product.id}>
                                         [{product.type}] {product.name} ({product.sku})
@@ -577,7 +599,7 @@ const SmartPricing: React.FC = () => {
                             </select>
                             {editableInventoryProducts.length === 0 && (
                                 <div className="mt-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-                                    No Smart Pricing items were found in inventory yet.
+                                    No products or services were found in inventory yet.
                                 </div>
                             )}
                         </div>

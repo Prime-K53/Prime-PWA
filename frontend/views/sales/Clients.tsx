@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useSales } from '../../context/SalesContext';
-import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
 import { useFinance } from '../../context/FinanceContext';
 import { Customer, Invoice, CustomerPayment } from '../../types';
 import { ClientModal } from './components/ClientModal';
@@ -17,7 +17,7 @@ import { exportToCSV } from '../../utils/helpers';
 export const Clients: React.FC = () => {
   const { customers, addCustomer, updateCustomer, deleteCustomer, isLoading, customerPayments } = useSales();
   const { invoices } = useFinance();
-  const { companyConfig } = useData();
+  const { companyConfig } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const currency = companyConfig?.currencySymbol || '$';
@@ -240,7 +240,7 @@ export const Clients: React.FC = () => {
             Lead Board
           </button>
           <button
-            onClick={() => exportToCSV('Clients', customers)}
+            onClick={() => exportToCSV(customers, 'Clients')}
             className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-700 font-semibold hover:bg-slate-50 transition-all shadow-sm text-[13px]"
           >
             <Download size={16} />

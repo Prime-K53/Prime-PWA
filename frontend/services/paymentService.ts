@@ -123,7 +123,7 @@ export const paymentService = {
         });
 
         const pseudoPayment: CustomerPayment = {
-            id: `RCP-${Date.now()}`,
+            id: `RCP-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
             date: new Date().toISOString(),
             customerId,
             customerName,

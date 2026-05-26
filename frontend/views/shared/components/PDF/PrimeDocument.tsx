@@ -233,12 +233,13 @@ const CleanInvoiceTemplate = ({
 
   const showPaymentTerms = templateSettings.showPaymentTerms;
   const paymentTermsLabel = String(dataAny?.paymentTerms || '').trim() || getDefaultPaymentTermsLabel(config);
-  
+   
   const companyEnquiryLine = [companyName, companyAddress].filter(Boolean).join(', ');
+  const companyFlatContact1 = `${companyEnquiryLine}, ${companyPhone}`;
   const legalFooterLine1 = showPaymentTerms
     ? `This is a computer-generated document. Payment terms: ${paymentTermsLabel}.`
-    : 'This is a computer-generated document. All accounts are subject to our terms of service';
-  const legalFooterLine2 = `For enquiries contact: ${companyEnquiryLine} Phone: ${companyPhone}`;
+    : 'This is a computer-generated document. For enquiries contact:';
+  const legalFooterLine2 = `${companyFlatContact1}`;
 
   const renderRow = (item: any, i: number) => {
     const isService = item.category === 'service' || item.type === 'service' || item.isService === true;
@@ -886,24 +887,22 @@ const ProfessionalInvoiceTemplate = ({
           </View>
 
           <View style={{ flex: 1, alignItems: 'flex-end', textAlign: 'right' }}>
-            {templateSettings.showPaymentTerms && config?.transactionSettings?.defaultPaymentTermsDays !== undefined && (
-              <View style={{ marginBottom: 12 }}>
-                <Text style={{ fontSize: 9 * fontScale, fontWeight: 'bold', color: '#999999', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 3 }}>Payment Method / Terms</Text>
-                <Text style={{ fontSize: 9 * fontScale, color: '#666666', lineHeight: 1.6 }}>{getDefaultPaymentTermsLabel(config)}</Text>
-              </View>
-            )}
-            
-            <Text style={{ fontSize: 9 * fontScale, color: '#aaaaaa', lineHeight: 1.5, maxWidth: 200, marginTop: 6 }}>
-              This is a computer-generated document. All accounts are subject to our terms of service.
-            </Text>
+             {templateSettings.showPaymentTerms && config?.transactionSettings?.defaultPaymentTermsDays !== undefined && (
+               <View style={{ marginBottom: 12 }}>
+                 <Text style={{ fontSize: 9 * fontScale, fontWeight: 'bold', color: '#999999', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 3 }}>Payment Method / Terms</Text>
+                 <Text style={{ fontSize: 9 * fontScale, color: '#666666', lineHeight: 1.6 }}>{getDefaultPaymentTermsLabel(config)}</Text>
+               </View>
+             )}
+             
+             <View>
+               <Text style={{ fontSize: 9 * fontScale, color: '#aaaaaa', lineHeight: 1.5, maxWidth: 200, marginTop: 6 }}>
+                 This is a computer-generated document. For enquiries contact:
+               </Text>
+               <Text style={{ fontSize: 9 * fontScale, color: '#aaaaaa', lineHeight: 1.5, maxWidth: 200, marginTop: 2 }}>
+                 {`${companyName}, ${companyAddress}, ${companyPhone}`}
+               </Text>
+             </View>
           </View>
-        </View>
-
-        {/* Footer */}
-        <View style={{ marginTop: 25, paddingTop: 15, borderTopWidth: 0.5, borderTopColor: '#eeeeee', alignItems: 'center' }}>
-          <Text style={{ color: accentColor, fontSize: 10 * fontScale, fontWeight: 'bold', letterSpacing: 2, textTransform: 'uppercase' }}>
-            Thanks for business with us!
-          </Text>
         </View>
       </Page>
     </Document>
@@ -943,10 +942,11 @@ export const PrimeDocument = ({ type, data, configOverride = null }: DocProps) =
 
   const companyContact = `${formattedPhone} | ${config?.email || ''}`;
   const companyEnquiryLine = [companyName, companyAddress].filter(Boolean).join(', ');
+  const companyFlatContact2 = `${companyEnquiryLine}, ${companyPhone}`;
   const legalFooterLine1 = showPaymentTerms
     ? `This is a computer-generated document. Payment terms: ${paymentTermsLabel}.`
-    : 'This is a computer-generated document. All accounts are subject to our terms of service';
-  const legalFooterLine2 = `For enquiries contact: ${companyEnquiryLine} Phone: ${companyPhone}`;
+    : 'This is a computer-generated document. For enquiries contact:';
+  const legalFooterLine2 = `${companyFlatContact2}`;
   const currency = config?.currencySymbol || 'K';
   const logo = resolvePdfLogoSource(config, templateSettings.showCompanyLogo);
   const showInvoiceBalances = templateSettings.showOutstandingAndWalletBalances;
@@ -1250,12 +1250,12 @@ export const PrimeDocument = ({ type, data, configOverride = null }: DocProps) =
             </View>
           </View>
 
-          <View style={s.footerContainer} wrap={false}>
-            <Text style={[s.thankYouText, { fontSize: scaledFont(9) }]}>Thank you for choosing <Text style={{ fontWeight: 'bold', fontSize: scaledFont(13) }}>{companyName}</Text></Text>
-            <View style={s.footerLine} />
-            <Text style={[s.footerDetail, { fontSize: scaledFont(9) }]}>{companyAddress}</Text>
-            <Text style={[s.footerDetail, { fontSize: scaledFont(9) }]}>{companyContact}</Text>
-          </View>
+            <View style={s.footerContainer} wrap={false}>
+              <Text style={[s.thankYouText, { fontSize: scaledFont(12) }]}>Thank you for choosing <Text style={{ fontWeight: 'bold', fontSize: scaledFont(14) }}>{companyName}</Text></Text>
+              <View style={s.footerLine} />
+              <Text style={[s.footerDetail, { fontSize: scaledFont(12) }]}>{companyAddress}</Text>
+              <Text style={[s.footerDetail, { fontSize: scaledFont(12) }]}>{companyContact}</Text>
+            </View>
 
           <SecurityFooter
             data={rc}
@@ -1321,13 +1321,13 @@ export const PrimeDocument = ({ type, data, configOverride = null }: DocProps) =
             </View>
           </View>
 
-          <View style={s.footerContainer} wrap={false}>
-            <Text style={s.thankYouText}>Authorized by <Text style={{ fontWeight: 'bold', fontSize: scaledFont(13) }}>{companyName}</Text></Text>
-            <View style={s.footerLine} />
-            <Text style={[s.companyName, { fontSize: templateSettings.companyNameFontSize }]}>{companyName}</Text>
-            <Text style={s.footerDetail}>{companyAddress}</Text>
-            <Text style={s.footerDetail}>{companyContact}</Text>
-          </View>
+            <View style={s.footerContainer} wrap={false}>
+              <Text style={[s.thankYouText, { fontSize: scaledFont(12) }]}>Authorized by <Text style={{ fontWeight: 'bold', fontSize: scaledFont(14) }}>{companyName}</Text></Text>
+              <View style={s.footerLine} />
+              <Text style={[s.companyName, { fontSize: scaledFont(12) }]}>{companyName}</Text>
+              <Text style={[s.footerDetail, { fontSize: scaledFont(12) }]}>{companyAddress}</Text>
+              <Text style={[s.footerDetail, { fontSize: scaledFont(12) }]}>{companyContact}</Text>
+            </View>
 
           <View style={s.signatureBlock}>
             <View>
@@ -1751,12 +1751,12 @@ if (type === 'POS_RECEIPT') {
                   );
                 })()}
 
-                {/* Thank You Note */}
-                <View style={{ marginTop: 15, alignItems: 'center' }}>
-                  <Text style={{ fontSize: scaledFont(11), color: '#334155' }}>
-                    Thank you for choosing <Text style={{ fontWeight: 'bold' }}>{companyName}</Text>
-                  </Text>
-                </View>
+                  {/* Thank You Note */}
+                  <View style={{ marginTop: 15, alignItems: 'center' }}>
+                    <Text style={{ fontSize: scaledFont(12), color: '#334155' }}>
+                      Thank you for choosing <Text style={{ fontWeight: 'bold' }}>{companyName}</Text>
+                    </Text>
+                  </View>
 
                 {/* Quotation Note */}
                 {type === 'QUOTATION' && (
@@ -2037,15 +2037,6 @@ if (type === 'POS_RECEIPT') {
         {/* Case: EXAMINATION_INVOICE */}
         {type === 'EXAMINATION_INVOICE' && (
           <View style={{ marginTop: 20 }}>
-            {/* PAID Stamp for fully paid examination invoices */}
-            {'status' in data && data.status === 'Paid' && (
-              <View style={s.paidStampContainer} fixed>
-                <View style={s.paidStampBox}>
-                  <Text style={s.paidStampText}>PAID</Text>
-                </View>
-              </View>
-            )}
-
             <View style={s.tableHeader}>
               <Text style={{ flex: 3 }}>Class / Subject</Text>
               <Text style={{ flex: 1, textAlign: 'center' }}>Qty</Text>
@@ -2101,11 +2092,11 @@ if (type === 'POS_RECEIPT') {
               </View>
             </View>
 
-            <View style={{ marginTop: 15, alignItems: 'center' }}>
-              <Text style={{ fontSize: scaledFont(11), color: '#334155' }}>
-                Thank you for choosing <Text style={{ fontWeight: 'bold' }}>{companyName}</Text>
-              </Text>
-            </View>
+              <View style={{ marginTop: 15, alignItems: 'center' }}>
+                <Text style={{ fontSize: scaledFont(12), color: '#334155' }}>
+                  Thank you for choosing <Text style={{ fontWeight: 'bold' }}>{companyName}</Text>
+                </Text>
+              </View>
 
             {Boolean(showPaymentTerms) && !!paymentTermsLabel && (
               <View

@@ -3,9 +3,11 @@ import { AlertTriangle, FileText, Loader2, RefreshCw, Download, ExternalLink } f
 import type { PDFPreviewSource } from './pdfPreviewUtils';
 import { downloadPdfSource, formatPdfSize, getPdfErrorMessage, preparePdfBytes } from './pdfPreviewUtils';
 import { platform } from '../../../../services/platform';
+import { isPdfDebugLoggingEnabled } from '../../../../utils/debugFlags';
 
 const HARD_TIMEOUT_MS = 20000;
 const SLOW_WARN_MS = 10000;
+const pdfDebugLoggingEnabled = isPdfDebugLoggingEnabled();
 
 interface NativePdfPreviewProps {
   source?: PDFPreviewSource | null;
@@ -18,6 +20,7 @@ interface NativePdfPreviewProps {
 }
 
 const previewLog = (event: string, meta?: Record<string, unknown>) => {
+  if (!pdfDebugLoggingEnabled) return;
   const entry = { ts: Date.now(), event, ...meta };
   if (platform.isDesktop) {
     platform.api.log({ message: `[Preview] ${event}`, ...meta });
@@ -255,27 +258,17 @@ export const NativePdfPreview: React.FC<NativePdfPreviewProps> = ({
           </div>
         )}
 
-        <div className="relative flex flex-1 flex-col overflow-hidden bg-slate-100">
+        <div className="relative flex flex-1 flex-col overflow-hidden bg-[#b5b0a8]">
           {previewUrl && (
-            platform.isDesktop ? (
-              <embed
-                src={previewUrl}
-                type="application/pdf"
-                className="h-full w-full"
-                style={{ background: 'transparent' }}
-              />
-            ) : (
-              <iframe
-                ref={iframeRef}
-                src={previewUrl}
-                className="h-full w-full border-none"
-                title={title}
-                
-              />
-            )
+            <iframe
+              ref={iframeRef}
+              src={previewUrl}
+              className="h-full w-full border-none bg-[#b5b0a8]"
+              title={title}
+            />
           )}
           {phase === 'load' && !loadedRef.current && (
-            <div className="absolute inset-0 flex items-center justify-center bg-white/70">
+            <div className="absolute inset-0 flex items-center justify-center bg-[#f4f1ec]/75">
               <div className="text-center">
                 <Loader2 className="mx-auto h-6 w-6 animate-spin text-slate-900" />
                 <p className="mt-2 text-xs font-medium text-slate-500">
@@ -311,18 +304,18 @@ export const NativePdfPreview: React.FC<NativePdfPreviewProps> = ({
         </div>
       )}
 
-      <div className="relative flex flex-1 flex-col overflow-hidden bg-slate-200">
+      <div className="relative flex flex-1 flex-col overflow-hidden bg-[#b5b0a8]">
         {previewUrl && (
           <iframe
             ref={iframeRef}
             src={previewUrl}
-            className="h-full w-full"
+            className="h-full w-full bg-[#b5b0a8]"
             style={{ border: 'none' }}
             title={title}
           />
         )}
         {phase === 'load' && !loadedRef.current && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/70">
+          <div className="absolute inset-0 flex items-center justify-center bg-[#f4f1ec]/75">
             <div className="text-center">
               <Loader2 className="mx-auto h-6 w-6 animate-spin text-slate-900" />
               <p className="mt-2 text-xs font-medium text-slate-500">

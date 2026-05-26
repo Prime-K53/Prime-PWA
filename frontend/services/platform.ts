@@ -1,7 +1,6 @@
-import { invoke } from '@tauri-apps/api/core';
-import { convertFileSrc } from '@tauri-apps/api/core';
+import { isFileProtocol } from '../utils/runtime';
 
-export type PlatformType = 'tauri' | 'electron' | 'browser';
+export type PlatformType = 'browser';
 
 export interface PlatformLogPayload {
   message: string;
@@ -43,192 +42,50 @@ export interface PlatformAPI {
   getPdfPreviewUrl: (filePath: string) => string | null;
 }
 
-let platformType: PlatformType | null = null;
 let cachedApi: PlatformAPI | null = null;
+const blobUrls = new Set<string>();
 
-export function detectPlatform(): PlatformType {
-  if (platformType) return platformType;
-
-  if (typeof window !== 'undefined' && typeof (window as any).__TAURI_INTERNALS__ !== 'undefined') {
-    platformType = 'tauri';
-  } else if (typeof window !== 'undefined' && typeof (window as any).electronAPI?.writeTempPdf === 'function') {
-    platformType = 'electron';
-  } else {
-    platformType = 'browser';
+const getRuntimeBackendUrl = () => {
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    const override = String(urlParams.get('backend') || '').trim();
+    if (override) return override;
+  } catch {
+    // Ignore malformed query strings.
   }
 
-  return platformType;
-}
+  const configured = String((window as any)?.BACKEND_ORIGIN || '').trim();
+  if (configured) return configured;
+  if (isFileProtocol()) return '';
+  return 'http://localhost:3000';
+};
 
-export function isTauri(): boolean {
-  return detectPlatform() === 'tauri';
-}
+const toFileUrl = (filePath: string) => {
+  const normalized = String(filePath || '').trim();
+  if (!normalized) return null;
+  if (
+    normalized.startsWith('blob:')
+    || normalized.startsWith('data:')
+    || normalized.startsWith('file:')
+    || /^https?:\/\//i.test(normalized)
+  ) {
+    return normalized;
+  }
 
-export function isElectron(): boolean {
-  return detectPlatform() === 'electron';
-}
+  if (/^[a-zA-Z]:[\\/]/.test(normalized)) {
+    return `file:///${normalized.replace(/\\/g, '/')}`;
+  }
 
-export function isDesktop(): boolean {
-  return isTauri() || isElectron();
-}
-
-function createTauriAPI(): PlatformAPI {
-  return {
-    getBackendUrl: async () => {
-      try {
-        return await invoke<string>('get_backend_url');
-      } catch {
-        return '';
-      }
-    },
-
-    log: (payload: PlatformLogPayload) => {
-      const level = payload.level || 'INFO';
-      console[level === 'ERROR' ? 'error' : level === 'WARN' ? 'warn' : 'log'](
-        `[${level}] ${payload.message}`,
-        payload,
-      );
-    },
-
-    readPdfFile: async (filePath: string): Promise<PlatformReadPdfResult> => {
-      try {
-        const data = await invoke<number[]>('read_pdf_file', { path: filePath });
-        return { success: true, data, size: data.length };
-      } catch (err: any) {
-        return { success: false, error: err?.toString() || 'Failed to read PDF file' };
-      }
-    },
-
-    writeTempPdf: async (data: number[], filename?: string): Promise<PlatformWritePdfResult> => {
-      try {
-        const path = await invoke<string>('write_temp_pdf', { data, filename: filename || null });
-        return { success: true, path };
-      } catch (err: any) {
-        return { success: false, error: err?.toString() || 'Failed to write temp PDF' };
-      }
-    },
-
-    cleanupTempPdf: async (filePath: string): Promise<PlatformCleanupPdfResult> => {
-      try {
-        await invoke('cleanup_temp_pdf', { path: filePath });
-        return { success: true };
-      } catch (err: any) {
-        return { success: false, error: err?.toString() || 'Failed to cleanup temp PDF' };
-      }
-    },
-
-    openPdfWithSystemViewer: async (filePath: string): Promise<PlatformOpenPdfResult> => {
-      try {
-        await invoke('open_pdf_system', { path: filePath });
-        return { success: true };
-      } catch (err: any) {
-        return { success: false, error: err?.toString() || 'Failed to open PDF' };
-      }
-    },
-
-    getPdfPreviewUrl: (filePath: string): string | null => {
-      if (!filePath) return null;
-      try {
-        return convertFileSrc(filePath);
-      } catch {
-        const normalized = filePath.replace(/\\/g, '/');
-        return `file:///${normalized.startsWith('/') ? normalized.slice(1) : normalized}`;
-      }
-    },
-  };
-}
-
-function createElectronAPI(): PlatformAPI {
-  const electron = (window as any).electronAPI;
-
-  return {
-    getBackendUrl: async () => {
-      try {
-        if (typeof electron?.getBackendUrl === 'function') {
-          return await electron.getBackendUrl();
-        }
-      } catch {}
-      return electron?.backendOrigin || '';
-    },
-
-    log: (payload: PlatformLogPayload) => {
-      if (typeof electron?.log === 'function') {
-        electron.log(payload);
-      } else {
-        const level = payload.level || 'INFO';
-        console[level === 'ERROR' ? 'error' : level === 'WARN' ? 'warn' : 'log'](
-          `[${level}] ${payload.message}`,
-          payload,
-        );
-      }
-    },
-
-    readPdfFile: async (filePath: string): Promise<PlatformReadPdfResult> => {
-      try {
-        if (typeof electron?.readPdfFile === 'function') {
-          return await electron.readPdfFile(filePath);
-        }
-      } catch (err: any) {
-        return { success: false, error: err?.toString() || 'Failed to read PDF file' };
-      }
-      return { success: false, error: 'electronAPI.readPdfFile not available' };
-    },
-
-    writeTempPdf: async (data: number[], filename?: string): Promise<PlatformWritePdfResult> => {
-      try {
-        if (typeof electron?.writeTempPdf === 'function') {
-          return await electron.writeTempPdf(data, filename);
-        }
-      } catch (err: any) {
-        return { success: false, error: err?.toString() || 'Failed to write temp PDF' };
-      }
-      return { success: false, error: 'electronAPI.writeTempPdf not available' };
-    },
-
-    cleanupTempPdf: async (filePath: string): Promise<PlatformCleanupPdfResult> => {
-      try {
-        if (typeof electron?.cleanupTempPdf === 'function') {
-          return await electron.cleanupTempPdf(filePath);
-        }
-      } catch (err: any) {
-        return { success: false, error: err?.toString() || 'Failed to cleanup temp PDF' };
-      }
-      return { success: false, error: 'electronAPI.cleanupTempPdf not available' };
-    },
-
-    openPdfWithSystemViewer: async (filePath: string): Promise<PlatformOpenPdfResult> => {
-      try {
-        if (typeof electron?.openPdfWithSystemViewer === 'function') {
-          return await electron.openPdfWithSystemViewer(filePath);
-        }
-      } catch (err: any) {
-        return { success: false, error: err?.toString() || 'Failed to open PDF' };
-      }
-      return { success: false, error: 'electronAPI.openPdfWithSystemViewer not available' };
-    },
-
-    getPdfPreviewUrl: (filePath: string): string | null => {
-      if (!filePath) return null;
-      if (typeof electron?.getPdfPreviewUrl === 'function') {
-        return electron.getPdfPreviewUrl(filePath);
-      }
-      const normalized = filePath.replace(/\\/g, '/');
-      const encoded = encodeURIComponent(normalized);
-      return `prime-pdf:///${encoded}`;
-    },
-  };
-}
+  try {
+    return new URL(normalized.replace(/^\/+/, ''), window.location.href).toString();
+  } catch {
+    return null;
+  }
+};
 
 function createBrowserAPI(): PlatformAPI {
   return {
-    getBackendUrl: async () => {
-      try {
-        const urlParams = new URLSearchParams(window.location.search);
-        return urlParams.get('backend') || 'http://localhost:3000';
-      } catch {
-        return 'http://localhost:3000';
-      }
-    },
+    getBackendUrl: async () => getRuntimeBackendUrl(),
 
     log: (payload: PlatformLogPayload) => {
       const level = payload.level || 'INFO';
@@ -238,44 +95,95 @@ function createBrowserAPI(): PlatformAPI {
       );
     },
 
-    readPdfFile: async (_filePath: string): Promise<PlatformReadPdfResult> => {
-      return { success: false, error: 'File system not available in browser' };
+    readPdfFile: async (filePath: string): Promise<PlatformReadPdfResult> => {
+      const previewUrl = toFileUrl(filePath);
+      if (!previewUrl || previewUrl.startsWith('file:')) {
+        return {
+          success: false,
+          error: 'Direct local file reads are not available in browser-only mode. Use the generated preview URL instead.'
+        };
+      }
+
+      try {
+        const response = await fetch(previewUrl);
+        if (!response.ok) {
+          return { success: false, error: `Failed to read PDF (${response.status})` };
+        }
+        const buffer = await response.arrayBuffer();
+        return {
+          success: true,
+          data: Array.from(new Uint8Array(buffer)),
+          size: buffer.byteLength,
+          path: previewUrl
+        };
+      } catch (err: any) {
+        return { success: false, error: err?.message || 'Failed to read file' };
+      }
     },
 
-    writeTempPdf: async (_data: number[], _filename?: string): Promise<PlatformWritePdfResult> => {
-      return { success: false, error: 'File system not available in browser' };
+    writeTempPdf: async (data: number[], _filename?: string): Promise<PlatformWritePdfResult> => {
+      try {
+        const blob = new Blob([new Uint8Array(data)], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        blobUrls.add(url);
+        return { success: true, path: url };
+      } catch (err: any) {
+        return { success: false, error: err?.message || 'Failed to write temp PDF' };
+      }
     },
 
-    cleanupTempPdf: async (_filePath: string): Promise<PlatformCleanupPdfResult> => {
+    cleanupTempPdf: async (filePath: string): Promise<PlatformCleanupPdfResult> => {
+      if (filePath?.startsWith('blob:')) {
+        try {
+          URL.revokeObjectURL(filePath);
+          blobUrls.delete(filePath);
+        } catch (err: any) {
+          return { success: false, error: err?.message || 'Failed to clean up temporary PDF' };
+        }
+      }
+
       return { success: true };
     },
 
-    openPdfWithSystemViewer: async (_filePath: string): Promise<PlatformOpenPdfResult> => {
-      return { success: false, error: 'System viewer not available in browser' };
+    openPdfWithSystemViewer: async (filePath: string): Promise<PlatformOpenPdfResult> => {
+      const previewUrl = toFileUrl(filePath);
+      if (!previewUrl) {
+        return { success: false, error: 'No PDF path available to open.' };
+      }
+
+      const opened = window.open(previewUrl, '_blank', 'noopener,noreferrer');
+      if (!opened) {
+        return { success: false, error: 'Browser blocked the PDF preview window.' };
+      }
+
+      return { success: true };
     },
 
     getPdfPreviewUrl: (filePath: string): string | null => {
-      return filePath || null;
+      return toFileUrl(filePath);
     },
   };
+}
+
+export function detectPlatform(): PlatformType {
+  return 'browser';
+}
+
+export function isTauri(): boolean {
+  return false;
+}
+
+export function isElectron(): boolean {
+  return false;
+}
+
+export function isDesktop(): boolean {
+  return false;
 }
 
 export function getPlatformAPI(): PlatformAPI {
   if (cachedApi) return cachedApi;
-
-  const platform = detectPlatform();
-  switch (platform) {
-    case 'tauri':
-      cachedApi = createTauriAPI();
-      break;
-    case 'electron':
-      cachedApi = createElectronAPI();
-      break;
-    default:
-      cachedApi = createBrowserAPI();
-      break;
-  }
-
+  cachedApi = createBrowserAPI();
   return cachedApi;
 }
 
@@ -284,13 +192,13 @@ export const platform = {
     return detectPlatform();
   },
   get isTauri(): boolean {
-    return isTauri();
+    return false;
   },
   get isElectron(): boolean {
-    return isElectron();
+    return false;
   },
   get isDesktop(): boolean {
-    return isDesktop();
+    return false;
   },
   get api(): PlatformAPI {
     return getPlatformAPI();

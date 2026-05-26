@@ -1,7 +1,9 @@
 
 import React, { useState } from 'react';
 import { X, Calendar, Filter, Eye, Printer, Download, Clock, TrendingUp, Scale, Activity, Target, CheckCircle2, History } from 'lucide-react';
-import { useData } from '../context/DataContext';
+import { useAuth } from '../context/AuthContext';
+import { useFinance } from '../context/FinanceContext';
+import { useProcurement } from '../context/ProcurementContext';
 import { useDocumentStore } from '../stores/documentStore';
 import { calculateAccountBalances, getAgedData } from '../services/reportService';
 import { format, parseISO, startOfYear, endOfYear, startOfMonth, endOfMonth } from 'date-fns';
@@ -14,7 +16,9 @@ interface ReportOptionsModalProps {
 }
 
 const ReportOptionsModal: React.FC<ReportOptionsModalProps> = ({ isOpen, onClose, reportType, reportLabel }) => {
-    const { accounts, ledger, budgets, invoices, purchases, companyConfig, notify } = useData();
+    const { accounts, ledger, budgets, invoices } = useFinance();
+    const { purchases } = useProcurement();
+    const { companyConfig, notify } = useAuth();
     const { safeOpenPreview } = useDocumentStore();
     const currency = companyConfig?.currencySymbol || '$';
 

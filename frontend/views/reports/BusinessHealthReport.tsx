@@ -1,11 +1,17 @@
 import React, { useState } from 'react';
 import { ShieldCheck, Activity, TrendingUp, AlertTriangle, FileText, Sparkles, RefreshCw, Printer, Loader2 } from 'lucide-react';
-import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
+import { useSales } from '../../context/SalesContext';
+import { useFinance } from '../../context/FinanceContext';
+import { useInventory } from '../../context/InventoryContext';
 import { generateBusinessHealthReport } from '../../services/geminiService';
 import ReactMarkdown from 'react-markdown';
 
 const BusinessHealthReport: React.FC = () => {
-    const { invoices, expenses, income, accounts, sales, customers, inventory, notify, companyConfig } = useData();
+    const { notify, companyConfig } = useAuth();
+    const { sales, customers } = useSales();
+    const { invoices, expenses, income, accounts } = useFinance();
+    const { inventory } = useInventory();
     const [report, setReport] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
 

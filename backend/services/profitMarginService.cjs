@@ -1,4 +1,5 @@
-const { db } = require('../db.cjs');
+const { getDatabase } = require('../db.cjs');
+const getDb = () => getDatabase();
 const { randomUUID } = require('crypto');
 
 /**
@@ -17,7 +18,7 @@ const profitMarginService = {
     return new Promise((resolve, reject) => {
       // 1. Check line_item level
       if (lineItemId) {
-        db.get(
+        getDb().get(
           "SELECT margin_value, margin_type, scope, apply_volume_margins FROM profit_margin_settings WHERE scope = 'line_item' AND scope_ref_id = ? AND is_active = 1 AND deleted_at IS NULL",
           [lineItemId],
           (err, row) => {
@@ -37,7 +38,7 @@ const profitMarginService = {
   _checkCategory: (categoryId) => {
     return new Promise((resolve, reject) => {
       if (categoryId) {
-        db.get(
+        getDb().get(
           "SELECT margin_value, margin_type, scope, apply_volume_margins FROM profit_margin_settings WHERE scope = 'category' AND scope_ref_id = ? AND is_active = 1 AND deleted_at IS NULL",
           [categoryId],
           (err, row) => {
@@ -56,7 +57,7 @@ const profitMarginService = {
 
   _checkGlobal: () => {
     return new Promise((resolve, reject) => {
-      db.get(
+      getDb().get(
         "SELECT margin_value, margin_type, scope, apply_volume_margins FROM profit_margin_settings WHERE scope = 'global' AND is_active = 1 AND deleted_at IS NULL",
         [],
         (err, row) => {
@@ -82,7 +83,7 @@ const profitMarginService = {
         params.push(scope);
       }
       query += " ORDER BY created_at DESC";
-      db.all(query, params, (err, rows) => {
+      getDb().all(query, params, (err, rows) => {
         if (err) reject(err);
         else resolve(rows);
       });
@@ -94,7 +95,7 @@ const profitMarginService = {
    */
   getById: (id) => {
     return new Promise((resolve, reject) => {
-      db.get("SELECT * FROM profit_margin_settings WHERE id = ? AND deleted_at IS NULL", [id], (err, row) => {
+      getDb().get("SELECT * FROM profit_margin_settings WHERE id = ? AND deleted_at IS NULL", [id], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
@@ -117,7 +118,7 @@ const profitMarginService = {
 
     // Conflict check: only one active override per specific ref
     const existing = await new Promise((res) => {
-      db.get(
+      getDb().get(
         "SELECT id FROM profit_margin_settings WHERE scope = ? AND (scope_ref_id = ? OR (scope_ref_id IS NULL AND ? IS NULL)) AND is_active = 1 AND deleted_at IS NULL",
         [scope, scope_ref_id, scope_ref_id],
         (err, row) => res(row)
@@ -130,30 +131,30 @@ const profitMarginService = {
 
     return new Promise((resolve, reject) => {
       const id = randomUUID();
-      db.serialize(() => {
-        db.run("BEGIN TRANSACTION");
-        db.run(
+      getDb().serialize(() => {
+        getDb().run("BEGIN TRANSACTION");
+        getDb().run(
           `INSERT INTO profit_margin_settings (id, scope, scope_ref_id, margin_type, margin_value, reason, created_by, apply_volume_margins)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           [id, scope, scope_ref_id, margin_type, margin_value, reason, userId, data.apply_volume_margins || 0],
           function(err) {
             if (err) {
-              db.run("ROLLBACK");
+              getDb().run("ROLLBACK");
               return reject(err);
             }
             
             // Log audit
             const auditId = randomUUID();
-            db.run(
+            getDb().run(
               `INSERT INTO profit_margin_audit_logs (id, setting_id, action, scope, new_value, reason, performed_by)
                VALUES (?, ?, ?, ?, ?, ?, ?)`,
               [auditId, id, 'CREATE', scope, JSON.stringify(data), reason, userId],
               (err) => {
                 if (err) {
-                  db.run("ROLLBACK");
+                  getDb().run("ROLLBACK");
                   return reject(err);
                 }
-                db.run("COMMIT");
+                getDb().run("COMMIT");
                 resolve({ id, ...data });
               }
             );
@@ -178,8 +179,8 @@ const profitMarginService = {
     }
 
     return new Promise((resolve, reject) => {
-      db.serialize(() => {
-        db.run("BEGIN TRANSACTION");
+      getDb().serialize(() => {
+        getDb().run("BEGIN TRANSACTION");
         
         const updates = [];
         const params = [];
@@ -192,27 +193,27 @@ const profitMarginService = {
         
         params.push(id);
         
-        db.run(
+        getDb().run(
           `UPDATE profit_margin_settings SET ${updates.join(', ')} WHERE id = ?`,
           params,
           function(err) {
             if (err) {
-              db.run("ROLLBACK");
+              getDb().run("ROLLBACK");
               return reject(err);
             }
             
             // Log audit
             const auditId = randomUUID();
-            db.run(
+            getDb().run(
               `INSERT INTO profit_margin_audit_logs (id, setting_id, action, scope, old_value, new_value, reason, performed_by)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
               [auditId, id, 'UPDATE', old.scope, JSON.stringify(old), JSON.stringify({ ...old, ...data }), reason || data.reason, userId],
               (err) => {
                 if (err) {
-                  db.run("ROLLBACK");
+                  getDb().run("ROLLBACK");
                   return reject(err);
                 }
-                db.run("COMMIT");
+                getDb().run("COMMIT");
                 resolve({ id, ...old, ...data });
               }
             );
@@ -230,29 +231,29 @@ const profitMarginService = {
     if (!old) throw new Error("Setting not found");
 
     return new Promise((resolve, reject) => {
-      db.serialize(() => {
-        db.run("BEGIN TRANSACTION");
-        db.run(
+      getDb().serialize(() => {
+        getDb().run("BEGIN TRANSACTION");
+        getDb().run(
           "UPDATE profit_margin_settings SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?",
           [id],
           (err) => {
             if (err) {
-              db.run("ROLLBACK");
+              getDb().run("ROLLBACK");
               return reject(err);
             }
             
             // Log audit
             const auditId = randomUUID();
-            db.run(
+            getDb().run(
               `INSERT INTO profit_margin_audit_logs (id, setting_id, action, scope, old_value, reason, performed_by)
                VALUES (?, ?, ?, ?, ?, ?, ?)`,
               [auditId, id, 'DELETE', old.scope, JSON.stringify(old), reason, userId],
               (err) => {
                 if (err) {
-                  db.run("ROLLBACK");
+                  getDb().run("ROLLBACK");
                   return reject(err);
                 }
-                db.run("COMMIT");
+                getDb().run("COMMIT");
                 resolve({ success: true });
               }
             );
@@ -321,7 +322,7 @@ const profitMarginService = {
     params.push(filters.offset || 0);
     
     return new Promise((resolve, reject) => {
-      db.all(query, params, (err, rows) => {
+      getDb().all(query, params, (err, rows) => {
         if (err) reject(err);
         else resolve(rows);
       });

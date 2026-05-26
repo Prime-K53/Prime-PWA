@@ -2,7 +2,8 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { ShoppingCart, Trash2, User, Plus, Minus, ShoppingBag, PauseCircle, Undo2, ArrowRight, UserPlus, CreditCard, Clock, ChevronRight, Tag, School, Building2, AlertTriangle, X, TrendingUp, Truck, Scale } from 'lucide-react';
 import { CartItem } from '../../../types';
-import { useData } from '../../../context/DataContext';
+import { useAuth } from '../../../context/AuthContext';
+import { useFinance } from '../../../context/FinanceContext';
 
 import { formatNumber } from '../../../utils/helpers';
 
@@ -47,7 +48,8 @@ interface CartSidebarProps {
 export const CartSidebar: React.FC<CartSidebarProps> = ({
     cart, selectedCustomerName, selectedSubAccount, setSelectedSubAccount, onSelectCustomer, updateQuantity, updatePrice, resetPriceOverride, removeFromCart, clearCart, onPark, onReturn, onPay, totals, adjustmentSummary, pricingSummary, rounding
 }) => {
-    const { companyConfig, invoices } = useData();
+    const { companyConfig } = useAuth();
+    const { invoices } = useFinance();
     const currency = companyConfig.currencySymbol;
     const [showManualOverrideCard, setShowManualOverrideCard] = useState(false);
     const [selectedOverrideItemId, setSelectedOverrideItemId] = useState<string>('');
@@ -328,12 +330,24 @@ export const CartSidebar: React.FC<CartSidebarProps> = ({
                                 )}
                             </div>
                         )}
-                        {profitMarginTotal > 0 && (
+                        {profitMarginTotal !== 0 && (
                             <div className={`flex justify-between items-center ${orderedAdjustmentSummary.length > 0 || rounding?.enabled || Math.abs(roundingTotal) > 0.0001 ? 'pt-2 mt-2 border-t border-slate-100' : ''}`}>
-                                <span className="text-emerald-600 text-[11px] font-semibold tracking-tight flex items-center gap-1.5">
-                                    <TrendingUp size={10} className="text-emerald-500" /> Profit Margin
+                                <span className={`text-[11px] font-semibold tracking-tight flex items-center gap-1.5 ${profitMarginTotal < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                    <TrendingUp size={10} className={profitMarginTotal < 0 ? 'text-rose-500' : 'text-emerald-500'} /> Profit Margin
                                 </span>
-                                <span className="text-emerald-600 font-mono text-[11px] font-semibold">+{currency}{formatNumber(profitMarginTotal)}</span>
+                                <span className={`font-mono text-[11px] font-semibold ${profitMarginTotal < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                    {profitMarginTotal >= 0 ? '+' : ''}{currency}{formatNumber(profitMarginTotal)}
+                                </span>
+                            </div>
+                        )}
+                        {profitMarginTotal <= 0 && (
+                            <div className="flex items-start gap-2 p-2 bg-rose-50 border border-rose-200 rounded-lg mt-1">
+                                <AlertTriangle size={12} className="text-rose-500 shrink-0 mt-0.5" />
+                                <p className="text-[10px] text-rose-700 leading-relaxed">
+                                    {profitMarginTotal === 0
+                                        ? 'Zero profit margin — price equals cost plus adjustments.'
+                                        : `Negative margin of ${currency}${formatNumber(Math.abs(profitMarginTotal))} — selling below cost.`}
+                                </p>
                             </div>
                         )}
                     </div>
@@ -374,7 +388,7 @@ export const CartSidebar: React.FC<CartSidebarProps> = ({
 }
 
 const CartItemRow: React.FC<{ item: CartItem, updateQuantity: (id: string, delta: number, isAbsolute?: boolean) => void, updatePrice: (id: string, newPrice: number) => void, removeFromCart: (id: string) => void }> = ({ item, updateQuantity, updatePrice, removeFromCart }) => {
-    const { companyConfig } = useData();
+    const { companyConfig } = useAuth();
     const currency = companyConfig.currencySymbol;
     const [localQty, setLocalQty] = useState(item.quantity.toString());
     const serviceDetails = (item as any).serviceDetails;

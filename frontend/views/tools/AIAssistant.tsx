@@ -5,7 +5,10 @@ import {
   ArrowRight, Copy, Check, RefreshCw, Brain, Cpu, Database, BarChart3, CreditCard,
   Scale, Truck, FileCheck, AlertCircle, Clock, Star, ChevronDown, UserPlus
 } from 'lucide-react';
-import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
+import { useInventory } from '../../context/InventoryContext';
+import { useSales } from '../../context/SalesContext';
+import { useFinance } from '../../context/FinanceContext';
 import { generateAIResponse } from '../../services/geminiService';
 import { useNavigate } from 'react-router-dom';
 
@@ -63,7 +66,10 @@ const QUICK_TEMPLATES = [
 ];
 
 const AIAssistant: React.FC = () => {
-  const { inventory, customers, invoices, sales, accounts, isOnline, notify, companyConfig, user } = useData();
+  const { isOnline, notify, companyConfig, user } = useAuth();
+  const { inventory } = useInventory();
+  const { customers, sales } = useSales();
+  const { invoices, accounts } = useFinance();
   const navigate = useNavigate();
   
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -109,7 +115,7 @@ Provide concise, actionable insights. Use the data above to give specific number
     if (!input.trim()) return;
     
     const userMessage: ChatMessage = {
-      id: Date.now().toString(),
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       role: 'user',
       content: input,
       timestamp: new Date().toISOString()
@@ -128,7 +134,7 @@ Provide concise, actionable insights. Use the data above to give specific number
       );
 
       const aiMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
+        id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         role: 'assistant',
         content: response,
         timestamp: new Date().toISOString(),
@@ -139,7 +145,7 @@ Provide concise, actionable insights. Use the data above to give specific number
     } catch (error) {
       console.error('AI Error:', error);
       setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
+        id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         role: 'assistant',
         content: 'I apologize, but I encountered an error processing your request. Please try again or rephrase your question.',
         timestamp: new Date().toISOString()

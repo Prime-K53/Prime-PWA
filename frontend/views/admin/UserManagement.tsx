@@ -1,14 +1,14 @@
 
 import React, { useState, useRef } from 'react';
 import { Users, Shield, Lock, Plus, Edit2, Trash2, Check, X, Key, Loader2, Camera, ShieldCheck, QrCode, Smartphone } from 'lucide-react';
-import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
 import { User, UserGroup } from '../../types';
 import { AVAILABLE_PERMISSIONS } from '../../constants';
 import { localFileStorage } from '../../services/localFileStorage';
 import { OfflineImage } from '../../components/OfflineImage';
 
 const UserManagement: React.FC = () => {
-  const { allUsers, userGroups, manageUser, deleteUser, manageUserGroup, deleteUserGroup, passwordPolicy, updatePasswordPolicy, checkPermission, validatePasswordStrength, notify } = useData();
+  const { allUsers, userGroups, manageUser, deleteUser, manageUserGroup, deleteUserGroup, passwordPolicy, updatePasswordPolicy, checkPermission, validatePasswordStrength, notify } = useAuth();
   const [activeTab, setActiveTab] = useState<'Users' | 'Groups' | 'Policies'>('Users');
 
   // User Modal State

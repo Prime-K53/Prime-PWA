@@ -1,6 +1,11 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { TrendingUp, AlertTriangle, Package, Calendar, ArrowRight, BarChart3, Wallet, ArrowUpCircle, ArrowDownCircle, Coins, Calculator } from 'lucide-react';
 import { useData, REFRESH_INTERVAL } from '../context/DataContext';
+import { useAuth } from '../context/AuthContext';
+import { useSales } from '../context/SalesContext';
+import { useInventory } from '../context/InventoryContext';
+import { useFinance } from '../context/FinanceContext';
+import { useProduction } from '../context/ProductionContext';
 import { useModuleRefresh } from '../hooks/useModuleRefresh';
 import { Item, Invoice, Purchase } from '../types';
 import ProductForecastDetail from './inventory/components/ProductForecastDetail';
@@ -15,7 +20,12 @@ import ReactMarkdown from 'react-markdown';
 import { generateNextId } from '../utils/helpers';
 
 const Forecasting: React.FC = () => {
-  const { inventory, sales, batches, boms, companyConfig, purchases, addPurchase, invoices, expenses, ledger, accounts, notify, refreshAllData } = useData();
+  const { companyConfig, notify } = useAuth();
+  const { sales } = useSales();
+  const { inventory, purchases, addPurchase } = useInventory();
+  const { batches, boms } = useProduction();
+  const { invoices, expenses, ledger, accounts } = useFinance();
+  const { refreshAllData } = useData();
   
   // 5-minute poll + focus refresh
   useModuleRefresh(refreshAllData, { interval: REFRESH_INTERVAL });

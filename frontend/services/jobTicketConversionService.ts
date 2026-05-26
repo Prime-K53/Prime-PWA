@@ -38,7 +38,7 @@ const createAuditLog = (params: {
   requesterRole: string;
   details: string;
 }) => ({
-  id: `LOG-${Date.now()}-${Math.floor(Math.random() * 100000)}`,
+  id: `LOG-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
   date: nowIso(),
   action: 'CREATE',
   entityType: 'JobTicketConversion',

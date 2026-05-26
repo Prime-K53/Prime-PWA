@@ -102,7 +102,7 @@ export const AuditTimeline: React.FC<AuditTimelineProps> = ({
                                 Details: log.details,
                                 CorrelationId: log.correlationId
                             }));
-                            exportToCSV('AuditTrail', exportData);
+                            exportToCSV(exportData, 'AuditTrail');
                         }}
                         className="bg-white hover:bg-slate-50 p-2 rounded-xl border border-slate-200 shadow-sm text-slate-500 hover:text-blue-600 transition-all flex items-center gap-2"
                         title="Download Trail (CSV)"

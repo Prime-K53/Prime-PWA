@@ -1,11 +1,11 @@
 
 import React from 'react';
 import { ArrowRight, Calculator, AlertTriangle } from 'lucide-react';
-import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
 import { useFinance } from '../../context/FinanceContext';
 
 export const AuditorBridge: React.FC<{ drift: number, physical: number, ledger: number }> = ({ drift, physical, ledger }) => {
-    const { companyConfig, notify } = useData();
+    const { companyConfig, notify } = useAuth();
     const { postJournalEntry } = useFinance();
     const currency = companyConfig.currencySymbol;
 
@@ -28,7 +28,7 @@ export const AuditorBridge: React.FC<{ drift: number, physical: number, ledger: 
             debitAccountId: isLedgerHigh ? correctionAcc : invAssetAcc,
             creditAccountId: isLedgerHigh ? invAssetAcc : correctionAcc,
             amount: amount,
-            referenceId: `AUDIT-SYNC-${Date.now()}`,
+            referenceId: `AUDIT-SYNC-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
             reconciled: true
         }];
 

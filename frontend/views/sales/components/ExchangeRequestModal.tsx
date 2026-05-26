@@ -119,7 +119,7 @@ export const ExchangeRequestModal: React.FC<ExchangeRequestModalProps> = ({ onCl
             const unitPrice = i.rate || i.price || 0;
             const priceDiff = (i.qty_to_replace - i.qty_to_return) * unitPrice;
             return {
-              id: `${Date.now()}-${idx}`,
+              id: `${Date.now()}-${Math.random().toString(36).substr(2, 5)}-${idx}`,
               product_id: i.id || i.productId,
               product_name: i.description || i.name,
               qty_returned: i.qty_to_return,

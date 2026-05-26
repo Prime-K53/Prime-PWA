@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
+import { useSales } from '../../context/SalesContext';
+import { useFinance } from '../../context/FinanceContext';
 import { format, parseISO, differenceInDays } from 'date-fns';
 import { Users, Printer, AlertTriangle, Clock, FileText } from 'lucide-react';
 import { useLocation, useSearchParams } from 'react-router-dom';
@@ -13,10 +15,9 @@ interface AgingBucket {
 }
 
 const ClientLedger: React.FC = () => {
-    const {
-        customers = [], ledger = [], invoices = [], customerPayments = [],
-        sales = [], companyConfig
-    } = useData();
+    const { companyConfig } = useAuth();
+    const { customers = [], customerPayments = [], sales = [] } = useSales();
+    const { ledger = [], invoices = [] } = useFinance();
     const [searchParams] = useSearchParams();
     const location = useLocation();
     const currency = companyConfig?.currencySymbol || '$';

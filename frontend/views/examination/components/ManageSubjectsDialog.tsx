@@ -3,7 +3,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Input } from '../../../components/Input';
 import { ExaminationClass, ExaminationSubject, Item } from '../../../types';
 import { Trash2, FileText, Copy, Layout, RotateCw, Calculator, Hash, Truck, ChevronDown, ChevronUp, Pencil, X, AlertTriangle, Users, Plus, Minus, Loader2, TrendingUp, Info } from 'lucide-react';
-import { useData } from '../../../context/DataContext';
+import { useAuth } from '../../../context/AuthContext';
+import { useInventory } from '../../../context/InventoryContext';
 import { examinationBatchService } from '../../../services/examinationBatchService';
 import OverrideDialog from './OverrideDialog';
 import { calculateLocalClassPreviewBase, calculateRoundedClassPreview } from '../../../utils/examinationClassPricing';
@@ -82,7 +83,8 @@ export const ManageSubjectsDialog: React.FC<ManageSubjectsDialogProps> = ({
   currencySymbol = 'MWK',
   isLocked = false
 }) => {
-  const { inventory, marketAdjustments, companyConfig } = useData();
+  const { companyConfig } = useAuth();
+  const { inventory, marketAdjustments } = useInventory();
   const [subjectName, setSubjectName] = useState('');
   const [pages, setPages] = useState('');
   const [extraCopies, setExtraCopies] = useState('0');

@@ -19,6 +19,7 @@ function getDatabase() {
       throw new Error('Multiple database connection attempts detected. Use getDatabase() to access the singleton instance.');
     }
     const dbPath = getDbPath();
+    console.log(`[Database] Opening database at: ${dbPath}`);
     dbInstance = new sqlite3.Database(dbPath);
     
     // Enable WAL mode for concurrent read/write performance
@@ -39,7 +40,7 @@ function getDatabase() {
 }
 
 // Export the singleton instance directly
-const db = getDatabase();
+let db = getDatabase();
 
 const initDb = () => {
   return new Promise((resolve, reject) => {
@@ -436,6 +437,11 @@ const initDb = () => {
         sync_checksum TEXT
       )`);
 
+      // Seed the synthetic auto-rounding adjustment so that rounding
+      // entries in market_adjustment_transactions satisfy the FK constraint.
+      db.run(`INSERT OR IGNORE INTO market_adjustments (id, name, type, value, applies_to, is_system_default, is_active, active, adjustment_category, sort_order)
+              VALUES ('auto-rounding', 'Rounding Adjustment', 'FIXED', 0, 'COST', 1, 0, 0, 'Custom', 9999)`);
+
       db.run(`CREATE TABLE IF NOT EXISTS examination_batch_notifications (
         id TEXT PRIMARY KEY,
         batch_id TEXT,
@@ -815,16 +821,8 @@ const initDb = () => {
         { table: 'profit_margin_settings', column: 'apply_volume_margins', type: 'INTEGER DEFAULT 0' }
       ];
 
-      const migrationPromises = columns.map(col => {
-        return new Promise((res) => {
-          db.run(`ALTER TABLE ${col.table} ADD COLUMN ${col.column} ${col.type}`, (err) => {
-            // Ignore error if column exists or other migration issues
-            res();
-          });
-        });
-      });
-
-      // Production resources (work centers and resources)
+      // Production resources (work centers and resources) — must be queued
+      // BEFORE migration ALTER TABLEs so they exist when initDb() resolves.
       db.run(`CREATE TABLE IF NOT EXISTS work_centers (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -846,6 +844,15 @@ const initDb = () => {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (work_center_id) REFERENCES work_centers(id) ON DELETE CASCADE
       )`);
+
+      const migrationPromises = columns.map(col => {
+        return new Promise((res) => {
+          db.run(`ALTER TABLE ${col.table} ADD COLUMN ${col.column} ${col.type}`, (err) => {
+            // Ignore error if column exists or other migration issues
+            res();
+          });
+        });
+      });
 
       Promise.all(migrationPromises).then(() => {
         resolve();
@@ -869,7 +876,13 @@ function reinitializeDatabase() {
     dbInstance = null;
     instanceId = 0;
   }
-  return getDatabase();
+  db = getDatabase();
+  return db;
 }
 
-module.exports = { db, initDb, getDatabase, reinitializeDatabase };
+module.exports = {
+  get db() { return getDatabase(); },
+  initDb,
+  getDatabase,
+  reinitializeDatabase
+};

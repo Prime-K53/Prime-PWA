@@ -9,7 +9,11 @@ import {
 } from 'recharts';
 import { useNavigate } from 'react-router-dom';
 import { Item, Sale, Purchase, ProductionBatch, WorkOrder } from '../../../types';
-import { useData } from '../../../context/DataContext';
+import { useAuth } from '../../../context/AuthContext';
+import { useInventory } from '../../../context/InventoryContext';
+import { useSales } from '../../../context/SalesContext';
+import { useProcurement } from '../../../context/ProcurementContext';
+import { useProduction } from '../../../context/ProductionContext';
 import { OfflineImage } from '../../../components/OfflineImage';
 import { generateAIResponse } from '../../../services/geminiService';
 import ReactMarkdown from 'react-markdown';
@@ -26,7 +30,11 @@ interface ProductDetailsProps {
 }
 
 const ProductDetails: React.FC<ProductDetailsProps> = ({ item, onBack, onEdit, onAdjust, onUpdate }) => {
-    const { sales, purchases, boms, batches, workOrders, companyConfig, isOnline, inventory, addPurchase, notify, updateItem, recalculatePrice } = useData();
+    const { companyConfig, isOnline, notify, auditLogs } = useAuth();
+    const { inventory, updateItem, recalculatePrice } = useInventory();
+    const { sales } = useSales();
+    const { purchases, addPurchase } = useProcurement();
+    const { boms, batches, workOrders } = useProduction();
     const navigate = useNavigate();
     const currency = companyConfig.currencySymbol;
     const [activeTab, setActiveTab] = useState<'Overview' | 'Variants' | 'Logistics' | 'Sales History' | 'Purchase History' | 'Stock Log' | 'Analytics' | 'Security'>('Overview');
@@ -1152,7 +1160,7 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({ item, onBack, onEdit, o
                 {activeTab === 'Security' && (
                     <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 overflow-hidden flex flex-col h-[600px]">
                         <AuditTimeline 
-                            logs={(useData().auditLogs || []).filter((log: any) => 
+                            logs={(auditLogs || []).filter((log: any) => 
                                 log.entityId === item.id || 
                                 (log.entityType === 'Stock' && log.entityId === item.id)
                             )} 

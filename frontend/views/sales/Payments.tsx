@@ -2,7 +2,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Banknote as PaymentIcon, Plus, Trash2, X, Search, Calendar, Eye, Mail, ArrowRight, AlertTriangle, Wallet, MoreVertical, Building2, Undo2, Printer, Edit2, FileText, Download, Loader2, ExternalLink, BarChart3, FileBarChart, RefreshCw } from 'lucide-react';
 import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
 import { useFinance } from '../../context/FinanceContext';
+import { useSales } from '../../context/SalesContext';
 import { OFFLINE_MODE, DEFAULT_ACCOUNTS } from '../../constants';
 import { CustomerPayment, InvoiceAllocation, Sale, Invoice, SupplierPayment, PurchaseAllocation, LedgerEntry, WalletTransaction } from '../../types';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -29,7 +31,7 @@ const CustomerPaymentHoverCard: React.FC<{
     pos: { x: number, y: number },
     payment: CustomerPayment
 }> = ({ pos, payment }) => {
-    const { companyConfig } = useData();
+    const { companyConfig } = useAuth();
     const currency = companyConfig.currencySymbol;
 
     return (
@@ -85,7 +87,8 @@ const SupplierPaymentHoverCard: React.FC<{
     pos: { x: number, y: number },
     payment: SupplierPayment
 }> = ({ pos, payment }) => {
-    const { companyConfig, suppliers = [] } = useData();
+    const { companyConfig } = useAuth();
+    const { suppliers } = useProcurement();
     const currency = companyConfig.currencySymbol;
     const supplier = suppliers.find(s => s.id === payment.supplierId);
 
@@ -142,7 +145,8 @@ interface SupplierDetailPanelProps {
 }
 
 const SupplierDetailPanel: React.FC<SupplierDetailPanelProps> = ({ payment, onClose, onVoid }) => {
-    const { suppliers = [], companyConfig } = useData();
+    const { companyConfig } = useAuth();
+    const { suppliers } = useProcurement();
     const currency = companyConfig.currencySymbol;
 
     if (!payment) return null;
@@ -262,7 +266,8 @@ const CustomerPaymentDetailPanel: React.FC<{
     onPreview: (payment: CustomerPayment) => void;
     onStatement: (customerId: string, customerName: string) => void;
 }> = ({ payment, onClose, onDelete, onEdit, onPreview, onStatement }) => {
-    const { companyConfig, notify, ledger = [], accounts = [] } = useData();
+    const { companyConfig, notify } = useAuth();
+    const { ledger, accounts } = useFinance();
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState<'Details' | 'Accounting'>('Details');
     const currency = companyConfig.currencySymbol;
@@ -510,7 +515,11 @@ const CustomerPaymentDetailPanel: React.FC<{
 };
 
 const Payments: React.FC = () => {
-    const { customerPayments = [], addCustomerPayment, updateCustomerPayment, deleteCustomerPayment, customers = [], invoices = [], sales = [], companyConfig, notify, user, updateInvoice, suppliers = [], refreshAllData } = useData();
+    const { refreshAllData } = useData();
+    const { companyConfig, notify, user } = useAuth();
+    const { customerPayments, addCustomerPayment, updateCustomerPayment, deleteCustomerPayment, customers, sales } = useSales();
+    const { invoices, updateInvoice } = useFinance();
+    const { suppliers } = useProcurement();
     const { postJournalEntry, supplierPayments = [], recordSupplierPayment, updateSupplierPayment, voidSupplierPayment } = useFinance();
     const { purchases = [] } = useProcurement();
     const { accounts: bankAccounts, fetchBankingData } = useBankingStore();
@@ -607,7 +616,7 @@ const Payments: React.FC = () => {
                     sale: linkedSale,
                     cashierName: linkedSale.cashierId || 'Cashier',
                     customerName: linkedSale.customerName || 'Walk-in Customer',
-                    footerMessage: companyConfig.transactionSettings?.pos?.receiptFooter || companyConfig.footer?.receiptFooter
+                    footerMessage: companyConfig.transactionSettings?.pos?.receiptFooter || companyConfig.receiptFooter || ''
                 });
                 console.log('POS receipt preview data:', JSON.stringify(previewData, null, 2));
                 
@@ -618,7 +627,7 @@ const Payments: React.FC = () => {
                 
                 const parsed = PosReceiptSchema.safeParse(previewData);
                 if (!parsed.success) {
-                    console.error('POS receipt validation errors:', parsed.error.errors);
+                    console.error('POS receipt validation errors:', parsed.error.issues);
                     const message = parsed.error.issues[0]?.message || 'Invalid POS receipt payload';
                     throw new Error(`POS receipt validation failed: ${message}`);
                 }
@@ -650,7 +659,7 @@ const Payments: React.FC = () => {
                 
                 const parsed = ReceiptSchema.safeParse(formattedData);
                 if (!parsed.success) {
-                    console.error('Customer receipt validation errors:', parsed.error.errors);
+                    console.error('Customer receipt validation errors:', parsed.error.issues);
                     const message = parsed.error.issues[0]?.message || 'Invalid receipt payload';
                     throw new Error(`Customer receipt validation failed: ${message}`);
                 }

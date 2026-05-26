@@ -30,6 +30,7 @@ export interface TransactionSettingsConfig {
   defaultPaymentTermsDays: number;
   quotationExpiryDays: number;
   autoPrintReceipt: boolean;
+  showReceiptPreview?: boolean;
   quickItemEntry: boolean;
   defaultPOSWarehouse: string;
   posDefaultCustomer: string;
@@ -43,7 +44,9 @@ export interface TransactionSettingsConfig {
     gridColumns: number;
     showCategoryFilters: boolean;
     photocopyPrice: number;
+    photocopyCostPerPage: number;
     typePrintingPrice: number;
+    typePrintingCostPerPage: number;
     staplePrice: number;
     receiptFooter: string;
     requireCustomer: boolean;
@@ -54,6 +57,21 @@ export interface TransactionSettingsConfig {
       F2: string;
       F3: string;
       F10: string;
+    };
+    paymentDetails?: {
+      bankAccounts: Array<{
+        id: string;
+        bankName: string;
+        accountName: string;
+        accountNumber: string;
+        branchCode?: string;
+      }>;
+      mobileMoneyAccounts: Array<{
+        id: string;
+        network: string;
+        accountName: string;
+        phoneNumber: string;
+      }>;
     };
   };
   
@@ -84,6 +102,7 @@ export interface TransactionSettingsConfig {
 export interface IntegrationSettingsConfig {
   externalApis: Array<{
     id?: string;
+    name?: string;
     baseUrl: string;
     apiKey: string;
     enabled: boolean;
@@ -101,7 +120,7 @@ export interface InvoiceTemplatesConfig {
   accentColor: string;
   companyNameFontSize: number;
   bodyFontSize?: number;
-  fontFamily?: 'Helvetica' | 'Courier';
+  fontFamily?: 'Helvetica' | 'Courier' | 'Times-Roman' | 'Comic Sans MS';
   logoWidth?: number;
   showCompanyLogo?: boolean;
   showPaymentTerms?: boolean;
@@ -140,6 +159,7 @@ export interface CloudSyncConfig {
   apiKey: string;
   autoSyncEnabled: boolean;
   syncIntervalMinutes: number;
+  lastSyncTimestamp?: string;
 }
 
 export interface SecuritySettingsConfig {
@@ -227,7 +247,17 @@ export interface CompanyConfig {
 
   // Dynamic module enablement
   enabledModules: Record<string, boolean>;
-  logoBase64?: string;
+  notificationTemplates?: Array<{
+    id: string;
+    enabled: boolean;
+    subjectTemplate: string;
+    bodyTemplate: string;
+    [key: string]: any;
+  }>;
+  taxRate?: number;
+  enableTax?: boolean;
+  receiptFooter?: string;
+
   // Backup configuration
   backupFrequency: 'Daily' | 'Weekly' | 'Monthly' | 'Never';
   backupSettings?: {
@@ -239,14 +269,14 @@ export interface CompanyConfig {
 
   // Pricing settings (from Phase 0-1)
   pricingSettings?: {
-    roundingMethod: string;
-    defaultMarkup: number;
-    categoryOverrides: Array<{
+    roundingMethod?: string;
+    defaultMarkup?: number;
+    categoryOverrides?: Array<{
       category: string;
       markup: number;
       roundingMethod?: string;
     }>;
-    seasonalAdjustments: Array<{
+    seasonalAdjustments?: Array<{
       startDate: string;
       endDate: string;
       adjustmentPercent: number;
@@ -480,6 +510,14 @@ export type ExaminationRecurringProfile = any; // TIER 2: Added as any due to mi
 export type ExaminationJobPayload = any; // TIER 2: Added as any due to missing definitions
 export type ExaminationGroupPayload = any; // TIER 2: Added as any due to missing definitions
 export type ExaminationRecurringPayload = any; // TIER 2: Added as any due to missing definitions
+export type ExaminationRecurringFrequency = 'weekly' | 'monthly' | 'termly';
+export interface ExaminationInvoiceGroupJobLine {
+  examination_job_id: string;
+  class_name: string;
+  learners: number;
+  price_per_learner: number;
+  amount: number;
+}
 export type School = any; // TIER 2: Added as any due to missing definitions
 export type Customer = any; // TIER 2: Added as any due to missing definitions
 export type MarketAdjustment = any; // TIER 2: Added as any due to missing definitions
@@ -522,6 +560,7 @@ export interface FinishingOption {
   enabled: boolean;
   price: number;
   description?: string;
+  quantity?: number;
   items: FinishingItemConfig[];
 }
 
@@ -630,23 +669,56 @@ export interface PricingSettings {
 }
 
 export interface ConsumptionSnapshot {
+  id?: string;
+  saleId?: string;
   itemId: string;
+  variantId?: string;
+  pages?: number;
   quantity: number;
   cost: number;
   totalCost: number;
   name?: string;
+  paperConsumed?: number;
+  tonerConsumed?: number;
+  costPerUnit?: number;
+  bomBreakdown?: Array<{ materialId: string; materialName: string; quantity: number; unit: string; cost: number }>;
+  timestamp?: string;
 }
 
 export interface TransactionAdjustmentSnapshot {
   id: string;
+  saleId?: string;
+  itemId?: string;
+  itemName?: string;
+  variantId?: string;
+  adjustmentId?: string;
   name: string;
   amount: number;
   type: string;
+  value?: number;
+  baseCost?: number;
+  quantity?: number;
+  unitAdjustmentAmount?: number;
+  totalAdjustmentAmount?: number;
+  calculatedAmount?: number;
+  category?: string;
+  isActive?: boolean;
+  timestamp?: string;
 }
 
 export interface DynamicServiceDetails {
   materials: ConsumptionSnapshot[];
   adjustments: TransactionAdjustmentSnapshot[];
+  pages?: number;
+  copies?: number;
+  totalPages?: number;
+  unitCostPerPage?: number;
+  unitPricePerPage?: number;
+  unitCostPerCopy?: number;
+  unitPricePerCopy?: number;
+  totalCost?: number;
+  totalPrice?: number;
+  calculatedTotalPrice?: number;
 }
 
 export type ReceiptPaymentStatus = 'Paid' | 'Partial' | 'Unpaid' | 'Voided' | 'Overpaid';

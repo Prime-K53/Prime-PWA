@@ -22,22 +22,22 @@ export function useKeyboardListNavigation({
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        setActiveIndex(prev => (prev + columns >= itemCount ? prev : prev + columns));
+        setActiveIndex(prev => Math.min(prev + columns, itemCount - 1));
         break;
       case 'ArrowUp':
         e.preventDefault();
-        setActiveIndex(prev => (prev - columns < 0 ? prev : prev - columns));
+        setActiveIndex(prev => Math.max(prev - columns, 0));
         break;
       case 'ArrowRight':
         if (columns > 1) {
           e.preventDefault();
-          setActiveIndex(prev => (prev + 1 >= itemCount ? prev : prev + 1));
+          setActiveIndex(prev => Math.min(prev + 1, itemCount - 1));
         }
         break;
       case 'ArrowLeft':
         if (columns > 1) {
           e.preventDefault();
-          setActiveIndex(prev => (prev - 1 < 0 ? prev : prev - 1));
+          setActiveIndex(prev => Math.max(prev - 1, 0));
         }
         break;
       case 'Enter':

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, FileText, Loader2, AlertTriangle, RefreshCw, Download, Monitor } from 'lucide-react';
+import { X, FileText, Loader2, AlertTriangle, RefreshCw, Download } from 'lucide-react';
 import type { DocType, FilePreviewDescriptor } from '../../../../stores/documentStore';
 import type { PrimeDocData } from './schemas';
 import { attachDocumentSecurity } from '../../../../utils/documentSecurity';
@@ -9,7 +9,6 @@ import { hydrateCompanyPdfAssets } from '../../../../utils/companyAssetUtils';
 import { NativePdfPreview } from './NativePdfPreview';
 import { downloadPdfSource, getPdfErrorMessage, type PDFPreviewSource, resolvePdfFilePreviewSource } from './pdfPreviewUtils';
 import { validateDocumentData } from './documentValidation';
-import { platform } from '../../../../services/platform';
 
 interface PreviewModalProps {
   isOpen: boolean;
@@ -66,32 +65,6 @@ export const PreviewModal = ({ isOpen, onClose, type, data = null, file = null }
         return;
       }
 
-      if (platform.isDesktop && platform.type === 'electron' && typeof (window as any).electronAPI?.getBackendUrl === 'function') {
-        setGenInfo('Generating PDF in background worker…');
-        const api = (window as any).electronAPI;
-
-        setGenInfo('Preparing assets…');
-        const config = await hydrateCompanyPdfAssets(getStoredCompanyConfig());
-        await initializePrimePdfFonts();
-        setGenInfo('Securing document…');
-        const secured = await attachDocumentSecurity(data as any);
-
-        setGenInfo('Sending to PDF worker…');
-        const start = Date.now();
-        const result = await api.generatePdf(type, secured, config);
-        const ms = Date.now() - start;
-
-        if (id !== rid.current) return;
-
-        if (result?.success && result.path) {
-          setGenInfo(`Generated in ${ms}ms`);
-          setDirectPath(result.path);
-        } else {
-          throw new Error(result?.error || 'PDF generation failed');
-        }
-        return;
-      }
-
       setGenInfo('Preparing assets…');
       const config = await hydrateCompanyPdfAssets(getStoredCompanyConfig());
       await initializePrimePdfFonts();
@@ -104,15 +77,6 @@ export const PreviewModal = ({ isOpen, onClose, type, data = null, file = null }
       const ms = Date.now() - start;
       setGenInfo(`Generated in ${ms}ms`);
       if (id !== rid.current) return;
-
-      if (platform.isDesktop) {
-        const bytes = new Uint8Array(await blob.arrayBuffer());
-        const result = await platform.api.writeTempPdf(Array.from(bytes), `gen_${Date.now()}.pdf`);
-        if (result?.success && result.path) {
-          setDirectPath(result.path);
-          return;
-        }
-      }
 
       setPdfSource(blob);
     } catch (err: any) {
@@ -154,13 +118,13 @@ export const PreviewModal = ({ isOpen, onClose, type, data = null, file = null }
   const hasContent = pdfSource || directPath;
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#8d8880]/35 p-4 backdrop-blur-[2px]">
       <div
-        className="flex w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+        className="flex w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-[#d7d1c7] bg-[#f3f0ea] shadow-2xl"
         style={{ height: 'min(90vh, 800px)' }}
       >
         {type !== 'ACCOUNT_STATEMENT' && type !== 'ACCOUNT_STATEMENT_SUMMARY' && (
-        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-5 py-3">
+        <div className="flex shrink-0 items-center justify-between border-b border-[#d7d1c7] bg-[#f6f3ee] px-5 py-3">
           <div className="flex items-center gap-3 overflow-hidden">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-white shadow-sm">
               <FileText className="h-4 w-4" />
@@ -173,16 +137,6 @@ export const PreviewModal = ({ isOpen, onClose, type, data = null, file = null }
             </div>
           </div>
           <div className="flex items-center gap-3 shrink-0">
-            {directPath && platform.isDesktop && (
-              <button 
-                onClick={() => platform.api.openPdfWithSystemViewer(directPath)}
-                className="flex items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-600 transition-all hover:bg-slate-200 hover:text-slate-900"
-                title="Open in default system PDF viewer"
-              >
-                <Monitor size={12}/>
-                <span>System Viewer</span>
-              </button>
-            )}
             {hasContent && (
               <button 
                 onClick={handleDownload}
@@ -199,7 +153,7 @@ export const PreviewModal = ({ isOpen, onClose, type, data = null, file = null }
           </div>
         )}
 
-        <div className="flex flex-1 flex-col overflow-hidden bg-slate-200">
+        <div className="flex flex-1 flex-col overflow-hidden bg-[#b5b0a8]">
           {preparing ? (
             <div className="flex h-full items-center justify-center">
               <div className="text-center">

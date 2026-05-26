@@ -1,8 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useData, DASHBOARD_REFRESH_INTERVAL } from '../context/DataContext';
 import { useModuleRefresh } from '../hooks/useModuleRefresh';
 import { useAuth } from '../context/AuthContext';
+import { useFinance } from '../context/FinanceContext';
+import { useSales } from '../context/SalesContext';
+import { useProduction } from '../context/ProductionContext';
+import { useInventory } from '../context/InventoryContext';
+import { useProcurement } from '../context/ProcurementContext';
 import { useNotifications } from '../context/NotificationContext';
 import {
   TrendingUp, TrendingDown, DollarSign, Clock,
@@ -720,22 +724,11 @@ const DashboardContent: React.FC = () => {
   const isTablet  = screenWidth >= 640 && screenWidth < 1024;
   const isDesktop = screenWidth >= 1024;
 
-  const {
-    customers = [],
-    suppliers = [],
-    companyConfig,
-    accounts = [],
-    invoices = [],
-    sales = [],
-    customerPayments = [],
-    jobOrders = [],
-    quotations = [],
-    workOrders = [],
-    purchases = [],
-    expenses = [],
-    recurringInvoices: subscriptions = [],
-    resetSystem
-  } = useData();
+  const { companyConfig, resetSystem } = useAuth();
+  const { accounts, invoices, expenses, recurringInvoices: subscriptions } = useFinance();
+  const { customers, sales, customerPayments, quotations, jobOrders } = useSales();
+  const { workOrders } = useProduction();
+  const { purchases, suppliers } = useProcurement();
 
   const { 
     notifications: globalNotifications, 
@@ -746,7 +739,7 @@ const DashboardContent: React.FC = () => {
   } = useNotifications();
 
   // Re-enable 1-minute polling and focus refresh for Dashboard
-  useModuleRefresh(undefined, { interval: DASHBOARD_REFRESH_INTERVAL });
+  useModuleRefresh(undefined, { interval: 60000 });
 
   const currency = companyConfig?.currencySymbol || 'MK ';
 
@@ -896,8 +889,9 @@ const DashboardContent: React.FC = () => {
   const todayStr = new Date().toISOString().split('T')[0];
   const collectionData = (() => {
     const todayPayments = (customerPayments as any[])
+      .filter((p: any) => String(p.status || '').toLowerCase() !== 'voided')
       .filter((p: any) => String(p.date || p.createdAt || '').startsWith(todayStr));
-    const sum = todayPayments.reduce((acc, p) => acc + toSafeNumber(p.amount), 0);
+    const sum = todayPayments.reduce((acc, p) => acc + toSafeNumber(p.amountRetained ?? p.receiptSnapshot?.amountRetained ?? p.amount), 0);
     const firstAcc = todayPayments[0]?.accountName || todayPayments[0]?.method || 'Cash';
     return { sum, acc: firstAcc };
   })();
@@ -913,8 +907,9 @@ const DashboardContent: React.FC = () => {
   const yesterdayStr = yesterdayDate.toISOString().split('T')[0];
   const yesterdaysCollection = (() => {
     return (customerPayments as any[])
+      .filter((p: any) => String(p.status || '').toLowerCase() !== 'voided')
       .filter((p: any) => String(p.date || p.createdAt || '').startsWith(yesterdayStr))
-      .reduce((sum: number, p: any) => sum + toSafeNumber(p.amount), 0);
+      .reduce((sum: number, p: any) => sum + toSafeNumber(p.amountRetained ?? p.receiptSnapshot?.amountRetained ?? p.amount), 0);
   })();
 
   const collectionTrend = yesterdaysCollection > 0
@@ -923,7 +918,10 @@ const DashboardContent: React.FC = () => {
 
   // 3. Receivables — outstanding balance on unpaid/partial invoices
   const receivables = (invoices as any[])
-    .filter((inv: any) => inv.status === 'Unpaid' || inv.status === 'Partial' || inv.status === 'Overdue')
+    .filter((inv: any) => {
+      const s = String(inv.status || '').toLowerCase();
+      return s !== 'cancelled' && s !== 'voided' && s !== 'draft' && (s === 'unpaid' || s === 'partial' || s === 'overdue');
+    })
     .reduce((sum: number, inv: any) => {
       const total  = toSafeNumber(inv.totalAmount);
       const paid   = toSafeNumber(inv.paidAmount);
@@ -1293,7 +1291,7 @@ const DashboardContent: React.FC = () => {
     }
   }, [invoices, sales, purchases, activePeriod, companyConfig]);
 
-  useEffect(() => { loadChartData(); }, [loadChartData]);
+  useEffect(() => { loadChartData(); }, []); // eslint-disable-line
 
 
 
@@ -1611,7 +1609,7 @@ const DashboardContent: React.FC = () => {
                   <div 
                     onClick={() => {
                         logout();
-                        window.location.href = '/login';
+                        navigate('/login');
                     }}
                     style={{ padding: '12px 16px', fontSize: 13, fontWeight: 500, color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
                     onMouseEnter={e => e.currentTarget.style.backgroundColor = '#fef2f2'}

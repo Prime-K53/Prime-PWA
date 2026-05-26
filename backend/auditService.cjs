@@ -8,7 +8,8 @@
  * - Full request context capture
  */
 
-const { db } = require('./db.cjs');
+const { getDatabase } = require('./db.cjs');
+const getDb = () => getDatabase();
 const { randomUUID } = require('crypto');
 
 // Enhanced audit event schema aligned with compliance requirements
@@ -131,9 +132,9 @@ class AuditService {
 
   async createAuditTable() {
     return new Promise((resolve, reject) => {
-      db.serialize(() => {
+      getDb().serialize(() => {
         // Enhanced audit_logs table with compliance features
-        db.run(`CREATE TABLE IF NOT EXISTS audit_logs (
+        getDb().run(`CREATE TABLE IF NOT EXISTS audit_logs (
           id TEXT PRIMARY KEY,
           timestamp DATETIME NOT NULL,
           correlation_id TEXT NOT NULL,
@@ -159,11 +160,11 @@ class AuditService {
           if (err) reject(err);
           else {
             // Create indexes for efficient querying
-            db.run(`CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_logs(timestamp)`);
-            db.run(`CREATE INDEX IF NOT EXISTS idx_audit_correlation ON audit_logs(correlation_id)`);
-            db.run(`CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_id)`);
-            db.run(`CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_logs(entity_type, entity_id)`);
-            db.run(`CREATE INDEX IF NOT EXISTS idx_audit_integrity ON audit_logs(integrity_hash)`);
+            getDb().run(`CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_logs(timestamp)`);
+            getDb().run(`CREATE INDEX IF NOT EXISTS idx_audit_correlation ON audit_logs(correlation_id)`);
+            getDb().run(`CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_id)`);
+            getDb().run(`CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_logs(entity_type, entity_id)`);
+            getDb().run(`CREATE INDEX IF NOT EXISTS idx_audit_integrity ON audit_logs(integrity_hash)`);
             resolve();
           }
         });
@@ -177,7 +178,7 @@ class AuditService {
       const dbObj = auditEvent.toDBObject();
 
       await new Promise((resolve, reject) => {
-        db.run(
+        getDb().run(
           `INSERT INTO audit_logs (
             id, timestamp, correlation_id, user_id, user_role, session_id,
             action, entity_type, entity_id, details, old_value, new_value,
@@ -308,7 +309,7 @@ class AuditService {
     params.push(limit, offset);
 
     return new Promise((resolve, reject) => {
-      db.all(query, params, (err, rows) => {
+      getDb().all(query, params, (err, rows) => {
         if (err) reject(err);
         else resolve(rows);
       });
@@ -326,7 +327,7 @@ class AuditService {
   // Integrity verification
   async verifyIntegrity(eventId) {
     return new Promise((resolve, reject) => {
-      db.get('SELECT * FROM audit_logs WHERE id = ?', [eventId], async (err, row) => {
+      getDb().get('SELECT * FROM audit_logs WHERE id = ?', [eventId], async (err, row) => {
         if (err) reject(err);
         if (!row) resolve({ valid: false, error: 'Event not found' });
 
@@ -376,7 +377,7 @@ class AuditService {
     }
 
     return new Promise((resolve, reject) => {
-      db.get(query, params, (err, row) => {
+      getDb().get(query, params, (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });

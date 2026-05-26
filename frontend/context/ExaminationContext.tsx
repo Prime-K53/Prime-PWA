@@ -34,6 +34,7 @@ import { examinationProductionService, BatchToProductionPayload } from '../servi
 import { MARKET_ADJUSTMENTS_CHANGED_EVENT } from '../utils/marketAdjustmentUtils';
 import { useAuth } from './AuthContext';
 import { useProduction } from './ProductionContext';
+import { bindSyncLifecycle } from '../services/syncManager';
 
 interface ExaminationContextType {
   // State
@@ -53,7 +54,7 @@ interface ExaminationContextType {
   deleteBatch: (id: string) => Promise<void>;
   deleteBatches: (ids: string[]) => Promise<{ success: string[]; failed: { id: string; error: string }[] }>;
   calculateBatch: (id: string) => Promise<ExaminationBatch>;
-  approveBatch: (id: string) => Promise<ExaminationBatch>;
+  approveBatch: (id: string) => Promise<{ batch: ExaminationBatch; warnings: Array<{ item_id: string; item_name: string; available: number; required: number; message: string }> }>;
   generateInvoice: (id: string) => Promise<{
     success: boolean;
     invoiceId: number;
@@ -126,6 +127,8 @@ const withTimeout = <T,>(promise: Promise<T>, ms: number, label: string): Promis
   ]);
 };
 
+const EXAMINATION_REFRESH_TTL_MS = 3000;
+
 export const ExaminationProvider: React.FC<ExaminationProviderProps> = ({ children }) => {
   const { companyConfig, user, notify } = useAuth();
   const [jobs, setJobs] = useState<ExaminationJob[]>([]);
@@ -143,6 +146,8 @@ export const ExaminationProvider: React.FC<ExaminationProviderProps> = ({ childr
   const [groupLoading, setGroupLoading] = useState(false);
   const loadAllDataInFlightRef = useRef<Promise<void> | null>(null);
   const loadBatchesInFlightRef = useRef<Promise<void> | null>(null);
+  const lastLoadAllAtRef = useRef(0);
+  const lastLoadBatchesAtRef = useRef(0);
 
   const refreshMarketAdjustments = useCallback(async () => {
     try {
@@ -156,6 +161,13 @@ export const ExaminationProvider: React.FC<ExaminationProviderProps> = ({ childr
   const loadAllData = useCallback(async () => {
     if (loadAllDataInFlightRef.current) {
       return loadAllDataInFlightRef.current;
+    }
+
+    if (
+      lastLoadAllAtRef.current > 0
+      && Date.now() - lastLoadAllAtRef.current < EXAMINATION_REFRESH_TTL_MS
+    ) {
+      return;
     }
 
     const request = (async () => {
@@ -237,6 +249,7 @@ export const ExaminationProvider: React.FC<ExaminationProviderProps> = ({ childr
         // Extract subjects from jobs
         const allSubjects = jobsData.flatMap(job => job.subjects || []);
         setSubjects(allSubjects);
+        lastLoadAllAtRef.current = Date.now();
       } catch (error) {
         console.error('Error loading examination data:', error);
       } finally {
@@ -257,11 +270,19 @@ export const ExaminationProvider: React.FC<ExaminationProviderProps> = ({ childr
       return loadBatchesInFlightRef.current;
     }
 
+    if (
+      lastLoadBatchesAtRef.current > 0
+      && Date.now() - lastLoadBatchesAtRef.current < EXAMINATION_REFRESH_TTL_MS
+    ) {
+      return;
+    }
+
     const request = (async () => {
       try {
         const data = await examinationBatchService.listBatches();
         setBatches(data);
         setBatchLoadError(null);
+        lastLoadBatchesAtRef.current = Date.now();
       } catch (error) {
         console.error('Error loading batches:', error);
         const message = error instanceof Error ? error.message : 'Unknown error';
@@ -280,10 +301,10 @@ export const ExaminationProvider: React.FC<ExaminationProviderProps> = ({ childr
   const createBatch = useCallback(async (payload: Partial<ExaminationBatch>) => {
     setLoading(true);
     try {
-      console.log('[DEBUG] ExaminationContext - createBatch called with:', payload);
       const result = await examinationBatchService.createBatch(payload);
-      console.log('[DEBUG] ExaminationContext - createBatch result:', result);
       setBatchLoadError(null);
+      lastLoadBatchesAtRef.current = Date.now();
+      lastLoadAllAtRef.current = Date.now();
       setBatches(prev => {
         const withoutCurrent = prev.filter((batch) => String(batch.id) !== String(result.id));
         const next = [...withoutCurrent, result];
@@ -297,7 +318,6 @@ export const ExaminationProvider: React.FC<ExaminationProviderProps> = ({ childr
       }
       return result;
     } catch (error) {
-      console.error('[DEBUG] ExaminationContext - createBatch error:', error);
       throw error;
     } finally {
       setLoading(false);
@@ -309,6 +329,7 @@ export const ExaminationProvider: React.FC<ExaminationProviderProps> = ({ childr
     try {
       await examinationBatchService.deleteBatch(id);
       setBatches(prev => prev.filter(b => b.id !== id));
+      lastLoadBatchesAtRef.current = Date.now();
     } finally {
       setLoading(false);
     }
@@ -320,6 +341,7 @@ export const ExaminationProvider: React.FC<ExaminationProviderProps> = ({ childr
       const results = await examinationBatchService.deleteBatches(ids);
       // Remove successfully deleted batches from state
       setBatches(prev => prev.filter(b => !results.success.includes(b.id)));
+      lastLoadBatchesAtRef.current = Date.now();
       return results;
     } finally {
       setLoading(false);
@@ -418,14 +440,12 @@ export const ExaminationProvider: React.FC<ExaminationProviderProps> = ({ childr
     setLoading(true);
     try {
       try {
-        await Promise.all([
-          examinationSyncService.syncMarketAdjustmentsToBackend({
-            triggerRecalculate: false
-          }),
-          examinationSyncService.syncBomRelevantInventoryToBackend({
-            triggerRecalculate: false
-          })
-        ]);
+        await examinationSyncService.syncMarketAdjustmentsToBackend({
+          triggerRecalculate: false
+        });
+        await examinationSyncService.syncBomRelevantInventoryToBackend({
+          triggerRecalculate: false
+        });
       } catch (syncError) {
         // Non-blocking: subject/class operations must still proceed even when sync is temporarily unavailable.
         console.warn('[Examination] Pre-calculation sync skipped due to error:', syncError);
@@ -476,21 +496,21 @@ export const ExaminationProvider: React.FC<ExaminationProviderProps> = ({ childr
   const approveBatch = useCallback(async (id: string) => {
     setLoading(true);
     try {
-      const result = await examinationBatchService.approveBatch(id);
-      setBatches(prev => prev.map(b => b.id === id ? result : b));
+      const { batch, warnings } = await examinationBatchService.approveBatch(id);
+      setBatches(prev => prev.map(b => b.id === id ? batch : b));
 
       // Create notification for batch approval
       try {
-        await sendBatchApprovedNotification(result, user?.id);
+        await sendBatchApprovedNotification(batch, user?.id);
 
         // Trigger Customer Notification (External messaging app)
-        const school = schools.find(s => String(s.id) === String(result.school_id));
+        const school = schools.find(s => String(s.id) === String(batch.school_id));
         if (school?.phone) {
           customerNotificationService.triggerNotification('EXAM_BATCH', {
-            id: result.id,
+            id: batch.id,
             customerName: school.name,
             phoneNumber: school.phone,
-            count: result.expected_candidature || result.total_students || 0
+            count: batch.expected_candidature || batch.total_students || 0
           });
         }
       } catch (notificationError) {
@@ -498,7 +518,7 @@ export const ExaminationProvider: React.FC<ExaminationProviderProps> = ({ childr
         // Non-blocking: continue even if notification fails
       }
 
-      return result;
+      return { batch, warnings };
     } finally {
       setLoading(false);
     }
@@ -604,13 +624,11 @@ export const ExaminationProvider: React.FC<ExaminationProviderProps> = ({ childr
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const handleOnline = () => {
-      void examinationBatchService.syncPendingBatches().then(() => loadBatches());
-    };
-    window.addEventListener('online', handleOnline);
-    return () => {
-      window.removeEventListener('online', handleOnline);
-    };
+    return bindSyncLifecycle(async () => {
+      await examinationBatchService.syncPendingBatches();
+      lastLoadBatchesAtRef.current = 0;
+      await loadBatches();
+    });
   }, [loadBatches]);
 
   const createJob = useCallback(async (payload: ExaminationJobPayload) => {

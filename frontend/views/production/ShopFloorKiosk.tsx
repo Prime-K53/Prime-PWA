@@ -6,13 +6,14 @@ import {
   Terminal, ShieldAlert, Timer, Settings, Activity,
   List, Hash, Filter, ArrowRight
 } from 'lucide-react';
-import { useData } from '../../context/DataContext';
 import { useProduction } from '../../context/ProductionContext';
+import { useAuth } from '../../context/AuthContext';
 import { WorkOrder } from '../../types';
 import { format } from 'date-fns';
 
 const ShopFloorKiosk: React.FC = () => {
-    const { workOrders = [], user, notify, companyConfig } = useData();
+    const { workOrders = [] } = useProduction();
+    const { user, notify, companyConfig } = useAuth();
     const { updateWorkOrderStatus, logProductionStep, completeWorkOrder } = useProduction();
     
     const [manualInput, setManualInput] = useState('');

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { CalendarClock, AlertCircle, ChevronLeft, ChevronRight, Clock, GripVertical, Trash2, Lock, Zap } from 'lucide-react';
-import { useData } from '../../context/DataContext';
+import { useProduction } from '../../context/ProductionContext';
 import { WorkOrder, ResourceAllocation } from '../../types';
 
 const Scheduler: React.FC = () => {
@@ -13,7 +13,7 @@ const Scheduler: React.FC = () => {
     moveAllocation, 
     removeAllocation, 
     updateWorkOrderStatus 
-  } = useData();
+  } = useProduction();
   
   // Date Control
   const [currentDate, setCurrentDate] = useState(new Date());

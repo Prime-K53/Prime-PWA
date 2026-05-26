@@ -1,5 +1,6 @@
 import { BillOfMaterial, BOMTemplate } from '../types';
 import { initDB } from './db';
+import { productionDb } from './productionDb';
 import { SafeFormulaEngine, FormulaEvaluationResult } from './formulaEngine';
 import { repriceMasterInventoryFromAdjustments } from './masterInventoryPricingService';
 
@@ -7,34 +8,28 @@ export const bomService = {
   formulaEngine: new SafeFormulaEngine(),
 
   async getBOMs(): Promise<BillOfMaterial[]> {
-    const db = await initDB();
-    return db.getAll('boms');
+    try { return await productionDb.boms.toArray(); } catch { const db = await initDB(); return db.getAll('boms'); }
   },
 
   async getBOMTemplates(): Promise<BOMTemplate[]> {
-    const db = await initDB();
-    return db.getAll('bomTemplates');
+    try { return await productionDb.bomTemplates.toArray(); } catch { const db = await initDB(); return db.getAll('bomTemplates'); }
   },
 
   async saveBOM(bom: BillOfMaterial): Promise<void> {
-    const db = await initDB();
-    await db.put('boms', bom);
+    try { await productionDb.boms.put(bom); } catch { const db = await initDB(); await db.put('boms', bom); }
   },
 
   async saveBOMTemplate(template: BOMTemplate): Promise<void> {
-    const db = await initDB();
-    await db.put('bomTemplates', template);
+    try { await productionDb.bomTemplates.put(template); } catch { const db = await initDB(); await db.put('bomTemplates', template); }
     await repriceMasterInventoryFromAdjustments();
   },
 
   async deleteBOM(id: string): Promise<void> {
-    const db = await initDB();
-    await db.delete('boms', id);
+    try { await productionDb.boms.delete(id); } catch { const db = await initDB(); await db.delete('boms', id); }
   },
 
   async deleteBOMTemplate(id: string): Promise<void> {
-    const db = await initDB();
-    await db.delete('bomTemplates', id);
+    try { await productionDb.bomTemplates.delete(id); } catch { const db = await initDB(); await db.delete('bomTemplates', id); }
     await repriceMasterInventoryFromAdjustments();
   },
 

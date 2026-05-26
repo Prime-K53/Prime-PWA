@@ -3,7 +3,10 @@ import React, { useState } from 'react';
 import { Truck } from 'lucide-react';
 import { useData, REFRESH_INTERVAL } from '../context/DataContext';
 import { useModuleRefresh } from '../hooks/useModuleRefresh';
+import { useAuth } from '../context/AuthContext';
 import { useFinance } from '../context/FinanceContext';
+import { useInventory } from '../context/InventoryContext';
+import { useProcurement } from '../context/ProcurementContext';
 import { Purchase, SupplierPayment } from '../types';
 import { PurchaseBuilder } from './purchases/components/PurchaseBuilder';
 import { PurchaseHistory } from './purchases/components/PurchaseHistory';
@@ -13,8 +16,11 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { generateNextId } from '../utils/helpers';
 
 const Purchases: React.FC = () => {
-  const { suppliers, inventory, addPurchase, purchases, receivePurchase, updatePurchase, addExpense, notify, deleteItem, refreshAllData, companyConfig } = useData();
-  const { recordSupplierPayment } = useFinance();
+  const { refreshAllData } = useData();
+  const { notify, companyConfig } = useAuth();
+  const { recordSupplierPayment, addExpense } = useFinance();
+  const { inventory, addPurchase, purchases, updatePurchase, deleteItem } = useInventory();
+  const { suppliers, receivePurchase } = useProcurement();
 
   // 5-minute poll + focus refresh
   useModuleRefresh(refreshAllData, { interval: REFRESH_INTERVAL });

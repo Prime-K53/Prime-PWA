@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { CheckCircle, AlertCircle, XCircle, X } from 'lucide-react';
-import { useData } from '../context/DataContext';
+import { useAuth } from '../context/AuthContext';
 
 type ToastLevel = 'success' | 'error' | 'info';
 type ToastMessage = {
@@ -23,7 +23,7 @@ export const toast = {
 };
 
 const Toast: React.FC = () => {
-  const { notification, clearNotification } = useData();
+  const { notification, clearNotification } = useAuth();
   const [eventNotification, setEventNotification] = useState<ToastMessage | null>(null);
 
   useEffect(() => {

@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
+import { useSales } from '../../context/SalesContext';
 import { useInventory } from '../../context/InventoryContext';
 import { 
   Upload, FileText, CheckCircle, AlertTriangle, ArrowLeft, 
@@ -12,7 +13,8 @@ import { generateAccountNumber, generateNextId, generateSku } from '../../utils/
 import type { Item } from '../../types';
 
 const DataImport: React.FC = () => {
-  const { addCustomer, notify, customers, companyConfig } = useData();
+  const { notify, companyConfig } = useAuth();
+  const { addCustomer, customers } = useSales();
   const { addItem, inventory } = useInventory();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -65,6 +67,14 @@ const DataImport: React.FC = () => {
           if (importingType === 'Customers') {
             const name = row.Name || row.name || row.CustomerName;
             if (name) {
+              const nameLower = name.toLowerCase();
+              const exists = currentCustomers.some(
+                c => c.name.toLowerCase() === nameLower
+              );
+              if (exists) {
+                rejected.push({ ...row, status: 'Skipped', message: 'Duplicate - customer already exists' });
+                continue;
+              }
               const customer = {
                 id: row.ID || row.id || generateNextId('customer', currentCustomers, companyConfig),
                 name,
@@ -86,11 +96,20 @@ const DataImport: React.FC = () => {
             // Products
             const name = row.Name || row.name || row.ItemName;
             if (name) {
+              const nameLower = name.toLowerCase();
+              const sku = (row.SKU || row.sku || '').toString().trim();
+              const exists = currentInventory.some(
+                item => item.name.toLowerCase() === nameLower || (sku && item.sku === sku)
+              );
+              if (exists) {
+                rejected.push({ ...row, status: 'Skipped', message: 'Duplicate - product/service already exists' });
+                continue;
+              }
               const category = row.Category || row.category || 'General';
               const item: Item = {
                 id: row.ID || row.id || generateNextId('item', currentInventory, companyConfig),
                 name,
-                sku: row.SKU || row.sku || generateSku(category, currentInventory),
+                sku: sku || generateSku(category, currentInventory),
                 price: Number(row.Price || row.price || 0),
                 cost: Number(row.Cost || row.cost || 0),
                 stock: Number(row.Stock || row.stock || 0),
@@ -383,6 +402,7 @@ const DataImport: React.FC = () => {
                 <li>• Ensure the first row contains exact column headers.</li>
                 <li>• Do not include currency symbols ($) in numeric columns.</li>
                 <li>• Existing records with matching IDs will be updated.</li>
+                <li>• Existing records with matching Names or SKUs will be skipped automatically.</li>
                 <li>• Missing ID fields will trigger automatic system ID generation.</li>
               </ul>
             </div>

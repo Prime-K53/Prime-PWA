@@ -1,14 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import { Search, ChevronLeft, ChevronRight, ExternalLink, Target, Calendar, DollarSign } from 'lucide-react';
 import { useSales } from '../../context/SalesContext';
-import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
 const pipelineStages = ['New', 'Qualified', 'Proposal', 'Negotiation', 'Won', 'Lost'];
 
 const LeadBoard: React.FC = () => {
   const { customers = [], updateCustomer, isLoading } = useSales() as any;
-  const { companyConfig, notify } = useData();
+  const { companyConfig, notify } = useAuth();
   const navigate = useNavigate();
   const currency = companyConfig?.currencySymbol || '$';
 

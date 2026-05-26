@@ -5,7 +5,9 @@ import { Item, Warehouse } from '../../../types';
 import { usePagination } from '../../../hooks/usePagination';
 import Pagination from '../../../components/Pagination';
 import PreviewButton from '../../../components/PreviewButton';
-import { useData } from '../../../context/DataContext';
+import { useAuth } from '../../../context/AuthContext';
+import { useInventory } from '../../../context/InventoryContext';
+import { useProcurement } from '../../../context/ProcurementContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useHighlight } from '../../../hooks/useHighlight';
 import { formatParentProductPrice, formatMaterialItemCost } from '../../../utils/pricing';
@@ -186,7 +188,9 @@ export const ItemTable: React.FC<ItemTableProps> = ({
     onLoadToSPE,
     initialSearch = ''
 }) => {
-    const { companyConfig, triggerReplenishment, notify, suppliers } = useData();
+    const { companyConfig, notify } = useAuth();
+    const { triggerReplenishment } = useInventory();
+    const { suppliers } = useProcurement();
     const navigate = useNavigate();
     const currency = companyConfig.currencySymbol;
 
@@ -286,7 +290,7 @@ const showStockColumn = filterType === 'Material' || filterType === 'Stationery'
     const handleToggleSelect = (id: string) => {
         const item = items.find(i => i.id === id);
         if (item?.isProtected) {
-            notify('warning', 'Protected items cannot be selected for deletion');
+            notify('Protected items cannot be selected for deletion', 'warning');
             return;
         }
         setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);

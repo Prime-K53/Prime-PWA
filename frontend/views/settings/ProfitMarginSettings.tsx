@@ -6,7 +6,15 @@ import {
   DollarSign, Percent, Globe, Tag, Package, Shield,
   Clock, User, Info, ChevronRight, Zap
 } from 'lucide-react';
-import { getUrl } from '../../config/api';
+import { getUrl, HAS_REMOTE_BACKEND } from '../../config/api';
+import {
+  bulkUploadOfflineMarginSettings,
+  createOfflineMarginSetting,
+  deleteOfflineMarginSetting,
+  listOfflineMarginAuditLogs,
+  listOfflineMarginSettings,
+  updateOfflineMarginSetting
+} from '../../services/offlineProfitMargins';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -54,15 +62,83 @@ const getHeaders = () => ({
   'x-user-role': localStorage.getItem('prime_user_role') || 'Admin',
 });
 
+const parseBody = (body?: BodyInit | null) => {
+  if (typeof body !== 'string') return {};
+  try {
+    return JSON.parse(body);
+  } catch {
+    return {};
+  }
+};
+
+async function apiFetchOffline(path: string, opts: RequestInit = {}) {
+  const method = String(opts.method || 'GET').toUpperCase();
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  const payload = parseBody(opts.body);
+
+  if (cleanPath === '/profit-margins' && method === 'GET') {
+    return listOfflineMarginSettings();
+  }
+
+  if (cleanPath.startsWith('/profit-margins/audit-log') && method === 'GET') {
+    const url = new URL(`https://offline.local${cleanPath}`);
+    return listOfflineMarginAuditLogs({
+      scope: url.searchParams.get('scope') || '',
+      user: url.searchParams.get('user') || '',
+      startDate: url.searchParams.get('startDate') || '',
+      endDate: url.searchParams.get('endDate') || '',
+    });
+  }
+
+  if (cleanPath === '/profit-margins' && method === 'POST') {
+    return createOfflineMarginSetting(payload as Partial<MarginSetting>);
+  }
+
+  if (cleanPath === '/profit-margins/bulk-upload' && method === 'POST') {
+    return bulkUploadOfflineMarginSettings(Array.isArray((payload as any)?.rows) ? (payload as any).rows : []);
+  }
+
+  const match = cleanPath.match(/^\/profit-margins\/([^/?]+)/);
+  if (match) {
+    const id = decodeURIComponent(match[1]);
+    if (method === 'PATCH') {
+      return updateOfflineMarginSetting(id, payload as Partial<MarginSetting>);
+    }
+    if (method === 'DELETE') {
+      return deleteOfflineMarginSetting(id, (payload as any)?.reason || null);
+    }
+  }
+
+  throw new Error(`Unsupported offline request: ${method} ${cleanPath}`);
+}
+
 async function apiFetch(path: string, opts: RequestInit = {}) {
-  const res = await fetch(getUrl(`settings${path}`), {
-    ...opts,
-    headers: { ...getHeaders(), ...(opts.headers || {}) },
-    signal: AbortSignal.timeout(6000),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Request failed');
-  return data;
+  if (!HAS_REMOTE_BACKEND) {
+    return apiFetchOffline(path, opts);
+  }
+
+  try {
+    const res = await fetch(getUrl(`settings${path}`), {
+      ...opts,
+      headers: { ...getHeaders(), ...(opts.headers || {}) },
+      signal: AbortSignal.timeout(6000),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Request failed');
+    return data;
+  } catch (error) {
+    if (
+      error instanceof TypeError
+      || (error instanceof Error && (
+        error.name === 'AbortError'
+        || error.message.toLowerCase().includes('failed to fetch')
+        || error.message.toLowerCase().includes('network')
+      ))
+    ) {
+      return apiFetchOffline(path, opts);
+    }
+    throw error;
+  }
 }
 
 /** Persist a margin record array to localStorage for offline access. */
@@ -425,8 +501,8 @@ const ProfitMarginSettings: React.FC = () => {
     }
   }, [auditFilter, toast]);
 
-  useEffect(() => { load(); }, [load]);
-  useEffect(() => { if (activeTab === 'audit') loadAudit(); }, [activeTab, loadAudit]);
+  useEffect(() => { load(); }, []); // eslint-disable-line
+  useEffect(() => { if (activeTab === 'audit') loadAudit(); }, [activeTab]); // eslint-disable-line
 
   // ── Global save ───────────────────────────────────────────────────────────
 
@@ -446,7 +522,7 @@ const ProfitMarginSettings: React.FC = () => {
         // Build the record that will be saved locally regardless of API success
         const now = new Date().toISOString();
         const offlineRecord: MarginSetting = {
-          id: globalSetting?.id || `local-global-${Date.now()}`,
+          id: globalSetting?.id || `local-global-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
           scope: 'global',
           scope_ref_id: null,
           margin_type: globalType,

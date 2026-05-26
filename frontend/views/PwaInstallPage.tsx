@@ -1,12 +1,14 @@
 import React from 'react';
 import { usePwaInstall } from '../context/PwaInstallContext';
 import { Download, Smartphone, Monitor, Apple, Chrome, CheckCircle, X, Share2, Compass } from 'lucide-react';
+import { isFileProtocol, resolveAppAssetUrl } from '../utils/runtime';
 
 const PwaInstallPage: React.FC = () => {
   const { isInstallable, isInstalled, install } = usePwaInstall();
   const [dismissed, setDismissed] = React.useState(false);
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+  const fileProtocol = isFileProtocol();
 
   if (isStandalone || dismissed) {
     return (
@@ -18,7 +20,9 @@ const PwaInstallPage: React.FC = () => {
           <h1 className="text-2xl font-black text-slate-800 mb-2">Prime ERP is Installed</h1>
           <p className="text-slate-500 mb-6">You are running the app in standalone mode. Enjoy the full experience!</p>
           <button
-            onClick={() => window.location.href = '/'}
+            onClick={() => {
+              window.location.hash = '#/';
+            }}
             className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-colors"
           >
             Go to Dashboard
@@ -41,7 +45,7 @@ const PwaInstallPage: React.FC = () => {
 
       <header className="relative z-10 px-6 py-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <img src="/pwa-icon-192x192.png" alt="Prime ERP" className="w-10 h-10 rounded-xl shadow-lg shadow-blue-200" />
+                  <img src={resolveAppAssetUrl('/pwa-icon-192x192.png')} alt="Prime ERP" className="w-10 h-10 rounded-xl shadow-lg shadow-blue-200" />
                   <span className="font-bold text-slate-700 text-lg">Prime ERP</span>
                 </div>
         <button
@@ -63,7 +67,7 @@ const PwaInstallPage: React.FC = () => {
           </p>
         </div>
 
-        {isInstallable && (
+        {isInstallable && !fileProtocol && (
           <button
             onClick={install}
             className="group relative px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg rounded-2xl shadow-xl shadow-blue-200/50 transition-all active:scale-95 mb-10"
@@ -137,7 +141,7 @@ const PwaInstallPage: React.FC = () => {
         </div>
 
         <p className="text-xs text-slate-400 text-center">
-          Prime ERP v1.0.0 &middot; {isInstallable ? 'Ready to install' : isStandalone ? 'Running as installed app' : 'Open this page in Chrome, Edge, or Safari to install'}
+          Prime ERP v1.0.0 &middot; {fileProtocol ? 'Desktop installer mode active' : isInstallable ? 'Ready to install' : isStandalone ? 'Running as installed app' : 'Open this page in Chrome, Edge, or Safari to install'}
         </p>
       </main>
     </div>

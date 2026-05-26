@@ -306,7 +306,7 @@ export interface WorkflowTemplate {
   category: string;
   
   // Template definition
-  definition: Omit<WorkflowDefinition, 'id' | 'createdBy' | 'createdAt' | 'updatedAt'>;
+  definition: Omit<WorkflowDefinition, 'id' | 'version' | 'createdBy' | 'createdAt' | 'updatedAt'>;
   
   // Metadata
   isSystem: boolean;
@@ -375,7 +375,6 @@ export const DEFAULT_WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
     definition: {
       name: 'Expense Approval',
       entityType: 'expense',
-      version: 1,
       steps: [
         {
           id: 'STEP-1',
@@ -423,8 +422,6 @@ export const DEFAULT_WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
       finalStepId: 'STEP-3',
       isActive: true,
       allowParallelInstances: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
     },
   },
   {
@@ -439,7 +436,6 @@ export const DEFAULT_WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
     definition: {
       name: 'Purchase Order Approval',
       entityType: 'purchase_order',
-      version: 1,
       steps: [
         {
           id: 'STEP-1',
@@ -485,8 +481,6 @@ export const DEFAULT_WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
       finalStepId: 'STEP-3',
       isActive: true,
       allowParallelInstances: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
     },
   },
   {
@@ -501,7 +495,6 @@ export const DEFAULT_WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
     definition: {
       name: 'Leave Request',
       entityType: 'leave_request',
-      version: 1,
       steps: [
         {
           id: 'STEP-1',
@@ -518,8 +511,6 @@ export const DEFAULT_WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
       finalStepId: 'STEP-1',
       isActive: true,
       allowParallelInstances: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
     },
   },
 ];

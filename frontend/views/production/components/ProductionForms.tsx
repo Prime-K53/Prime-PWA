@@ -8,7 +8,7 @@ import {
     Eye, Download
 } from 'lucide-react';
 import { Item, ProductionOperation, BOMComponent, WorkCenter, WorkOrder, JobOrder, VDPConfig, BillOfMaterial } from '../../../types';
-import { useData } from '../../../context/DataContext';
+import { useAuth } from '../../../context/AuthContext';
 import { Loader2 } from 'lucide-react';
 import { OfflineImage } from '../../../components/OfflineImage';
 import { generateNextId } from '../../../utils/helpers';
@@ -26,7 +26,7 @@ interface BOMFormProps {
 }
 
 export const BOMForm: React.FC<BOMFormProps> = ({ inventory, workCenters, initialData, onSave, onCancel }) => {
-    const { companyConfig } = useData();
+    const { companyConfig } = useAuth();
     const currency = companyConfig.currencySymbol;
     const products = inventory.filter(i => i.type === 'Product' || i.type === 'Service');
     const materials = inventory.filter(i => i.type === 'Raw Material');
@@ -101,7 +101,7 @@ export const BOMForm: React.FC<BOMFormProps> = ({ inventory, workCenters, initia
 
     const handleAddOp = () => {
         if (!tempOpName || !tempWC) return;
-        setOperations([...operations, { id: `OP-${Date.now()}`, name: tempOpName, workCenterId: tempWC, setupTime: tempSetup, runTimePerUnit: tempRun, sequence: operations.length + 1 }]);
+        setOperations([...operations, { id: `OP-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, name: tempOpName, workCenterId: tempWC, setupTime: tempSetup, runTimePerUnit: tempRun, sequence: operations.length + 1 }]);
         setTempOpName('');
         // Reset to default instead of clearing
         setTempWC(companyConfig.productionSettings?.defaultWorkCenterId || (workCenters[0]?.id || ''));
@@ -891,7 +891,9 @@ interface WorkOrderModalProps {
 }
 
 export const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ boms, inventory, onSave, onClose, initialData }) => {
-    const { companyConfig, invoices = [], workOrders = [], notify } = useData();
+    const { companyConfig, notify } = useAuth();
+    const { invoices = [] } = useFinance();
+    const { workOrders = [], workCenters = [] } = useProduction();
     const currency = companyConfig.currencySymbol;
 
     const customerNames = useMemo(() => {
@@ -1129,7 +1131,7 @@ export const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ boms, inventory,
                                     onChange={e => setFormData({ ...formData, workCenterId: e.target.value })}
                                 >
                                     <option value="">Select Work Center...</option>
-                                    {useData().workCenters.map((wc: WorkCenter) => (
+                                    {workCenters.map((wc: WorkCenter) => (
                                         <option key={wc.id} value={wc.id}>{wc.name}</option>
                                     ))}
                                 </select>

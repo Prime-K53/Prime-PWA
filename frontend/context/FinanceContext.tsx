@@ -32,6 +32,7 @@ interface FinanceContextType {
   payslips: Payslip[];
   cheques: Cheque[];
   supplierPayments: SupplierPayment[];
+  customerPayments: CustomerPayment[];
   
   addAccount: (account: Account) => void;
   updateAccount: (account: Account) => void;
@@ -88,6 +89,8 @@ interface FinanceContextType {
   closeFinancialYear: (year: number) => Promise<void>;
   runMonthEndClosing: (month: string) => Promise<void>;
   formatNumber: (num: number) => string;
+  updateCustomerPayment: (payment: CustomerPayment, reason?: string) => Promise<void>;
+  addCustomerPayment: (payment: CustomerPayment) => Promise<void>;
 }
 
 const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
@@ -180,7 +183,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       employeesToPay.forEach(emp => {
           totalBasic += emp.basicSalary;
           const slip: Payslip = {
-              id: `SLIP-${emp.id}-${Date.now()}`,
+              id: `SLIP-${emp.id}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
               payrollRunId: runId,
               employeeId: emp.id,
               employeeName: emp.name,
@@ -647,12 +650,15 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         
         const newId = generateNextId('DN', financeStore.deliveryNotes, companyConfig);
         const note: DeliveryNote = {
-            id: newId, 
-            invoiceId: invoice.id, 
-            date: new Date().toISOString(), 
+            id: newId,
+            number: newId,
+            dnNumber: newId,
+            invoiceId: invoice.id,
+            date: new Date().toISOString(),
             customerName: invoice.customerName,
-            shippingAddress: invoice.shippingAddress || 'N/A', 
-            items: invoice.items || [], 
+            clientName: invoice.customerName,
+            shippingAddress: invoice.shippingAddress || 'N/A',
+            items: invoice.items || [],
             status: 'Pending'
         };
         await financeStore.addDeliveryNote(note);
@@ -786,6 +792,42 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
   };
 
+  const updateCustomerPayment = async (payment: CustomerPayment, reason?: string) => {
+    try {
+      await transactionService.updateCustomerPayment(payment);
+      await financeStore.fetchFinanceData();
+      notify(`Payment updated successfully`, "success");
+      addAuditLog({
+        action: 'UPDATE',
+        entityType: 'CustomerPayment',
+        entityId: payment.id,
+        details: `Updated customer payment: ${reason || 'No reason provided'}`,
+        newValue: payment
+      });
+    } catch (err: any) {
+      notify(`Update Failed: ${err.message}`, "error");
+      throw err;
+    }
+  };
+
+  const addCustomerPayment = async (payment: CustomerPayment) => {
+    try {
+      await transactionService.addCustomerPayment(payment);
+      await financeStore.fetchFinanceData();
+      notify(`Payment recorded successfully`, "success");
+      addAuditLog({
+        action: 'CREATE',
+        entityType: 'CustomerPayment',
+        entityId: payment.id,
+        details: `Recorded customer payment of ${payment.amount} from ${payment.customerName}`,
+        newValue: payment
+      });
+    } catch (err: any) {
+      notify(`Failed to record payment: ${err.message}`, "error");
+      throw err;
+    }
+  };
+
   return (
     <FinanceContext.Provider value={{
       ...financeStore, addInvoice, updateInvoice, addExpense, approveExpense, addIncome, postJournalEntry,
@@ -805,7 +847,10 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       },
       deleteDeliveryNote: financeStore.deleteDeliveryNote, saveBudget: financeStore.saveBudget,
       updateOpeningBalance: financeStore.updateOpeningBalance, addEmployee: financeStore.addEmployee, updateEmployee: financeStore.updateEmployee, deleteEmployee: financeStore.deleteEmployee,
-      formatNumber
+      formatNumber,
+      customerPayments: salesStore.customerPayments || [],
+      updateCustomerPayment,
+      addCustomerPayment
     }}>
       {children}
     </FinanceContext.Provider>

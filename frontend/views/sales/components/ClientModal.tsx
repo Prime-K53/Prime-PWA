@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { X, Save, User, MapPin, CreditCard, FileText, Building, Truck, Plus, Trash2, Wallet, Users, AlertTriangle, CheckCircle2, Factory } from 'lucide-react';
 import { Customer } from '../../../types';
 import { getDefaultPaymentTermsForSegment } from '../../../utils/helpers';
-import { useData } from '../../../context/DataContext';
+import { useAuth } from '../../../context/AuthContext';
+import { useFinance } from '../../../context/FinanceContext';
 import { getPlaceholder } from '../../../constants/placeholders';
 
 interface ClientModalProps {
@@ -80,7 +81,7 @@ export const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSav
     }
   }, [customer, isOpen]);
 
-  const { invoices, companyConfig } = useData();
+  const { invoices } = useFinance(); const { companyConfig } = useAuth();
 
   const calcOutstanding = (custName: string | undefined) => {
     if (!custName) return 0;
@@ -110,7 +111,7 @@ export const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSav
   const handleAddSubAccount = () => {
     setFormData(prev => ({
       ...prev,
-      subAccounts: [...(prev.subAccounts || []), { id: `SUB-${Date.now()}`, name: '', balance: 0, walletBalance: 0, status: 'Active' }]
+      subAccounts: [...(prev.subAccounts || []), { id: `SUB-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, name: '', balance: 0, walletBalance: 0, status: 'Active' }]
     }));
   };
 

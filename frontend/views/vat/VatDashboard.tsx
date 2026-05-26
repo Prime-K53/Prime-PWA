@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo } from 'react';
 import { useVatStore } from '../../stores/vatStore';
-import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
@@ -12,7 +12,7 @@ import { format, parseISO, startOfMonth, endOfMonth, eachMonthOfInterval, subMon
 
 export const VatDashboard: React.FC = () => {
     const { transactions, returns, fetchVatData, isLoading } = useVatStore();
-    const { companyConfig } = useData();
+    const { companyConfig } = useAuth();
     const currency = companyConfig?.currencySymbol || 'MK';
 
     useEffect(() => {

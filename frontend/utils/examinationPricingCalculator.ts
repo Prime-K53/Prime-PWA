@@ -1,5 +1,6 @@
 import { ExaminationBatch, MarketAdjustment } from '../types';
 import { calculateExaminationBatchPricing } from '../src/domain/examination/pricingEngine';
+import { roundMoney } from './roundingUtils';
 
 export interface PricingSettings {
   paper_item_id: string | null;
@@ -77,13 +78,13 @@ export const getLiveTotalPreview = (
   const cls = batch?.classes?.find(c => c.id === classId);
   if (cls?.final_fee_per_learner !== undefined && cls?.final_fee_per_learner !== null) {
     const learners = Math.max(1, Math.floor(Number(cls?.number_of_learners) || 0));
-    return Math.round((Number(cls.final_fee_per_learner * learners) || 0) * 100) / 100;
+    return roundMoney(Number(cls.final_fee_per_learner * learners) || 0);
   }
   
   // Fallback to calculated value
   const expectedFee = getExpectedFeePerLearner(batch, settings, activeAdjustments, classId);
   const learners = Math.max(1, Math.floor(Number(cls?.number_of_learners) || 0));
-  return Math.round((Number(expectedFee * learners) || 0) * 100) / 100;
+  return roundMoney(Number(expectedFee * learners) || 0);
 };
 
 /**

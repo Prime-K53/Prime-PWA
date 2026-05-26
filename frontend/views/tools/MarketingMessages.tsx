@@ -9,7 +9,8 @@ import {
   Info, Globe
 } from 'lucide-react';
 import { dbService } from '../../services/db';
-import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
+import { useSales } from '../../context/SalesContext';
 import { whatsAppMarketingService, WhatsAppTemplate, WhatsAppCampaign, AutomationFlow, WhatsAppChat } from '../../services/whatsAppMarketingService';
 
 interface CampaignFormData {
@@ -22,7 +23,8 @@ interface CampaignFormData {
 }
 
 const MarketingMessages: React.FC = () => {
-  const { notify, companyConfig, customers } = useData();
+  const { notify, companyConfig } = useAuth();
+  const { customers } = useSales();
   const currency = companyConfig?.currencySymbol || 'K';
   
   const [activeView, setActiveView] = useState<'inbox' | 'campaigns' | 'templates' | 'automation' | 'settings'>('inbox');
@@ -271,7 +273,7 @@ const MarketingMessages: React.FC = () => {
       ...prev,
       steps: [
         ...prev.steps,
-        { id: `step-${Date.now()}`, order: prev.steps.length + 1, type: 'message' as const, config: { message: '' } }
+        { id: `step-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, order: prev.steps.length + 1, type: 'message' as const, config: { message: '' } }
       ]
     }));
   };
@@ -1367,7 +1369,7 @@ const MarketingMessages: React.FC = () => {
                       if (editingFlow) {
                         setEditingFlow({
                           ...editingFlow,
-                          steps: [...editingFlow.steps, { id: `step-${Date.now()}`, order: editingFlow.steps.length + 1, type: 'message', config: { message: '' } }]
+                          steps: [...editingFlow.steps, { id: `step-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, order: editingFlow.steps.length + 1, type: 'message', config: { message: '' } }]
                         });
                       } else {
                         addAutomationStep();

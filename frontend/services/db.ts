@@ -3,6 +3,10 @@ import {
     Item, Warehouse, Purchase, Sale, Quotation, JobOrder, CustomerPayment, BillOfMaterial, ProductionBatch, WorkOrder, WorkCenter, ProductionResource, Account, LedgerEntry, Invoice, RecurringInvoice, Expense, Income, ScheduledPayment, WalletTransaction, DeliveryNote, Budget, Transfer, Employee, PayrollRun, Payslip, User, ResourceAllocation, GoodsReceipt, UserRole, SMSCampaign, Subscriber, SMSTemplate, Cheque, Shipment, SubcontractOrder, MaintenanceLog, AuditLogEntry, SystemAlert, Reminder, ExamJob, ExamPaper, ExamPrintingBatch, School, Customer, Supplier, SupplierPayment, Order, PurchaseAllocation, VatTransaction, VatReturn, BOMTemplate, MarketAdjustment, MarketAdjustmentTransaction, UserGroup, MaterialCategory, WarehouseInventory, MaterialBatch, InventoryTransaction, MaterialReservation, RoundingLog, ExaminationJob, ExaminationJobSubject, ExaminationInvoiceGroup, ExaminationRecurringProfile, ExaminationInventoryDeduction, CustomerReceiptSnapshot, ExaminationBatchNotification, NotificationAuditLog, SalesOrder, JobTicket, JobTicketSettings
 } from '../types';
 import { calculateCustomerPaymentSnapshot } from './receiptCalculationService';
+import { resetEnterpriseDatabase } from './dexie/database';
+import { isBackedStore, dexieBridge } from './dexie/bridge';
+import { settingsBackplane } from './dexie/settings-backplane';
+import type { BackedLegacyStoreName } from './dexie/bridge';
 import {
     BankAccount,
     BankTransaction,
@@ -92,6 +96,7 @@ interface NexusDB extends DBSchema {
     reprintJobs: { key: string; value: any; };
     salesExchangeApprovals: { key: string; value: any; };
     files: { key: string; value: { id: string; blob: Blob; name: string; type: string; created: string } };
+    tasks: { key: string; value: any };
     syncOutbox: { key: string; value: { id: string; entityId: string; type: string; payload: any; date: string } };
     vatTransactions: { key: string; value: VatTransaction; };
     vatReturns: { key: string; value: VatReturn; };
@@ -120,7 +125,7 @@ const DB_NAME = 'PrimeERP_Final_v3_Clean';
 // Version bump required so existing IndexedDB instances run upgrade()
 // and create newly-added stores such as examinationBatchNotifications
 // and notificationAuditLogs.
-const DB_VERSION = 32;
+const DB_VERSION = 33;
 
 let dbPromise: Promise<IDBPDatabase<NexusDB>> | null = null;
 
@@ -137,7 +142,9 @@ const isRecoverableDbConnectionError = (error: unknown): boolean => {
 const resetDbConnection = async (db?: IDBPDatabase<NexusDB> | null) => {
     try {
         db?.close();
-    } catch { }
+    } catch (err) {
+        console.warn('[DB] Error closing connection:', err);
+    }
     dbPromise = null;
 };
 
@@ -197,6 +204,87 @@ const DATA_CHANGED_CHANNEL = 'primeerp-data-sync';
 const DB_SOURCE = `db-${Math.random().toString(36).slice(2)}`;
 let dataChangeChannel: BroadcastChannel | null = null;
 
+const RXDB_COLLECTION_BY_STORE: Partial<Record<keyof NexusDB, string>> = {
+    inventory: 'products',
+    customers: 'customers',
+    suppliers: 'suppliers',
+    invoices: 'invoices',
+    workCenters: 'workCenters',
+    resources: 'productionResources',
+    auditLogs: 'auditLogs',
+    examinationBatchNotifications: 'notifications'
+};
+
+const LEGACY_DATABASE_NAMES = [
+    'PrimeERP_Final_v3_Clean',
+    'PrimeERP_Production_v1',
+    'PrimeERP_OfflineFirst',
+    'PrimeERP_Examination_v1'
+] as const;
+const lastRouteHealthAt = new Map<string, number>();
+
+const getRouteDecision = (_storeName: keyof NexusDB) => ({
+    id: 'dexie',
+    mode: 'dexie' as const,
+    readOrder: ['dexie', 'legacy'] as Array<'dexie' | 'legacy' | 'rxdb'>,
+    writeTargets: ['dexie'] as Array<'dexie' | 'legacy' | 'rxdb'>,
+});
+
+const trackRouteHealthy = async (_storeName: keyof NexusDB | 'settings') => {};
+
+const trackRouteError = async (_storeName: keyof NexusDB | 'settings', _error: unknown, _fallbackReason?: string) => {};
+
+const mergeByIdentifier = <T>(...sources: T[][]): T[] => {
+    const keyed = new Map<string, T>();
+    const passthrough: T[] = [];
+
+    sources.forEach((rows) => {
+        rows.forEach((row) => {
+            const candidate = row as any;
+            const key = String(candidate?.id ?? candidate?.key ?? '');
+            if (!key) {
+                passthrough.push(row);
+                return;
+            }
+            if (!keyed.has(key)) {
+                keyed.set(key, row);
+            }
+        });
+    });
+
+    return [...keyed.values(), ...passthrough];
+};
+
+const extractLegacySettingValue = <T>(value: any): T | undefined => {
+    if (value === undefined || value === null) {
+        return value as T | undefined;
+    }
+
+    if (typeof value !== 'object' || Array.isArray(value)) {
+        return value as T;
+    }
+
+    if ('value' in value && Object.keys(value).every((key) => key === 'id' || key === 'value')) {
+        return value.value as T;
+    }
+
+    if ('id' in value) {
+        const { id: _unused, ...rest } = value as Record<string, unknown>;
+        return rest as T;
+    }
+
+    return value as T;
+};
+
+const shapeLegacySettingRecord = (key: string, value: unknown) => {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+        const { id: _unused, ...safeValue } = value as Record<string, unknown>;
+        return { id: key, ...safeValue };
+    }
+
+    return { id: key, value };
+};
+
 const notifySyncState = (status: SyncStatus) => {
     if (onSyncStateChange) onSyncStateChange(status);
 };
@@ -213,7 +301,9 @@ const emitDataChange = (stores: string[]) => {
             window.dispatchEvent(new CustomEvent(DATA_CHANGED_EVENT, { detail: payload }));
             localStorage.setItem(DATA_CHANGED_EVENT, JSON.stringify(payload));
         }
-    } catch { }
+    } catch (err) {
+        console.warn('[DB] Failed to dispatch data change event:', err);
+    }
     try {
         if (typeof BroadcastChannel !== 'undefined') {
             if (!dataChangeChannel) {
@@ -221,7 +311,52 @@ const emitDataChange = (stores: string[]) => {
             }
             dataChangeChannel.postMessage(payload);
         }
-    } catch { }
+    } catch (err) {
+        console.warn('[DB] Failed to broadcast data change:', err);
+    }
+};
+
+const getAllFromLegacyStore = async <T>(storeName: keyof NexusDB): Promise<T[]> => withDbRecovery(async (db) => {
+    if (!db.objectStoreNames.contains(storeName as any)) {
+        console.warn(`Object store "${storeName}" not found in IndexedDB.`);
+        return [];
+    }
+    return db.getAll(storeName as any) as Promise<T[]>;
+});
+
+const getFromLegacyStore = async <T>(storeName: keyof NexusDB, id: string): Promise<T | undefined> => withDbRecovery(async (db) => {
+    if (!db.objectStoreNames.contains(storeName as any)) {
+        console.warn(`Object store "${storeName}" not found in IndexedDB.`);
+        return undefined;
+    }
+    return db.get(storeName as any, id) as Promise<T | undefined>;
+});
+
+const putToLegacyStore = async <T>(storeName: keyof NexusDB, item: T): Promise<string> => withDbRecovery(async (db) => {
+    const result = await db.put(storeName as any, item as any);
+    return result as string;
+});
+
+const deleteFromLegacyStore = async (storeName: keyof NexusDB, id: string): Promise<void> => {
+    await withDbRecovery(async (db) => {
+        if (!db.objectStoreNames.contains(storeName as any)) {
+            return;
+        }
+        await db.delete(storeName as any, id);
+    });
+};
+
+const getSettingFromLegacyStore = async <T>(key: string): Promise<T | undefined> => withDbRecovery(async (db) => {
+    if (!db.objectStoreNames.contains('settings')) return undefined;
+    const value = await db.get('settings', key);
+    return extractLegacySettingValue<T>(value);
+});
+
+const saveSettingToLegacyStore = async <T>(key: string, value: T): Promise<void> => {
+    await withDbRecovery(async (db) => {
+        const record = shapeLegacySettingRecord(key, value);
+        await db.put('settings', record);
+    });
 };
 
 const STORE_NAMES: (keyof NexusDB)[] = [
@@ -231,7 +366,7 @@ const STORE_NAMES: (keyof NexusDB)[] = [
     'accounts', 'ledger', 'invoices', 'recurringInvoices',
     'expenses', 'income', 'scheduledPayments',
     'walletTransactions', 'deliveryNotes', 'budgets', 'cheques',
-    'transfers', 'employees', 'payrollRuns', 'payslips',
+    'transfers', 'employees', 'payrollRuns', 'payslips', 'tasks',
     'users', 'userGroups', 'goodsReceipts', 'files',
     'smsCampaigns', 'subscribers', 'smsTemplates', 'shipments',
     'subcontractOrders', 'maintenanceLogs',
@@ -317,13 +452,23 @@ export const initDB = async (): Promise<IDBPDatabase<NexusDB>> => {
 
 async function migrateToVersion20(transaction: any) {
     const invoiceStore = transaction.objectStore('invoices');
-    let invoices = await invoiceStore.getAll();
-    for (const inv of invoices) {
-        if (inv.totalAmount < 0) {
-            inv.totalAmount = Math.abs(inv.totalAmount);
-            await invoiceStore.put(inv);
-        }
-    }
+    await new Promise<void>((resolve, reject) => {
+        const request = invoiceStore.openCursor();
+        request.onsuccess = (event: any) => {
+            const cursor = event.target.result;
+            if (cursor) {
+                const inv = cursor.value;
+                if (inv.totalAmount < 0) {
+                    inv.totalAmount = Math.abs(inv.totalAmount);
+                    cursor.update(inv);
+                }
+                cursor.continue();
+            } else {
+                resolve();
+            }
+        };
+        request.onerror = () => reject(request.error);
+    });
 }
 
 const round2 = (value: number): number =>
@@ -457,35 +602,44 @@ const buildBackfilledReceiptSnapshot = (payment: CustomerPayment): CustomerRecei
 
 async function migrateToVersion24(transaction: any) {
     const paymentStore = transaction.objectStore('customerPayments');
-    const payments: CustomerPayment[] = await paymentStore.getAll();
+    await new Promise<void>((resolve, reject) => {
+        const request = paymentStore.openCursor();
+        request.onsuccess = (event: any) => {
+            const cursor = event.target.result;
+            if (cursor) {
+                const payment: CustomerPayment = cursor.value;
+                const hasSnapshot = !!payment.receiptSnapshot;
+                const snapshot = hasSnapshot
+                    ? {
+                        ...payment.receiptSnapshot!,
+                        backfilled: payment.receiptSnapshot?.backfilled ?? false,
+                        confidence: payment.receiptSnapshot?.confidence || 'exact',
+                        calculationVersion: payment.receiptSnapshot?.calculationVersion || payment.calculationVersion || 1
+                    }
+                    : buildBackfilledReceiptSnapshot(payment);
 
-    for (const payment of payments) {
-        const hasSnapshot = !!payment.receiptSnapshot;
-        const snapshot = hasSnapshot
-            ? {
-                ...payment.receiptSnapshot!,
-                backfilled: payment.receiptSnapshot?.backfilled ?? false,
-                confidence: payment.receiptSnapshot?.confidence || 'exact',
-                calculationVersion: payment.receiptSnapshot?.calculationVersion || payment.calculationVersion || 1
+                const updated: CustomerPayment = {
+                    ...payment,
+                    receiptSnapshot: snapshot,
+                    invoiceTotal: payment.invoiceTotal ?? snapshot.invoiceTotalAtPosting,
+                    paymentStatus: payment.paymentStatus ?? snapshot.paymentStatus,
+                    balanceDue: payment.balanceDue ?? snapshot.balanceDueAfterPayment,
+                    overpaymentAmount: payment.overpaymentAmount ?? snapshot.walletDeposit,
+                    walletDeposit: payment.walletDeposit ?? snapshot.walletDeposit,
+                    changeGiven: payment.changeGiven ?? snapshot.changeGiven,
+                    amountApplied: payment.amountApplied ?? snapshot.amountApplied,
+                    amountRetained: payment.amountRetained ?? snapshot.amountRetained,
+                    calculationVersion: payment.calculationVersion ?? snapshot.calculationVersion ?? 1
+                };
+
+                cursor.update(updated);
+                cursor.continue();
+            } else {
+                resolve();
             }
-            : buildBackfilledReceiptSnapshot(payment);
-
-        const updated: CustomerPayment = {
-            ...payment,
-            receiptSnapshot: snapshot,
-            invoiceTotal: payment.invoiceTotal ?? snapshot.invoiceTotalAtPosting,
-            paymentStatus: payment.paymentStatus ?? snapshot.paymentStatus,
-            balanceDue: payment.balanceDue ?? snapshot.balanceDueAfterPayment,
-            overpaymentAmount: payment.overpaymentAmount ?? snapshot.walletDeposit,
-            walletDeposit: payment.walletDeposit ?? snapshot.walletDeposit,
-            changeGiven: payment.changeGiven ?? snapshot.changeGiven,
-            amountApplied: payment.amountApplied ?? snapshot.amountApplied,
-            amountRetained: payment.amountRetained ?? snapshot.amountRetained,
-            calculationVersion: payment.calculationVersion ?? snapshot.calculationVersion ?? 1
         };
-
-        await paymentStore.put(updated);
-    }
+        request.onerror = () => reject(request.error);
+    });
 }
 
 export const dbService = {
@@ -507,6 +661,7 @@ export const dbService = {
                 return result;
             } catch (err) {
                 console.error("Atomic transaction failed. Data rolled back locally.", err);
+                try { tx.abort(); } catch (_) { /* ignore abort errors */ }
                 if (isRecoverableDbConnectionError(err)) {
                     await resetDbConnection(db);
                 }
@@ -581,43 +736,111 @@ export const dbService = {
     },
 
     async getAll<T>(storeName: keyof NexusDB): Promise<T[]> {
-        return withDbRecovery(async (db) => {
-            if (!db.objectStoreNames.contains(storeName as any)) {
-                console.warn(`Object store "${storeName}" not found in IndexedDB.`);
-                return [];
+        const route = getRouteDecision(storeName);
+        if (!route || !isBackedStore(String(storeName))) {
+            return getAllFromLegacyStore<T>(storeName);
+        }
+
+        const sourceStore = storeName as BackedLegacyStoreName;
+        let rxRows: T[] = [];
+        let legacyRows: T[] = [];
+
+        if (route.readOrder.includes('rxdb')) {
+            try {
+                rxRows = await dexieBridge.getAll(sourceStore) as T[];
+                void trackRouteHealthy(storeName);
+            } catch (error) {
+                void trackRouteError(storeName, error);
             }
-            return db.getAll(storeName as any) as Promise<T[]>;
-        });
+        }
+
+        if (route.readOrder.includes('legacy')) {
+            legacyRows = await getAllFromLegacyStore<T>(storeName);
+        }
+
+        if (route.readOrder[0] === 'rxdb') {
+            return mergeByIdentifier(rxRows, legacyRows);
+        }
+
+        return mergeByIdentifier(legacyRows, rxRows);
     },
 
     async get<T>(storeName: keyof NexusDB, id: string): Promise<T | undefined> {
-        return withDbRecovery(async (db) => {
-            if (!db.objectStoreNames.contains(storeName as any)) {
-                console.warn(`Object store "${storeName}" not found in IndexedDB.`);
-                return undefined;
+        const route = getRouteDecision(storeName);
+        if (!route || !isBackedStore(String(storeName))) {
+            return getFromLegacyStore<T>(storeName, id);
+        }
+
+        const sourceStore = storeName as BackedLegacyStoreName;
+        for (const source of route.readOrder) {
+            if (source === 'rxdb') {
+                try {
+                    const value = await dexieBridge.get(sourceStore, id) as T | undefined;
+                    if (value !== undefined) {
+                        void trackRouteHealthy(storeName);
+                        return value;
+                    }
+                } catch (error) {
+                    void trackRouteError(storeName, error);
+                }
+                continue;
             }
-            return db.get(storeName as any, id) as Promise<T | undefined>;
-        });
+
+            const legacyValue = await getFromLegacyStore<T>(storeName, id);
+            if (legacyValue !== undefined) {
+                return legacyValue;
+            }
+        }
+
+        return undefined;
     },
 
     async put<T>(storeName: keyof NexusDB, item: T): Promise<string> {
-        return withDbRecovery(async (db) => {
-            if (typeof item === 'object' && item !== null) {
-                (item as any)._updatedAt = new Date().toISOString();
-            }
-            const res = await db.put(storeName as any, item as any);
+        if (typeof item === 'object' && item !== null) {
+            (item as any)._updatedAt = new Date().toISOString();
+        }
+
+        const route = getRouteDecision(storeName);
+        if (!route || !isBackedStore(String(storeName))) {
+            const result = await putToLegacyStore(storeName, item);
             this.triggerSync();
             emitDataChange([String(storeName)]);
-            return res as string;
-        });
+            return result;
+        }
+
+        const sourceStore = storeName as BackedLegacyStoreName;
+        let resultId = String((item as any)?.id || '');
+        let persisted = false;
+
+        if (route.writeTargets.includes('rxdb')) {
+            try {
+                resultId = await dexieBridge.put(sourceStore, item);
+                persisted = true;
+                await trackRouteHealthy(storeName);
+            } catch (error) {
+                await trackRouteError(
+                    storeName,
+                    error,
+                    route.writeTargets.includes('legacy') ? undefined : `Fell back to legacy write for ${String(storeName)}.`
+                );
+            }
+        }
+
+        if (route.writeTargets.includes('legacy') || !persisted) {
+            resultId = await putToLegacyStore(storeName, item);
+            persisted = true;
+        }
+
+        this.triggerSync();
+        emitDataChange([String(storeName)]);
+        return resultId;
     },
 
     async getSetting<T>(key: string): Promise<T | undefined> {
         try {
-            return withDbRecovery(async (db) => {
-                if (!db.objectStoreNames.contains('settings')) return undefined;
-                return db.get('settings', key);
-            });
+            const value = await settingsBackplane.getJson<T>(key, { exactKey: true });
+            if (value !== undefined) return value;
+            return getSettingFromLegacyStore<T>(key);
         } catch (e) {
             console.warn("[DB] Error getting setting:", key, e);
             return undefined;
@@ -625,31 +848,90 @@ export const dbService = {
     },
 
     async saveSetting<T>(key: string, value: T): Promise<void> {
-        await withDbRecovery(async (db) => {
-            await db.put('settings', { id: key, ...value as any });
-            this.triggerSync();
-            emitDataChange(['settings']);
-        });
+        try {
+            await settingsBackplane.setJson(key, value, { exactKey: true });
+        } catch (error) {
+            console.warn("[DB] Error saving setting:", key, error);
+        }
+        this.triggerSync();
+        emitDataChange(['settings']);
     },
 
     async factoryReset() {
         const db = await initDB();
         db.close();
-        await deleteDB(DB_NAME);
-        localStorage.clear();
+        dbPromise = null;
+
+        const [productionModule, examinationModule, offlineModule] = await Promise.all([
+            import('./productionDb'),
+            import('./examinationDb'),
+            import('./offlineDb')
+        ]);
+
+        productionModule.getProductionDb()?.close();
+        examinationModule.getExaminationDb()?.close();
+        await offlineModule.closeOfflineDbConnection?.();
+
+        await resetEnterpriseDatabase().catch(() => undefined);
+        await Promise.all(LEGACY_DATABASE_NAMES.map((name) => deleteDB(name).catch(() => undefined)));
+
+        try {
+            localStorage.clear();
+        } catch {
+            const appPrefixes = ['nexus_', 'prime_', 'db_', 'user_', 'auth_', 'finance_', 'sales_'];
+            for (let i = localStorage.length - 1; i >= 0; i--) {
+                const key = localStorage.key(i);
+                if (key && appPrefixes.some(prefix => key.startsWith(prefix))) {
+                    localStorage.removeItem(key);
+                }
+            }
+        }
+
+        try {
+            sessionStorage.clear();
+        } catch {
+            // Ignore session storage cleanup failures.
+        }
+
         dbPromise = null;
     },
 
     async delete(storeName: keyof NexusDB, id: string): Promise<void> {
-        await withDbRecovery(async (db) => {
-            await db.delete(storeName as any, id);
+        const route = getRouteDecision(storeName);
+        if (!route || !isBackedStore(String(storeName))) {
+            await deleteFromLegacyStore(storeName, id);
             this.triggerSync();
             emitDataChange([String(storeName)]);
-        });
+            return;
+        }
+
+        const sourceStore = storeName as BackedLegacyStoreName;
+        let deleted = false;
+
+        if (route.writeTargets.includes('rxdb')) {
+            try {
+                await dexieBridge.delete(sourceStore, id);
+                deleted = true;
+                await trackRouteHealthy(storeName);
+            } catch (error) {
+                await trackRouteError(
+                    storeName,
+                    error,
+                    route.writeTargets.includes('legacy') ? undefined : `Fell back to legacy delete for ${String(storeName)}.`
+                );
+            }
+        }
+
+        if (route.writeTargets.includes('legacy') || !deleted) {
+            await deleteFromLegacyStore(storeName, id);
+        }
+
+        this.triggerSync();
+        emitDataChange([String(storeName)]);
     },
 
     async saveFile(file: File): Promise<string> {
-        const id = `FILE-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+        const id = `FILE-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         return withDbRecovery(async (db) => {
             await db.put('files', {
                 id,
@@ -706,7 +988,6 @@ export const dbService = {
     },
 
     async exportDatabase(): Promise<Blob> {
-        const db = await initDB();
         const exportData: any = {
             meta: { version: DB_VERSION, date: new Date().toISOString(), app: 'Prime ERP' },
             data: {},
@@ -714,11 +995,7 @@ export const dbService = {
         };
 
         for (const store of STORE_NAMES) {
-            if (db.objectStoreNames.contains(store as any)) {
-                exportData.data[store] = await db.getAll(store as any);
-            } else {
-                exportData.data[store] = [];
-            }
+            exportData.data[store] = await this.getAll(store as keyof NexusDB);
         }
 
         // Export all local storage settings dynamically to ensure nothing is missed
@@ -753,6 +1030,12 @@ export const dbService = {
         }
         await tx.done;
 
+        try {
+            localStorage.clear();
+        } catch {
+            // Ignore local storage clear failures and continue restoring known keys.
+        }
+
         if (parsed.settings && typeof parsed.settings === 'object') {
             Object.entries(parsed.settings).forEach(([key, value]) => {
                 if (typeof value === 'string') {
@@ -760,6 +1043,12 @@ export const dbService = {
                 }
             });
         }
+
+        await resetEnterpriseDatabase().catch(() => undefined);
+        await dexieBridge.ensureReady().catch((error) => {
+            console.warn('[DB] RxDB restore rehydration failed:', error);
+            return undefined;
+        });
 
         localStorage.setItem('prime_erp_backup_date', new Date().toISOString());
     },
@@ -773,6 +1062,16 @@ export const dbService = {
                 issues.push(`Missing object store: ${store} `);
             }
         });
+
+        try {
+            const { databaseManager } = await import('./dexie/DatabaseManager');
+            const health = databaseManager.isHealthy();
+            if (!health) {
+                issues.push('Enterprise Dexie database reports unhealthy');
+            }
+        } catch (error) {
+            issues.push(`Dexie diagnostics unavailable: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
 
         return {
             healthy: issues.length === 0,

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { JobTicket, JobTicketSettings } from '../types';
 import { generateNextId } from '../utils/helpers';
 import { dbService } from '../services/db';
+import { productionDb } from '../services/productionDb';
 
 interface JobTicketState {
   jobTickets: JobTicket[];
@@ -44,8 +45,10 @@ export const useJobTicketStore = create<JobTicketState>((set, get) => ({
   fetchJobTickets: async () => {
     set({ isLoading: true });
     try {
-      const tickets = await dbService.getAll<JobTicket>('jobTickets');
-      const settings = await dbService.get<JobTicketSettings>('jobTicketSettings', 'default');
+      let tickets: JobTicket[];
+      try { tickets = await productionDb.jobTickets.toArray(); } catch { tickets = await dbService.getAll<JobTicket>('jobTickets'); }
+      let settings: JobTicketSettings;
+      try { settings = await productionDb.jobTicketSettings.get('default') || defaultSettings; } catch { settings = await dbService.get<JobTicketSettings>('jobTicketSettings', 'default') || defaultSettings; }
       set({ 
         jobTickets: tickets || [], 
         settings: settings || defaultSettings,
@@ -68,20 +71,20 @@ export const useJobTicketStore = create<JobTicketState>((set, get) => ({
     };
     
     set(state => ({ jobTickets: [...state.jobTickets, newTicket] }));
-    await dbService.set('jobTickets', newTicket.id, newTicket);
+    try { await productionDb.jobTickets.put(newTicket); } catch { await dbService.set('jobTickets', newTicket.id, newTicket); }
   },
 
   updateJobTicket: async (ticket) => {
     const updated = { ...ticket, updatedAt: new Date().toISOString() };
-    set(state => ({ 
-      jobTickets: state.jobTickets.map(t => t.id === ticket.id ? updated : t) 
+    set(state => ({
+      jobTickets: state.jobTickets.map(t => t.id === ticket.id ? updated : t)
     }));
-    await dbService.set('jobTickets', ticket.id, updated);
+    try { await productionDb.jobTickets.put(updated); } catch { await dbService.set('jobTickets', ticket.id, updated); }
   },
 
   deleteJobTicket: async (id) => {
     set(state => ({ jobTickets: state.jobTickets.filter(t => t.id !== id) }));
-    await dbService.delete('jobTickets', id);
+    try { await productionDb.jobTickets.delete(id); } catch { await dbService.delete('jobTickets', id); }
   },
 
   updateJobTicketStatus: async (id, status) => {
@@ -103,29 +106,29 @@ export const useJobTicketStore = create<JobTicketState>((set, get) => ({
     set(state => ({ 
       jobTickets: state.jobTickets.map(t => t.id === id ? updated : t) 
     }));
-    await dbService.set('jobTickets', id, updated);
+    try { await productionDb.jobTickets.put(updated); } catch { await dbService.set('jobTickets', id, updated); }
   },
 
   updateJobProgress: async (id, progress) => {
     const ticket = get().jobTickets.find(t => t.id === id);
     if (!ticket) return;
     
-    const updated = { 
-      ...ticket, 
+    const updated = {
+      ...ticket,
       progressPercent: progress,
       updatedAt: new Date().toISOString(),
     };
     
-    set(state => ({ 
-      jobTickets: state.jobTickets.map(t => t.id === id ? updated : t) 
+    set(state => ({
+      jobTickets: state.jobTickets.map(t => t.id === id ? updated : t)
     }));
-    await dbService.set('jobTickets', id, updated);
+    try { await productionDb.jobTickets.put(updated); } catch { await dbService.set('jobTickets', id, updated); }
   },
 
   updateSettings: async (newSettings) => {
     const updated = { ...get().settings, ...newSettings };
     set({ settings: updated });
-    await dbService.set('jobTicketSettings', 'default', updated);
+    try { await productionDb.jobTicketSettings.put({ id: 'default', ...updated }); } catch { await dbService.set('jobTicketSettings', 'default', updated); }
   },
 
   getTicketsByStatus: (status) => {

@@ -9,7 +9,8 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   PieChart, Pie, Cell, BarChart, Bar 
 } from 'recharts';
-import { useData } from '../../context/DataContext';
+import { useProduction } from '../../context/ProductionContext';
+import { useAuth } from '../../context/AuthContext';
 import { ProductionResource, MaintenanceLog } from '../../types';
 import { generateAIResponse } from '../../services/geminiService';
 
@@ -27,9 +28,10 @@ interface MachineTelemetry {
 
 const MachineMaintenance: React.FC = () => {
   const { 
-    resources, addTask, user, notify, maintenanceLogs, addMaintenanceLog, 
-    deleteMaintenanceLog, companyConfig, workOrders 
-  } = useData();
+    resources, maintenanceLogs, addMaintenanceLog, 
+    deleteMaintenanceLog, workOrders 
+  } = useProduction();
+  const { addTask, user, notify, companyConfig } = useAuth();
   const [selectedMachineId, setSelectedMachineId] = useState<string>(resources[0]?.id || '');
   const [telemetry, setTelemetry] = useState<Record<string, MachineTelemetry>>({});
   const [aiPrediction, setAiPrediction] = useState<{ risk: 'Low' | 'Medium' | 'High', advice: string, loading: boolean }>({ risk: 'Low', advice: '', loading: false });

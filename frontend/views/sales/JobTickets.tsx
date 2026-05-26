@@ -9,7 +9,8 @@ import {
 import { jobTicketService, JobTicketNotification } from '../../services/jobTicketService';
 import { localFileStorage } from '../../services/localFileStorage';
 import { JobTicket, JobTicketStatus, JobTicketPriority, JobTicketType } from '../../types';
-import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
+import { useSales } from '../../context/SalesContext';
 import { useDocumentStore } from '../../stores/documentStore';
 import { isStoredFileIdentifier } from '../../utils/documentPreview';
 import html2canvas from 'html2canvas';
@@ -40,7 +41,7 @@ const typeConfig: Record<JobTicketType, { label: string; icon: React.ReactNode }
 };
 
 export const JobTickets: React.FC = () => {
-  const { companyConfig, customers, notify } = useData();
+  const { companyConfig, notify } = useAuth(); const { customers } = useSales();
   const currency = companyConfig.currencySymbol;
   
   const [tickets, setTickets] = useState<JobTicket[]>([]);
@@ -463,7 +464,7 @@ interface JobTicketCardProps {
 }
 
 const JobTicketCard: React.FC<JobTicketCardProps> = ({ ticket, currency, timeRemaining, onClick, onExport, onShare, onSendToCustomer }) => {
-  const { companyConfig, notify } = useData();
+  const { companyConfig, notify } = useAuth();
   const [qrSrc, setQrSrc] = useState<string>('');
   
   const cardBgColor = statusConfig[ticket.status]?.cardBg || 'bg-gray-50';
@@ -728,7 +729,7 @@ interface JobTicketFormProps {
 }
 
 const JobTicketForm: React.FC<JobTicketFormProps> = ({ ticket, customers, onSave, onClose }) => {
-  const { companyConfig } = useData();
+  const { companyConfig } = useAuth();
   const currency = companyConfig.currencySymbol;
   const companyName = companyConfig?.companyName || 'Prime ERP';
   

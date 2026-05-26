@@ -5,12 +5,14 @@ import {
   Building2, ArrowRight, Package, DollarSign, X, 
   ChevronRight, ArrowLeftRight, Trash2, Edit2
 } from 'lucide-react';
-import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
+import { useProduction } from '../../context/ProductionContext';
+import { useProcurement } from '../../context/ProcurementContext';
 import { WorkOrder, SubcontractOrder } from '../../types';
 import { generateNextId } from '../../utils/helpers';
 
 const Subcontracting: React.FC = () => {
-    const { workOrders, companyConfig, notify, updateWorkOrder, subcontractOrders, addSubcontractOrder, updateSubcontractOrder, deleteSubcontractOrder, purchases } = useData();
+    const { companyConfig, notify } = useAuth(); const { workOrders, updateWorkOrder } = useProduction(); const { subcontractOrders, addSubcontractOrder, updateSubcontractOrder, deleteSubcontractOrder, purchases } = useProcurement();
     
     // Derive Supplier List from Purchases
     const supplierNames = useMemo(() => {

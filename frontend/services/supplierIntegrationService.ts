@@ -1,6 +1,6 @@
 /**
  * Supplier Integration Service
- * 
+ *
  * Provides integration capabilities for:
  * - Supplier portals for ordering
  * - Automated purchase order generation
@@ -9,6 +9,10 @@
  * - Delivery tracking
  */
 
+import type { SupplierEntity } from './dexie/types';
+import { getEnterpriseRepositories } from './dexie/database';
+import { settingsBackplane } from './dexie/settings-backplane';
+
 export interface Supplier {
   id: string;
   name: string;
@@ -16,8 +20,8 @@ export interface Supplier {
   email: string;
   phone: string;
   address: string;
-  categories: string[]; // e.g., ['Paper', 'Toner', 'Ink']
-  rating: number; // 1-5
+  categories: string[];
+  rating: number;
   leadTimeDays: number;
   minimumOrderValue: number;
   paymentTerms: string;
@@ -87,8 +91,11 @@ class SupplierIntegrationService {
   private readonly SUPPLIERS_KEY = 'suppliers';
   private readonly ORDERS_KEY = 'purchaseOrders';
   private readonly QUOTES_KEY = 'supplierQuotes';
+  private suppliersCache: Supplier[] = [];
+  private ordersCache: PurchaseOrder[] = [];
+  private quotesCache: SupplierQuote[] = [];
+  private hydrationPromise: Promise<void> | null = null;
 
-  // Default suppliers for Malawi context
   private defaultSuppliers: Supplier[] = [
     {
       id: 'SUP-PAPER-001',
@@ -138,118 +145,236 @@ class SupplierIntegrationService {
   ];
 
   constructor() {
-    this.initializeSuppliers();
+    this.initializeCaches();
   }
 
-  /**
-   * Initialize with default suppliers if empty
-   */
-  private initializeSuppliers(): void {
-    const suppliers = this.getSuppliers();
-    if (suppliers.length === 0) {
-      localStorage.setItem(this.SUPPLIERS_KEY, JSON.stringify(this.defaultSuppliers));
+  private canUseIndexedDb(): boolean {
+    return typeof indexedDB !== 'undefined';
+  }
+
+  private readLocalArray<T>(key: string): T[] {
+    try {
+      const stored = localStorage.getItem(key);
+      if (!stored) return [];
+      const parsed = JSON.parse(stored);
+      return Array.isArray(parsed) ? parsed as T[] : [];
+    } catch {
+      return [];
     }
   }
 
-  /**
-   * Get all suppliers
-   */
-  getSuppliers(): Supplier[] {
+  private writeLocalArray(key: string, value: unknown[]) {
     try {
-      const stored = localStorage.getItem(this.SUPPLIERS_KEY);
-      if (stored) {
-        return JSON.parse(stored);
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch {
+      // Local mirroring is best effort only.
+    }
+  }
+
+  private parsePaymentTermsDays(paymentTerms: string): number {
+    const match = String(paymentTerms || '').match(/(\d+)/);
+    return match ? Number(match[1]) : 30;
+  }
+
+  private toSupplierEntity(supplier: Supplier): SupplierEntity {
+    return {
+      id: supplier.id,
+      supplierCode: supplier.id,
+      name: supplier.name,
+      status: supplier.active ? 'active' : 'inactive',
+      category: supplier.categories[0] || 'General',
+      email: supplier.email,
+      phone: supplier.phone,
+      address: {
+        line1: supplier.address
+      },
+      primaryContact: {
+        name: supplier.contactPerson,
+        email: supplier.email,
+        phone: supplier.phone
+      },
+      currency: 'MWK',
+      paymentTermsDays: this.parsePaymentTermsDays(supplier.paymentTerms),
+      outstandingBalance: 0,
+      entityVersion: 1,
+      createdAt: supplier.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      isDeleted: false,
+      source: 'user-action',
+      sync: {
+        status: 'pending',
+        retryCount: 0
+      },
+      tags: supplier.categories,
+      extra: {
+        contactPerson: supplier.contactPerson,
+        rating: supplier.rating,
+        leadTimeDays: supplier.leadTimeDays,
+        minimumOrderValue: supplier.minimumOrderValue,
+        paymentTerms: supplier.paymentTerms,
+        categories: supplier.categories
+      }
+    };
+  }
+
+  private fromSupplierEntity(entity: SupplierEntity): Supplier {
+    const extra = (entity.extra || {}) as Record<string, any>;
+    return {
+      id: entity.id,
+      name: entity.name,
+      contactPerson: String(extra.contactPerson || entity.primaryContact?.name || ''),
+      email: entity.email || '',
+      phone: entity.phone || '',
+      address: String(entity.address?.line1 || ''),
+      categories: Array.isArray(extra.categories) ? extra.categories.map(String) : [entity.category].filter(Boolean),
+      rating: Number(extra.rating || 0) || 0,
+      leadTimeDays: Number(extra.leadTimeDays || 0) || 0,
+      minimumOrderValue: Number(extra.minimumOrderValue || 0) || 0,
+      paymentTerms: String(extra.paymentTerms || `Net ${entity.paymentTermsDays || 30}`),
+      active: entity.status === 'active',
+      createdAt: entity.createdAt
+    };
+  }
+
+  private initializeCaches(): void {
+    const localSuppliers = this.readLocalArray<Supplier>(this.SUPPLIERS_KEY);
+    const localOrders = this.readLocalArray<PurchaseOrder>(this.ORDERS_KEY);
+    const localQuotes = this.readLocalArray<SupplierQuote>(this.QUOTES_KEY);
+
+    this.suppliersCache = localSuppliers.length > 0 ? localSuppliers : [...this.defaultSuppliers];
+    this.ordersCache = localOrders;
+    this.quotesCache = localQuotes;
+
+    this.writeLocalArray(this.SUPPLIERS_KEY, this.suppliersCache);
+
+    if (!this.hydrationPromise) {
+      this.hydrationPromise = this.hydrate().finally(() => {
+        this.hydrationPromise = null;
+      });
+    }
+  }
+
+  private async hydrate() {
+    try {
+      const [orders, quotes] = await Promise.all([
+        settingsBackplane.getJson<PurchaseOrder[]>(this.ORDERS_KEY, { exactKey: true }),
+        settingsBackplane.getJson<SupplierQuote[]>(this.QUOTES_KEY, { exactKey: true })
+      ]);
+
+      if (Array.isArray(orders) && orders.length > 0) {
+        this.ordersCache = orders;
+        this.writeLocalArray(this.ORDERS_KEY, this.ordersCache);
+      }
+
+      if (Array.isArray(quotes) && quotes.length > 0) {
+        this.quotesCache = quotes;
+        this.writeLocalArray(this.QUOTES_KEY, this.quotesCache);
+      }
+
+      if (this.canUseIndexedDb()) {
+        try {
+          const repositories = await getEnterpriseRepositories();
+          const rows = await repositories.suppliers.findAll({
+            sort: { field: 'updatedAt', direction: 'desc' }
+          });
+
+          if (rows.length > 0) {
+            this.suppliersCache = rows.map((row) => this.fromSupplierEntity(row));
+            this.writeLocalArray(this.SUPPLIERS_KEY, this.suppliersCache);
+          }
+        } catch {
+          // Dexie not available yet — fallback to local cache
+        }
       }
     } catch (error) {
-      console.error('[SupplierIntegration] Error loading suppliers:', error);
+      console.error('[SupplierIntegration] Hydration failed:', error);
     }
-    return this.defaultSuppliers;
   }
 
-  /**
-   * Get suppliers by category
-   */
+  private async persistSuppliers() {
+    this.writeLocalArray(this.SUPPLIERS_KEY, this.suppliersCache);
+
+    if (!this.canUseIndexedDb()) return;
+
+    try {
+      const repositories = await getEnterpriseRepositories();
+      await repositories.suppliers.bulkUpsert(this.suppliersCache.map((supplier) => this.toSupplierEntity(supplier)));
+    } catch (error) {
+      console.error('[SupplierIntegration] Persist failed:', error);
+    }
+  }
+
+  private async persistOrders() {
+    this.writeLocalArray(this.ORDERS_KEY, this.ordersCache);
+    await settingsBackplane.setJson(this.ORDERS_KEY, this.ordersCache, { exactKey: true });
+  }
+
+  private async persistQuotes() {
+    this.writeLocalArray(this.QUOTES_KEY, this.quotesCache);
+    await settingsBackplane.setJson(this.QUOTES_KEY, this.quotesCache, { exactKey: true });
+  }
+
+  getSuppliers(): Supplier[] {
+    return [...this.suppliersCache];
+  }
+
   getSuppliersByCategory(category: string): Supplier[] {
-    return this.getSuppliers().filter(s =>
-      s.active && s.categories.some(c => c.toLowerCase() === category.toLowerCase())
+    return this.suppliersCache.filter((supplier) =>
+      supplier.active && supplier.categories.some((entry) => entry.toLowerCase() === category.toLowerCase())
     );
   }
 
-  /**
-   * Get supplier by ID
-   */
   getSupplierById(supplierId: string): Supplier | undefined {
-    return this.getSuppliers().find(s => s.id === supplierId);
+    return this.suppliersCache.find((supplier) => supplier.id === supplierId);
   }
 
-  /**
-   * Add a new supplier
-   */
   addSupplier(supplier: Omit<Supplier, 'id' | 'createdAt'>): Supplier {
-    const suppliers = this.getSuppliers();
     const newSupplier: Supplier = {
       ...supplier,
-      id: `SUP-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+      id: `SUP-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       createdAt: new Date().toISOString()
     };
-    suppliers.push(newSupplier);
-    localStorage.setItem(this.SUPPLIERS_KEY, JSON.stringify(suppliers));
+
+    this.suppliersCache = [...this.suppliersCache, newSupplier];
+    void this.persistSuppliers();
     return newSupplier;
   }
 
-  /**
-   * Update supplier
-   */
   updateSupplier(supplierId: string, updates: Partial<Supplier>): Supplier | null {
-    const suppliers = this.getSuppliers();
-    const index = suppliers.findIndex(s => s.id === supplierId);
+    const index = this.suppliersCache.findIndex((supplier) => supplier.id === supplierId);
     if (index === -1) return null;
 
-    suppliers[index] = { ...suppliers[index], ...updates };
-    localStorage.setItem(this.SUPPLIERS_KEY, JSON.stringify(suppliers));
-    return suppliers[index];
+    this.suppliersCache[index] = { ...this.suppliersCache[index], ...updates };
+    void this.persistSuppliers();
+    return this.suppliersCache[index];
   }
 
-  /**
-   * Get all purchase orders
-   */
   getPurchaseOrders(): PurchaseOrder[] {
-    try {
-      const stored = localStorage.getItem(this.ORDERS_KEY);
-      if (stored) {
-        return JSON.parse(stored);
-      }
-    } catch (error) {
-      console.error('[SupplierIntegration] Error loading orders:', error);
-    }
-    return [];
+    return [...this.ordersCache];
   }
 
-  /**
-   * Create purchase order
-   */
   createPurchaseOrder(
     supplierId: string,
     items: Omit<PurchaseOrderItem, 'totalPrice' | 'receivedQuantity'>[],
-    notes: string = '',
-    expectedDeliveryDays: number = 7
+    notes = '',
+    expectedDeliveryDays = 7
   ): PurchaseOrder | null {
     const supplier = this.getSupplierById(supplierId);
     if (!supplier) return null;
 
-    const orderItems: PurchaseOrderItem[] = items.map(item => ({
+    const orderItems: PurchaseOrderItem[] = items.map((item) => ({
       ...item,
       totalPrice: item.quantity * item.unitPrice,
       receivedQuantity: 0
     }));
 
     const subtotal = orderItems.reduce((sum, item) => sum + item.totalPrice, 0);
-    const tax = subtotal * 0.16; // 16% VAT for Malawi
+    const tax = subtotal * 0.16;
     const total = subtotal + tax;
 
     const order: PurchaseOrder = {
-      id: `PO-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
-      orderNumber: `PO-${new Date().getFullYear()}-${String(this.getPurchaseOrders().length + 1).padStart(4, '0')}`,
+      id: `PO-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      orderNumber: `PO-${new Date().getFullYear()}-${String(this.ordersCache.length + 1).padStart(4, '0')}`,
       supplierId,
       supplierName: supplier.name,
       items: orderItems,
@@ -262,19 +387,13 @@ class SupplierIntegrationService {
       notes
     };
 
-    const orders = this.getPurchaseOrders();
-    orders.push(order);
-    localStorage.setItem(this.ORDERS_KEY, JSON.stringify(orders));
-
+    this.ordersCache = [...this.ordersCache, order];
+    void this.persistOrders();
     return order;
   }
 
-  /**
-   * Update order status
-   */
   updateOrderStatus(orderId: string, status: PurchaseOrder['status']): boolean {
-    const orders = this.getPurchaseOrders();
-    const order = orders.find(o => o.id === orderId);
+    const order = this.ordersCache.find((entry) => entry.id === orderId);
     if (!order) return false;
 
     order.status = status;
@@ -282,13 +401,10 @@ class SupplierIntegrationService {
       order.actualDelivery = new Date().toISOString();
     }
 
-    localStorage.setItem(this.ORDERS_KEY, JSON.stringify(orders));
+    void this.persistOrders();
     return true;
   }
 
-  /**
-   * Generate reorder suggestions based on inventory levels
-   */
   generateReorderSuggestions(
     inventoryItems: Array<{
       id: string;
@@ -301,13 +417,10 @@ class SupplierIntegrationService {
   ): ReorderSuggestion[] {
     const suggestions: ReorderSuggestion[] = [];
 
-    inventoryItems.forEach(item => {
+    inventoryItems.forEach((item) => {
       if (item.stock <= item.reorderPoint) {
         const suppliers = this.getSuppliersByCategory(item.category);
-        const suggestedQty = Math.max(
-          item.reorderPoint * 2 - item.stock, // Order enough to reach 2x reorder point
-          100 // Minimum order quantity
-        );
+        const suggestedQty = Math.max(item.reorderPoint * 2 - item.stock, 100);
 
         suggestions.push({
           itemId: item.id,
@@ -322,70 +435,49 @@ class SupplierIntegrationService {
       }
     });
 
-    return suggestions.sort((a, b) => b.estimatedCost - a.estimatedCost);
+    return suggestions.sort((left, right) => right.estimatedCost - left.estimatedCost);
   }
 
-  /**
-   * Send order to supplier (simulated)
-   */
   sendOrderToSupplier(orderId: string): boolean {
-    const orders = this.getPurchaseOrders();
-    const order = orders.find(o => o.id === orderId);
+    const order = this.ordersCache.find((entry) => entry.id === orderId);
     if (!order || order.status !== 'draft') return false;
 
     order.status = 'sent';
-    localStorage.setItem(this.ORDERS_KEY, JSON.stringify(orders));
-
-    // In a real implementation, this would send an email or API call
-    // Log to audit trail would go here
-
+    void this.persistOrders();
     return true;
   }
 
-  /**
-   * Get order by ID
-   */
   getOrderById(orderId: string): PurchaseOrder | undefined {
-    return this.getPurchaseOrders().find(o => o.id === orderId);
+    return this.ordersCache.find((order) => order.id === orderId);
   }
 
-  /**
-   * Get orders by supplier
-   */
   getOrdersBySupplier(supplierId: string): PurchaseOrder[] {
-    return this.getPurchaseOrders().filter(o => o.supplierId === supplierId);
+    return this.ordersCache.filter((order) => order.supplierId === supplierId);
   }
 
-  /**
-   * Export orders to CSV
-   */
   exportOrdersToCSV(orders?: PurchaseOrder[]): string {
-    const data = orders || this.getPurchaseOrders();
-
+    const data = orders || this.ordersCache;
     const headers = [
       'Order Number', 'Supplier', 'Status', 'Items', 'Subtotal', 'Tax', 'Total',
       'Created', 'Expected Delivery', 'Actual Delivery'
     ];
 
-    const rows = data.map(o => [
-      o.orderNumber,
-      `"${o.supplierName}"`,
-      o.status,
-      o.items.length,
-      o.subtotal.toFixed(2),
-      o.tax.toFixed(2),
-      o.total.toFixed(2),
-      o.createdAt.split('T')[0],
-      o.expectedDelivery.split('T')[0],
-      o.actualDelivery?.split('T')[0] || ''
+    const rows = data.map((order) => [
+      order.orderNumber,
+      `"${order.supplierName}"`,
+      order.status,
+      order.items.length,
+      order.subtotal.toFixed(2),
+      order.tax.toFixed(2),
+      order.total.toFixed(2),
+      order.createdAt.split('T')[0],
+      order.expectedDelivery.split('T')[0],
+      order.actualDelivery?.split('T')[0] || ''
     ]);
 
-    return [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    return [headers.join(','), ...rows.map((row) => row.join(','))].join('\n');
   }
 
-  /**
-   * Simulate quote request to suppliers
-   */
   requestQuotes(
     itemId: string,
     itemName: string,
@@ -394,9 +486,8 @@ class SupplierIntegrationService {
   ): SupplierQuote[] {
     const suppliers = this.getSuppliersByCategory(category);
 
-    return suppliers.map((supplier, index) => {
-      const availability: 'in_stock' | 'limited' | 'out_of_stock' =
-        Math.random() > 0.2 ? 'in_stock' : 'limited';
+    this.quotesCache = suppliers.map((supplier, index) => {
+      const availability: 'in_stock' | 'limited' | 'out_of_stock' = Math.random() > 0.2 ? 'in_stock' : 'limited';
       const unitPrice = supplier.rating * 100 + Math.random() * 50;
       const total = quantity * unitPrice;
 
@@ -416,9 +507,12 @@ class SupplierIntegrationService {
         subtotal: total,
         total,
         currency: 'MWK',
-        status: 'pending' as const
+        status: 'pending'
       };
     });
+
+    void this.persistQuotes();
+    return [...this.quotesCache];
   }
 }
 

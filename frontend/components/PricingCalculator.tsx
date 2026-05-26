@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import { X, Calculator, ChevronDown, ChevronUp, Info, Copy } from 'lucide-react';
 import { usePricingCalculator, FinishingOptionWithMaterial } from '../context/PricingCalculatorContext';
-import { useData } from '../context/DataContext';
+import { useAuth } from '../context/AuthContext';
 
 interface PricingCalculatorProps {
     // No props needed - uses context
 }
 
 const PricingCalculator: React.FC<PricingCalculatorProps> = () => {
-    const { companyConfig } = useData();
+    const { companyConfig } = useAuth();
     const currency = companyConfig?.currencySymbol || 'K';
 
     const {

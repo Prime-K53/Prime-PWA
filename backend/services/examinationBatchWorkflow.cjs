@@ -62,7 +62,7 @@ const assertCanApproveBatch = (statusInput) => {
       WORKFLOW_VALIDATION_CODES.APPROVAL_NOT_ALLOWED
     );
   }
-  if (!canTransitionBatchStatus(status, 'Approved')) {
+  if (status !== 'Draft' && status !== 'Calculated') {
     throw createWorkflowError(
       `Batch with status "${status}" cannot be approved.`,
       WORKFLOW_VALIDATION_CODES.INVALID_TRANSITION

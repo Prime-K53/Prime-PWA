@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Search, ShoppingCart, Save, X, Trash2, Sparkles, Loader2, ScanLine, ExternalLink, ChevronDown, Plus, Building } from 'lucide-react';
 import { Item, Purchase, Invoice, Supplier } from '../../../types';
-import { useData } from '../../../context/DataContext';
+import { useAuth } from '../../../context/AuthContext';
+import { useProcurement } from '../../../context/ProcurementContext';
 import { OfflineImage } from '../../../components/OfflineImage';
 import { extractInvoiceData } from '../../../services/geminiService';
 import { localFileStorage } from '../../../services/localFileStorage';
@@ -19,7 +20,7 @@ interface PurchaseBuilderProps {
 }
 
 export const PurchaseBuilder: React.FC<PurchaseBuilderProps> = ({ inventory, supplierNames, onCreateOrder, initialData, onUpdateOrder, onCancel }) => {
-    const { companyConfig, notify, isOnline, suppliers, purchases, addSupplier } = useData();
+    const { companyConfig, notify, isOnline } = useAuth(); const { suppliers, purchases, addSupplier } = useProcurement();
     const currency = companyConfig.currencySymbol;
     const navigate = useNavigate();
     

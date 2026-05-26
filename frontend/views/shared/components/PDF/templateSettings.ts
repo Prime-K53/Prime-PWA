@@ -1,5 +1,6 @@
 import { Font } from '@react-pdf/renderer';
 import type { CompanyConfig } from '../../../../types.ts';
+import { isPdfDebugLoggingEnabled } from '../../../../utils/debugFlags';
 
 export const PRIME_PDF_FONT_OPTIONS = [
   { value: 'Helvetica', label: 'Helvetica' },
@@ -10,7 +11,7 @@ export const PRIME_PDF_FONT_OPTIONS = [
 
 export type PrimePdfFontFamily = typeof PRIME_PDF_FONT_OPTIONS[number]['value'];
 
-export type TemplateEngine = 'Classic' | 'Modern' | 'Professional' | 'Clean';
+export type TemplateEngine = 'Standard' | 'Advanced' | 'Custom' | 'Classic' | 'Modern' | 'Professional' | 'Clean';
 
 export interface PrimeTemplateSettings {
   engine: TemplateEngine;
@@ -39,6 +40,7 @@ export const DEFAULT_PRIME_TEMPLATE_SETTINGS: PrimeTemplateSettings = {
 };
 
 let fontsInitialized = false;
+const pdfDebugLoggingEnabled = isPdfDebugLoggingEnabled();
 
 export const resetFontRegistrationState = () => {
   fontsInitialized = false;
@@ -60,9 +62,13 @@ export const initializePrimePdfFonts = async () => {
         { src: '/fonts/comicz.ttf', fontWeight: 'bold', fontStyle: 'italic' },
       ],
     });
-    console.log('[PDF Fonts] Custom fonts (Comic Sans MS) registered successfully');
+    if (pdfDebugLoggingEnabled) {
+      console.log('[PDF Fonts] Custom fonts (Comic Sans MS) registered successfully');
+    }
   } catch (error) {
-    console.error('[PDF Fonts] Failed to register custom fonts', error);
+    if (pdfDebugLoggingEnabled) {
+      console.error('[PDF Fonts] Failed to register custom fonts', error);
+    }
   }
 };
 

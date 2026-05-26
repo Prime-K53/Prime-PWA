@@ -1,7 +1,10 @@
 
 import React, { useState } from 'react';
 import { Layers, ShoppingCart, CheckSquare, Square, Truck, TrendingDown, PackagePlus, AlertTriangle, ShieldCheck, Info, X } from 'lucide-react';
-import { useData } from '../../context/DataContext';
+import { useProduction } from '../../context/ProductionContext';
+import { useInventory } from '../../context/InventoryContext';
+import { useProcurement } from '../../context/ProcurementContext';
+import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { OfflineImage } from '../../components/OfflineImage';
 import { generateNextId } from '../../utils/helpers';
@@ -9,14 +12,20 @@ import { generateNextId } from '../../utils/helpers';
 const MRP: React.FC = () => {
   const { 
     workOrders = [], 
-    boms = [], 
-    inventory = [], 
+    boms = []
+  } = useProduction();
+  const { 
+    inventory = []
+  } = useInventory();
+  const { 
     purchases = [],
     addPurchase, 
-    suppliers = [], 
+    suppliers = []
+  } = useProcurement();
+  const { 
     notify, 
     companyConfig 
-  } = useData();
+  } = useAuth();
   const navigate = useNavigate();
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
   const currency = companyConfig.currencySymbol;

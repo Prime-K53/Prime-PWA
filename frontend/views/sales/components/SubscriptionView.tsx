@@ -8,7 +8,9 @@ import {
 } from 'lucide-react';
 import { RecurringInvoice } from '../../../types';
 import { useDocumentPreview } from '../../../hooks/useDocumentPreview';
-import { useData } from '../../../context/DataContext';
+import { useAuth } from '../../../context/AuthContext';
+import { useFinance } from '../../../context/FinanceContext';
+import { useSales } from '../../../context/SalesContext';
 import { usePagination } from '../../../hooks/usePagination';
 import Pagination from '../../../components/Pagination';
 import { HoverActionMenu, useHoverTimer, RecurringList } from './SalesLists';
@@ -80,7 +82,7 @@ const useContextMenu = () => {
 };
 
 const SubscriptionView: React.FC<SubscriptionViewProps> = ({ data, onEdit, onView, onDelete, onAction }) => {
-    const { companyConfig, invoices, runRecurringBilling } = useData();
+    const { companyConfig } = useAuth(); const { invoices } = useFinance(); const { runRecurringBilling } = useSales();
     const { handlePreview } = useDocumentPreview();
     const currency = companyConfig.currencySymbol;
     const [viewMode, setViewMode] = useState<'List' | 'Grid' | 'Calendar'>('List');

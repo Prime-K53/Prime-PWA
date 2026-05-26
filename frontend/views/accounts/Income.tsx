@@ -1,15 +1,15 @@
 
 import React, { useState, useMemo } from 'react';
 import { DollarSign, Plus, Search, Calendar, CheckCircle, Trash2, Edit2, X, ArrowDownRight } from 'lucide-react';
-import { useData } from '../../context/DataContext';
 import { useFinance } from '../../context/FinanceContext';
+import { useAuth } from '../../context/AuthContext';
 import { useBankingStore } from '../../context/BankingContext';
 import { Income } from '../../types';
 import { DEFAULT_ACCOUNTS, ACCOUNT_IDS } from '../../constants';
 
 const IncomeView: React.FC = () => {
   const { income, addIncome, updateIncome, deleteIncome } = useFinance();
-  const { companyConfig, user, notify } = useData();
+  const { companyConfig, user, notify } = useAuth();
   const { accounts: bankAccounts, fetchBankingData } = useBankingStore();
   const currency = companyConfig.currencySymbol;
 

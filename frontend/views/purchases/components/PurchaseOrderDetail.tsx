@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { X, FileText, Package, Ship, Landmark, ChevronRight, History as LucideHistory, Printer, Building2, Eye, Loader2, Download } from 'lucide-react';
 import { Purchase, LandingCostItem } from '../../../types';
-import { useData } from '../../../context/DataContext';
+import { useAuth } from '../../../context/AuthContext';
+import { useFinance } from '../../../context/FinanceContext';
 import { useInventory } from '../../../context/InventoryContext';
 import { OfflineImage } from '../../../components/OfflineImage';
 import { pdf } from '@react-pdf/renderer';
@@ -25,8 +26,9 @@ interface PurchaseOrderDetailProps {
 }
 
 const PurchaseOrderDetail: React.FC<PurchaseOrderDetailProps> = ({ purchase, suppliers, onClose, onReceive, onConvert, onPayment }) => {
-    const { companyConfig, notify, expenses, inventory } = useData();
-    const { updatePurchase, goodsReceipts } = useInventory();
+    const { companyConfig, notify } = useAuth();
+    const { updatePurchase, goodsReceipts, inventory } = useInventory();
+    const { expenses } = useFinance();
     const { handlePreview } = useDocumentPreview();
     const location = useLocation();
     const currency = companyConfig.currencySymbol;

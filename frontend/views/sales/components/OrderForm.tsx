@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 // PRICING RULE: Do NOT implement pricing logic here. All pricing MUST go through pricingEngine.ts
 import { X, Save, Plus, Trash2, Calculator, Info, ShieldCheck, Building2, Package, Tag, Clock, Search, ChevronDown, Coins, UserPlus, Calendar, RefreshCw, Wallet, Mail, Layers, ExternalLink, FileText, Printer, FileDown, Eye, TrendingUp, Truck, Scale, Copy } from 'lucide-react';
-import { useData } from '../../../context/DataContext';
 import { useOrders } from '../../../context/OrdersContext';
 import { useAuth } from '../../../context/AuthContext';
+import { useFinance } from '../../../context/FinanceContext';
+import { useSales } from '../../../context/SalesContext';
+import { useInventory } from '../../../context/InventoryContext';
 import { CartItem, Item, Invoice, ProductVariant, Account, OrderItem, OrderPayment, BOMTemplate, AdjustmentSnapshot, Customer } from '../../../types';
 import { generateNextId, getDefaultPaymentTermsForSegment, resolveCustomerPaymentPolicy, roundToCurrency } from '../../../utils/helpers';
 import { pricingService, DynamicServicePricingResult } from '../../../services/pricingService';
@@ -178,9 +180,11 @@ const buildExaminationQuotationItems = (details: ExaminationQuotationDetails): C
 };
 
 export const OrderForm: React.FC<OrderFormProps> = ({ type, initialData, onSave, onCancel, onPreview }) => {
-    const { inventory = [], marketAdjustments = [], companyConfig, invoices = [], recurringInvoices = [], quotations = [], customerPayments = [], customers = [], accounts = [], notify, addCustomer, updateReservedStock } = useData();
+    const { companyConfig, notify, user } = useAuth();
+    const { invoices, recurringInvoices, accounts } = useFinance();
+    const { quotations, customerPayments, customers, addCustomer } = useSales();
+    const { inventory, marketAdjustments, updateReservedStock } = useInventory();
     const { createOrder } = useOrders();
-    const { user } = useAuth();
     const { handlePreview } = useDocumentPreview();
     const navigate = useNavigate();
     const currency = companyConfig?.currencySymbol || '$';
@@ -502,6 +506,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({ type, initialData, onSave,
                 type: adj.type,
                 value: adj.value,
                 percentage: adj.percentage ?? adj.value,
+                calculatedAmount: adj.value,
                 adjustmentId: adj.id,
                 isActive: true
             }));
@@ -1043,6 +1048,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({ type, initialData, onSave,
                     type: adj.type,
                     value: adj.value,
                     percentage: adj.percentage ?? adj.value,
+                    calculatedAmount: adj.value,
                     adjustmentId: adj.id,
                     isActive: true
                 }));
@@ -1235,7 +1241,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({ type, initialData, onSave,
 
             const paidAmount = andPay ? finalTotalAmount : 0;
             const payments: OrderPayment[] = andPay ? [{
-                id: `PAY-${Date.now()}`,
+                id: `PAY-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
                 orderId: formData.id,
                 amountPaid: finalTotalAmount,
                 paymentDate: new Date().toISOString(),
@@ -1330,12 +1336,18 @@ export const OrderForm: React.FC<OrderFormProps> = ({ type, initialData, onSave,
           ? (companyConfig.transactionSettings?.pos?.photocopyPrice || 2.00)
           : (companyConfig.transactionSettings?.pos?.typePrintingPrice || 5.00);
 
-        // For quick print, we use the total FROM THE MODAL (which includes stapling if configured)
-        // This ensures the cart calculation matches the modal total
+        const costPerPage = isPhotocopy
+          ? (companyConfig.transactionSettings?.pos?.photocopyCostPerPage ?? 0.50)
+          : (companyConfig.transactionSettings?.pos?.typePrintingCostPerPage ?? 1.20);
+
+        const totalPages = pagesPerCopy * quantity;
+        const materialCost = costPerPage * totalPages;
+        const unitCostPerCopy = totalPages > 0 ? materialCost : 0;
+
         const finalPrice = total;
 
         const newItem: CartItem = {
-          id: `QUICK-${isPhotocopy ? 'PHOTO' : 'PRINT'}-${Date.now()}`,
+          id: `QUICK-${isPhotocopy ? 'PHOTO' : 'PRINT'}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
           itemId: isPhotocopy ? 'SVC-PHOTOCOPY' : 'SVC-TYPE-PRINT',
           name: isPhotocopy ? 'Quick Photocopy' : 'Type & Printing',
           sku: isPhotocopy ? 'QUICK-PHOTO' : 'QUICK-PRINT',
@@ -1343,6 +1355,8 @@ export const OrderForm: React.FC<OrderFormProps> = ({ type, initialData, onSave,
             ? `Quick Photocopy (${pagesPerCopy} pages × ${quantity} copies)`
             : `Type & Printing (${pagesPerCopy} pages × ${quantity} copies)`,
           price: finalPrice,
+          cost: materialCost,
+          cost_price: materialCost,
           quantity: 1,
           pagesOverride: pagesPerCopy,
           category: 'Service',
@@ -1354,6 +1368,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({ type, initialData, onSave,
           adjustedPrice: finalPrice,
           priceLocked: true,
           lockedUnitPricePerCopy: finalPrice,
+          lockedUnitCostPerCopy: unitCostPerCopy,
           serviceDetails: {
             pages: pagesPerCopy,
             copies: quantity,
@@ -1622,6 +1637,7 @@ const handleVariantSelect = async (variant: ProductVariant) => {
                 type: adj.type,
                 value: adj.value,
                 percentage: adj.percentage ?? adj.value,
+                calculatedAmount: adj.value,
                 adjustmentId: adj.id,
                 isActive: true
             }));
@@ -2913,6 +2929,9 @@ const handleVariantSelect = async (variant: ProductVariant) => {
                         pricePerPage={quickPrintModal.type === 'photocopy' 
                             ? (companyConfig.transactionSettings?.pos?.photocopyPrice || 2.00)
                             : (companyConfig.transactionSettings?.pos?.typePrintingPrice || 5.00)}
+                        costPerPage={quickPrintModal.type === 'photocopy'
+                            ? (companyConfig.transactionSettings?.pos?.photocopyCostPerPage ?? 0.50)
+                            : (companyConfig.transactionSettings?.pos?.typePrintingCostPerPage ?? 1.20)}
                         currency={currency}
                         staplePrice={companyConfig.transactionSettings?.pos?.staplePrice}
                         pinningItem={(() => {

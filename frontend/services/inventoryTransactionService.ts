@@ -10,7 +10,7 @@
 
 import { InventoryTransaction, MaterialBatch, WarehouseInventory } from '../types';
 import { dbService } from './db';
-import { generateNextId } from '../utils/helpers';
+import { generateOpaqueId } from '../utils/idGeneration';
 
 export interface InventoryDeductionRequest {
   itemId: string;
@@ -110,7 +110,7 @@ class InventoryTransactionService {
 
       // Create transaction record
       const transaction: InventoryTransaction = {
-        id: `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: generateOpaqueId('TXN'),
         itemId,
         warehouseId,
         batchId,
@@ -189,7 +189,7 @@ class InventoryTransactionService {
 
       // Create batch if provided
       if (batchId && quantity > 0) {
-        const batchNumber = batchId || `BATCH-${Date.now()}`;
+        const batchNumber = batchId || generateOpaqueId('BATCH');
         
         const newBatch: MaterialBatch = {
           id: batchNumber,
@@ -215,7 +215,7 @@ class InventoryTransactionService {
 
       // Create transaction record
       const transaction: InventoryTransaction = {
-        id: `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: generateOpaqueId('TXN'),
         itemId,
         warehouseId,
         batchId,
@@ -256,7 +256,7 @@ class InventoryTransactionService {
         await dbService.put('warehouseInventory', updatedWhInv);
       } else if (warehouseId) {
         const newWhInv: WarehouseInventory = {
-          id: `WHINV-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          id: generateOpaqueId('WHINV'),
           itemId,
           warehouseId,
           quantity,

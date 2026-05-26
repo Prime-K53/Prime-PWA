@@ -1,10 +1,10 @@
 import React, { useMemo } from 'react';
-import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
 import { History as HistoryIcon, Clock, Activity, Shield, User as UserIcon, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const ProfileActivity: React.FC = () => {
-  const { auditLogs, user } = useData();
+  const { auditLogs, user } = useAuth();
   const navigate = useNavigate();
 
   const userLogs = useMemo(() => {

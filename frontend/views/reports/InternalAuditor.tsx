@@ -1,5 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
+import { useSales } from '../../context/SalesContext';
+import { useFinance } from '../../context/FinanceContext';
+import { useInventory } from '../../context/InventoryContext';
 import { format, parseISO, startOfWeek, startOfMonth, isWithinInterval } from 'date-fns';
 import {
     ShieldCheck, AlertTriangle, CheckCircle, XCircle, RefreshCw,
@@ -18,11 +21,10 @@ interface ReconciliationItem {
 }
 
 const InternalAuditor: React.FC = () => {
-    const { 
-        sales = [], invoices = [], customerPayments = [], expenses = [],
-        inventory = [], purchases = [], ledger = [], accounts = [],
-        companyConfig 
-    } = useData();
+    const { companyConfig } = useAuth();
+    const { sales = [], customerPayments = [] } = useSales();
+    const { invoices = [], expenses = [], ledger = [], accounts = [] } = useFinance();
+    const { inventory = [], purchases = [] } = useInventory();
     const currency = companyConfig?.currencySymbol || '$';
     const gl = companyConfig?.glMapping || {};
     const [dateRange, setDateRange] = useState<DateRange>('month');

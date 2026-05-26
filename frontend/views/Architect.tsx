@@ -10,7 +10,10 @@ import {
   BookOpen, HelpCircle, HardDrive, Cpu as Processor, Gauge, Info, Scale, Shield, FileCheck, LifeBuoy
 } from 'lucide-react';
 import { generateWpfFile } from '../services/wpfGenerator';
-import { useData } from '../context/DataContext';
+import { useAuth } from '../context/AuthContext';
+import { useFinance } from '../context/FinanceContext';
+import { useSales } from '../context/SalesContext';
+import { useInventory } from '../context/InventoryContext';
 import { SQL_SCHEMA, EF_CORE_CONTEXT, WPF_ARCHITECTURE } from '../services/backendBlueprint';
 import ReactMarkdown from 'react-markdown';
 import { generateAIResponse } from '../services/geminiService';
@@ -32,7 +35,10 @@ const ERROR_CODES = [
 ];
 
 const Architect: React.FC = () => {
-  const { isOnline, notify, inventory, invoices, customers, dbSyncStatus, companyConfig, accounts, ledger } = useData();
+  const { isOnline, notify, dbSyncStatus, companyConfig } = useAuth();
+  const { invoices, accounts, ledger } = useFinance();
+  const { customers } = useSales();
+  const { inventory } = useInventory();
   const [activeTab, setActiveTab] = useState<LocalTab>(LocalTab.EXPLORER);
   const [loading, setLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);

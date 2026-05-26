@@ -7,7 +7,8 @@ import { Purchase } from '../../../types';
 import { pdf } from '@react-pdf/renderer';
 import { PrimeDocument } from '../../shared/components/PDF/PrimeDocument';
 import { initializePrimePdfFonts } from '../../shared/components/PDF/templateSettings';
-import { useData } from '../../../context/DataContext';
+import { useAuth } from '../../../context/AuthContext';
+import { useInventory } from '../../../context/InventoryContext';
 import { WhatsAppLogo } from '../../../components/Icons';
 import { usePagination } from '../../../hooks/usePagination';
 import Pagination from '../../../components/Pagination';
@@ -92,7 +93,7 @@ const useContextMenu = () => {
 };
 
 export const PurchaseHistory: React.FC<PurchaseHistoryProps> = ({ purchases, suppliers, onReceive, onView, onEdit, onMerge, onBatchDelete, onPayment }) => {
-    const { companyConfig, notify, updatePurchase, inventory } = useData();
+    const { companyConfig, notify } = useAuth(); const { updatePurchase, inventory } = useInventory();
     const { handlePreview } = useDocumentPreview();
     const currency = companyConfig.currencySymbol;
     const location = useLocation();

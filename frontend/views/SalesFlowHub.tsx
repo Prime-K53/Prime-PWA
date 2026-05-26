@@ -2,10 +2,10 @@
 import React from 'react';
 import { Coins, FileText, FileCheck, Banknote as PaymentIcon, RefreshCw, MessageSquare, UserPlus, CheckSquare, Award, Target, Printer } from 'lucide-react';
 import GenericHub from './GenericHub';
-import { useData } from '../context/DataContext';
+import { useSales } from '../context/SalesContext';
 
 const SalesFlowHub: React.FC = () => {
-  const { setIsPosModalOpen } = useData();
+  const { setIsPosModalOpen } = useSales();
   const options = [
     {
       label: 'Point of Sale',

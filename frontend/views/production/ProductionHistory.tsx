@@ -1,10 +1,14 @@
 import React from 'react';
-import { useData } from '../../context/DataContext';
+import { useProduction } from '../../context/ProductionContext';
+import { useInventory } from '../../context/InventoryContext';
+import { useAuth } from '../../context/AuthContext';
 import { Calendar, Package } from 'lucide-react';
 import { OfflineImage } from '../../components/OfflineImage';
 
 const ProductionHistory: React.FC = () => {
-  const { batches = [], companyConfig, boms = [], inventory = [] } = useData();
+  const { batches = [], boms = [] } = useProduction();
+  const { inventory = [] } = useInventory();
+  const { companyConfig } = useAuth();
   const currency = companyConfig.currencySymbol;
 
   return (

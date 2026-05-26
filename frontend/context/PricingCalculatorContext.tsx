@@ -11,6 +11,8 @@ export interface Addon {
 }
 
 export interface FinishingOptionWithMaterial extends FinishingOption {
+    type: string;
+    cost: number;
     materialConversionRate: number; // e.g., 100 covers per ream
     coversPerCopy: number; // how many covers needed per copy
 }

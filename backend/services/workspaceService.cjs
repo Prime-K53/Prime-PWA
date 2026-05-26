@@ -25,7 +25,7 @@ class WorkspaceService {
     }
 
     // Database path inside Sync folder
-    const syncDbPath = path.join(syncFolder, path.basename(dbPath));
+    const syncDbPath = path.join(syncFolder, path.basename(getDbPath()));
 
     const config = {
       workspacePath,
@@ -34,6 +34,8 @@ class WorkspaceService {
       initializedAt: new Date().toISOString()
     };
 
+    const originalDbPath = getDbPath();
+
     // Ensure storage dir exists
     ensureRuntimeDirs();
 
@@ -41,9 +43,8 @@ class WorkspaceService {
 
     // Copy existing database to the Sync folder if it exists
     try {
-      const sourceDb = getDbPath();
-      if (fs.existsSync(sourceDb) && !fs.existsSync(syncDbPath)) {
-        fs.copyFileSync(sourceDb, syncDbPath);
+      if (fs.existsSync(originalDbPath) && !fs.existsSync(syncDbPath)) {
+        fs.copyFileSync(originalDbPath, syncDbPath);
         console.log('[Workspace] Existing database migrated to Sync folder.');
       }
     } catch (dbErr) {

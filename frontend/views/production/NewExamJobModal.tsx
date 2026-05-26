@@ -40,7 +40,6 @@ import { useProduction } from '../../context/ProductionContext';
 import { useSales } from '../../context/SalesContext';
 import { useInventory } from '../../context/InventoryContext';
 import { useFinance } from '../../context/FinanceContext';
-import { useData } from '../../context/DataContext';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -75,7 +74,7 @@ export const NewExamJobModal: React.FC<NewExamJobModalProps> = ({
   const { notify, user } = useAuth();
   const { inventory, updateStock } = useInventory();
   const { postJournalEntry, addRecurringInvoice, recurringInvoices, deleteRecurringInvoice } = useFinance();
-  const { companyConfig, updateCompanyConfig } = useData();
+  const { companyConfig, updateCompanyConfig } = useAuth();
 
   const [schools, setSchools] = useState<School[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
@@ -537,7 +536,7 @@ export const NewExamJobModal: React.FC<NewExamJobModalProps> = ({
           toner_kgs: costData.toner_kgs,
           adjustmentTotal: costData.adjustmentTotal,
           adjustmentSnapshots: costData.adjustmentSnapshots,
-          workOrderId: `WO-EXAM-${Date.now()}-${Math.floor(Math.random() * 1000)}`
+          workOrderId: `WO-EXAM-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
         };
       });
 

@@ -1,4 +1,5 @@
 import { platform } from './platform';
+import { HAS_REMOTE_BACKEND } from '../config/api.js';
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -78,6 +79,10 @@ class Logger {
   }
 
   private async sendToServer(entry: LogEntry) {
+    if (!HAS_REMOTE_BACKEND) {
+      return;
+    }
+
     try {
       const { getUrl } = await import('../config/api.js');
       await fetch(getUrl('logs'), {

@@ -8,7 +8,7 @@ import {
   ResponsiveContainer, ReferenceLine, BarChart, Bar, Legend 
 } from 'recharts';
 import { Item, Sale, Purchase } from '../../../types';
-import { useData } from '../../../context/DataContext';
+import { useAuth } from '../../../context/AuthContext';
 import { generateAIResponse } from '../../../services/geminiService';
 import ReactMarkdown from 'react-markdown';
 import { OfflineImage } from '../../../components/OfflineImage';
@@ -24,7 +24,7 @@ interface ProductForecastDetailProps {
 const ProductForecastDetail: React.FC<ProductForecastDetailProps> = ({ 
   item, salesHistory, purchaseHistory, onBack, onCreatePO 
 }) => {
-  const { companyConfig, notify } = useData();
+  const { companyConfig, notify } = useAuth();
   const currency = companyConfig?.currencySymbol || '$';
 
   // --- 1. Scenario State (What-If) ---

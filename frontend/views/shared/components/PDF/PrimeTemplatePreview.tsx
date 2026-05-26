@@ -7,7 +7,6 @@ import { getDefaultPaymentTermsLabel, initializePrimePdfFonts } from './template
 import { getPlaceholder } from '../../../../constants/placeholders';
 import { hydrateCompanyPdfAssets } from '../../../../utils/companyAssetUtils';
 import { NativePdfPreview } from './NativePdfPreview';
-import { platform } from '../../../../services/platform';
 
 interface PrimeTemplatePreviewProps {
   config: CompanyConfig;
@@ -73,45 +72,18 @@ export const PrimeTemplatePreview: React.FC<PrimeTemplatePreviewProps> = ({ conf
       try {
         const previewData = buildPreviewData(config);
 
-        if (platform.isDesktop && platform.type === 'electron' && typeof (window as any).electronAPI?.generatePdf === 'function') {
-          const api = (window as any).electronAPI;
-          setGenInfo('Preparing assets…');
-          const hydratedConfig = await hydrateCompanyPdfAssets(config);
-          await initializePrimePdfFonts();
-          setGenInfo('Securing document…');
-          const securedData = await attachDocumentSecurity(previewData as any, config?.companyName);
-          setGenInfo('Generating in worker…');
-          const result = await api.generatePdf('INVOICE', securedData, hydratedConfig);
-          if (cancelled) return;
-          if (result?.success && result.path) {
-            setDirectPath(result.path);
-            setGenInfo('');
-          } else {
-            throw new Error(result?.error || 'Generation failed');
-          }
-        } else {
-          setGenInfo('Generating…');
-          await initializePrimePdfFonts();
-          const hydratedConfig = await hydrateCompanyPdfAssets(config);
-          const securedData = await attachDocumentSecurity(previewData as any, config?.companyName);
-          const { generatePrimeDocumentBlob } = await import('./generatePrimeDocumentBlob');
-          const blob = await generatePrimeDocumentBlob('INVOICE', securedData as PrimeDocData, hydratedConfig, 10000);
-          if (cancelled) return;
+        setGenInfo('Generating…');
+        await initializePrimePdfFonts();
+        const hydratedConfig = await hydrateCompanyPdfAssets(config);
+        const securedData = await attachDocumentSecurity(previewData as any, config?.companyName);
+        const { generatePrimeDocumentBlob } = await import('./generatePrimeDocumentBlob');
+        const blob = await generatePrimeDocumentBlob('INVOICE', securedData as PrimeDocData, hydratedConfig, 10000);
+        if (cancelled) return;
 
-          if (platform.isDesktop) {
-            const bytes = new Uint8Array(await blob.arrayBuffer());
-            const result = await platform.api.writeTempPdf(Array.from(bytes), `preview_${Date.now()}.pdf`);
-            if (result?.success && result.path) {
-              setDirectPath(result.path);
-              return;
-            }
-          }
-
-          if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
-          const url = URL.createObjectURL(blob);
-          blobUrlRef.current = url;
-          setDirectPath(url);
-        }
+        if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
+        const url = URL.createObjectURL(blob);
+        blobUrlRef.current = url;
+        setDirectPath(url);
       } catch (previewError: any) {
         if (!cancelled) {
           setError(previewError?.message || 'Failed to generate preview.');

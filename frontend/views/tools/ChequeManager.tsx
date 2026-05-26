@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { CreditCard, Printer, Plus, Search, Calendar, CheckCircle, XCircle, Clock, Settings, Save, ArrowLeft, MoreVertical, Edit2, Trash2, FileText, Loader2 } from 'lucide-react';
-import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
 import { useFinance } from '../../context/FinanceContext';
 import { Cheque } from '../../types';
 
@@ -35,7 +35,7 @@ const numberToWords = (amount: number): string => {
 };
 
 const ChequeManager: React.FC = () => {
-    const { companyConfig, notify } = useData();
+    const { companyConfig, notify } = useAuth();
     const { cheques, addCheque, updateCheque, deleteCheque } = useFinance();
     const currency = companyConfig.currencySymbol;
 

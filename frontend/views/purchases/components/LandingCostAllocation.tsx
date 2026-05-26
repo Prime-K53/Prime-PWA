@@ -7,9 +7,10 @@ import {
   RotateCcw, Save, Loader2, Printer
 } from 'lucide-react';
 import { Purchase, LandingCostItem, Expense } from '../../../types';
-import { useData } from '../../../context/DataContext';
+import { useAuth } from '../../../context/AuthContext';
 import { useFinance } from '../../../context/FinanceContext';
 import { useInventory } from '../../../context/InventoryContext';
+import { useProcurement } from '../../../context/ProcurementContext';
 
 interface LandingCostAllocationProps {
     purchase: Purchase;
@@ -17,7 +18,7 @@ interface LandingCostAllocationProps {
 }
 
 const LandingCostAllocation: React.FC<LandingCostAllocationProps> = ({ purchase, onUpdate }) => {
-    const { companyConfig, notify, user, purchases = [] } = useData();
+    const { companyConfig, notify, user } = useAuth(); const { purchases = [] } = useProcurement();
     const { addExpense } = useFinance();
     const { updatePurchase } = useInventory();
     const currency = companyConfig.currencySymbol;
@@ -63,7 +64,7 @@ const LandingCostAllocation: React.FC<LandingCostAllocationProps> = ({ purchase,
 
     const handleAddCost = () => {
         const newCost: LandingCostItem = {
-            id: `LC-${Date.now()}`,
+            id: `LC-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
             category: 'Freight',
             description: '',
             amount: 0
@@ -131,7 +132,7 @@ const LandingCostAllocation: React.FC<LandingCostAllocationProps> = ({ purchase,
 
     const handleQuickAdd = (category: LandingCostItem['category'], amt: number) => {
         const newCost: LandingCostItem = {
-            id: `LC-${Date.now()}`,
+            id: `LC-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
             category,
             description: `Standard ${category} estimate`,
             amount: amt

@@ -13,6 +13,7 @@ const os = require('os');
 const net = require('net');
 const { spawn } = require('child_process');
 const { randomUUID } = require('crypto');
+const { getFrontendDistPath } = require('./appRoot.cjs');
 console.log('Requiring db...');
 const { db } = require('./db.cjs');
 console.log('Requiring bootstrap...');
@@ -278,9 +279,64 @@ app.use((req, res, next) => {
 // Audit middleware for correlation ID propagation and context capture
 const { auditContextMiddleware, auditAuthMiddleware, auditCrudMiddleware } = require('./auditMiddleware.cjs');
 const { validateTransactionPrice, calculateSellingPrice } = require('./services/pricingEngine.cjs');
+const { verifyToken, requireRole } = require('./middleware/auth.cjs');
 app.use(auditContextMiddleware);
 
 app.use('/api/auth', auditAuthMiddleware);
+
+// CORS configuration - accepts all local/LAN origins for browser-based access
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (!origin) {
+      return callback(null, true);
+    }
+    const normalizedOrigin = normalizeCorsOrigin(origin);
+    if (isDesktopLocalOrigin(normalizedOrigin)) {
+      return callback(null, true);
+    }
+    try {
+      const parsed = new URL(normalizedOrigin);
+      const hostname = parsed.hostname;
+      if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+          /^10\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+          /^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+          hostname === 'localhost' ||
+          hostname === '127.0.0.1' ||
+          hostname === '0.0.0.0') {
+        return callback(null, true);
+      }
+    } catch {
+      return callback(null, false);
+    }
+    return callback(null, false);
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id', 'x-user-role', 'x-user-is-super-admin', 'x-correlation-id', 'x-dev-bypass', 'x-user-email', 'x-can-override-exam-cost', 'x-auth-mode'],
+  credentials: true
+};
+
+// Apply CORS middleware before auth so preflight OPTIONS get proper headers
+app.use(cors(corsOptions));
+
+// Explicit credentials header (safety net)
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Credentials', 'true');
+  next();
+});
+
+// Handle preflight for all routes (safe global handler)
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS') {
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-user-id, x-user-role, x-user-is-super-admin, x-correlation-id, x-dev-bypass, x-user-email, x-can-override-exam-cost, x-auth-mode');
+    res.header('Access-Control-Allow-Origin', req.headers['origin'] || '*');
+    return res.sendStatus(204);
+  }
+  next();
+});
+
+// Apply JWT verification to all /api routes (auth routes are skipped by verifyToken internally)
+app.use('/api', verifyToken);
 
 // Shared helper for pricing validation
 async function validateItemsPricing(items) {
@@ -313,75 +369,19 @@ const isDesktopLocalOrigin = (origin) => {
 
   try {
     const parsed = new URL(normalized);
-    return ['localhost', '127.0.0.1', '0.0.0.0'].includes(parsed.hostname);
+    const hostname = parsed.hostname;
+    // Allow localhost, 127.0.0.1, 0.0.0.0 and any port on localhost
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0') {
+      return true;
+    }
   } catch {
     return false;
   }
+  return false;
 };
 
-// CORS configuration - accepts frontend from environment or defaults
-const corsOptions = {
-  origin: function (origin, callback) {
-    const allowedOrigins = [
-      process.env.FRONTEND_URL || 'https://meek-starburst-fd4497.netlify.app',
-      'http://127.0.0.1:5173',
-      'http://localhost:5173',
-      'http://127.0.0.1:3003',
-      'http://localhost:3003',
-      'http://127.0.0.1:5002',
-      'http://localhost:5002'
-    ].map(normalizeCorsOrigin).filter(Boolean);
-    
-    // Normalize origin to handle trailing slash
-    const normalizedOrigin = normalizeCorsOrigin(origin);
-    const isAllowed = allowedOrigins.includes(normalizedOrigin);
-    const isDesktopOrigin = isDesktopLocalOrigin(normalizedOrigin);
-    
-    // Debug: log origin for troubleshooting
-    console.log('[CORS]', {
-      origin,
-      normalizedOrigin,
-      desktopLocal: isDesktopOrigin,
-      allowed: isAllowed,
-      method: 'CHECK'
-    });
-    
-    // Allow requests with no origin (mobile apps, curl requests)
-    if (!origin) {
-      return callback(null, true);
-    }
-    
-    // Allow Electron/file origins and local loopback frontends used by the desktop app.
-    if (isAllowed || isDesktopOrigin) {
-      return callback(null, true);
-    }
-    
-    // Deny but don't throw error
-    return callback(null, false);
-  },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id', 'x-user-role', 'x-user-is-super-admin', 'x-correlation-id', 'x-dev-bypass', 'x-user-email', 'x-can-override-exam-cost'],
-  credentials: true
-};
 
-// Apply CORS middleware
-app.use(cors(corsOptions));
 
-// Explicit credentials header (safety net)
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Credentials', 'true');
-  next();
-});
-
-// Handle preflight for all routes (safe global handler)
-app.use((req, res, next) => {
-  if (req.method === 'OPTIONS') {
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-user-id, x-user-role, x-user-is-super-admin, x-correlation-id, x-dev-bypass, x-user-email, x-can-override-exam-cost');
-    return res.sendStatus(204);
-  }
-  next();
-});
 
 // Global request logging (audit trail)
 app.use((req, res, next) => {
@@ -417,9 +417,15 @@ const parseJsonArray = (value) => {
   }
 };
 
-// Root route for Render health checks
+// Root route - serves frontend in production or status message in dev
 app.get('/', (req, res) => {
-  res.status(200).send('Backend Running');
+  const frontendDistPath = getFrontendDistPath();
+  const indexPath = path.join(frontendDistPath, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(200).send('Backend Running');
+  }
 });
 
 // Explicit health check for Electron startup
@@ -621,42 +627,48 @@ async function startServer() {
 
     console.log(`[BACKEND] Creating POS sale #${id} for ${customerName}. Revenue: ${totalAmount}, Margin: ${profitMarginTotal}`);
 
-    db.run(
-      `INSERT INTO sales (
-        id, date, customer_id, customer_name, sub_account_name, 
-        total_amount, material_total, adjustment_total, profit_margin_total, rounding_total,
-        adjustment_snapshots_json, status, payment_method, source, items_json, payments_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        id, date, customerId, customerName, subAccountName,
-        totalAmount, materialTotal, adjustmentTotal, profitMarginTotal, roundingTotal,
-        snapshotsJson, status, paymentMethod, source, itemsJson, paymentsJson
-      ],
-      (error) => {
-        if (error) {
-          console.error(`[BACKEND] Error creating sale #${id}:`, error.message);
-          return res.status(500).json({ error: error.message });
+    db.serialize(() => {
+      db.run("BEGIN TRANSACTION");
+
+      db.run(
+        `INSERT OR REPLACE INTO sales (
+          id, date, customer_id, customer_name, sub_account_name, 
+          total_amount, material_total, adjustment_total, profit_margin_total, rounding_total,
+          adjustment_snapshots_json, status, payment_method, source, items_json, payments_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          id, date, customerId, customerName, subAccountName,
+          totalAmount, materialTotal, adjustmentTotal, profitMarginTotal, roundingTotal,
+          snapshotsJson, status, paymentMethod, source, itemsJson, paymentsJson
+        ],
+        (error) => {
+          if (error) {
+            db.run("ROLLBACK");
+            console.error(`[BACKEND] Error creating sale #${id}:`, error.message);
+            return res.status(500).json({ error: error.message });
+          }
+          db.run("COMMIT");
+          res.json({
+            id,
+            date,
+            customerId,
+            customerName,
+            subAccountName,
+            totalAmount,
+            materialTotal,
+            adjustmentTotal,
+            profitMarginTotal,
+            roundingTotal,
+            status,
+            paymentMethod,
+            source,
+            items: payload.items || [],
+            payments: payload.payments || [],
+            adjustmentSnapshots: payload.adjustmentSnapshots || []
+          });
         }
-        res.json({
-          id,
-          date,
-          customerId,
-          customerName,
-          subAccountName,
-          totalAmount,
-          materialTotal,
-          adjustmentTotal,
-          profitMarginTotal,
-          roundingTotal,
-          status,
-          paymentMethod,
-          source,
-          items: payload.items || [],
-          payments: payload.payments || [],
-          adjustmentSnapshots: payload.adjustmentSnapshots || []
-        });
-      }
-    );
+      );
+    });
   });
 
   // --- Examination Module Endpoints ---
@@ -664,12 +676,8 @@ async function startServer() {
   // For GET routes, we might allow read-only access or apply granular permissions if needed
   const examinationRoutes = require('./routes/examination.cjs');
   app.use('/api/examination', (req, res, next) => {
-      if (req.method !== 'GET') {
-          const userId = req.headers['x-user-id'];
-          const userRole = req.headers['x-user-role'];
-          if (!userId || !userRole) {
-            return res.status(401).json({ error: 'Unauthorized' });
-          }
+      if (req.method !== 'GET' && !req.user) {
+        return res.status(401).json({ error: 'Unauthorized' });
       }
       next();
   }, auditCrudMiddleware('examination_batch'), examinationRoutes);
@@ -677,9 +685,7 @@ async function startServer() {
   // --- Profit Margin Settings Endpoints ---
   const settingsRoutes = require('./routes/settings.cjs');
   app.use('/api/settings', (req, res, next) => {
-    const userId = req.headers['x-user-id'];
-    const userRole = req.headers['x-user-role'];
-    if (!userId || !userRole) {
+    if (!req.user) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     next();
@@ -688,6 +694,35 @@ async function startServer() {
   // --- System & Workspace Endpoints ---
   const systemRoutes = require('./routes/system.cjs');
   app.use('/api/system', systemRoutes);
+
+  // Helper: ensure production tables exist
+  const createProductionTables = () => new Promise((resolve, reject) => {
+    db.serialize(() => {
+      db.run(`CREATE TABLE IF NOT EXISTS work_centers (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        hourly_rate REAL DEFAULT 0,
+        capacity_per_day INTEGER DEFAULT 8,
+        status TEXT DEFAULT 'Active',
+        location TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )`);
+      db.run(`CREATE TABLE IF NOT EXISTS production_resources (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        work_center_id TEXT NOT NULL,
+        status TEXT DEFAULT 'Active',
+        resource_type TEXT,
+        description TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (work_center_id) REFERENCES work_centers(id) ON DELETE CASCADE
+      )`, (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+  });
 
   // Production fallback endpoint: return a basic set of work centers/resources
   // SUSPECTED DEAD: No frontend or test caller found as of April 21, 2026.
@@ -707,30 +742,42 @@ async function startServer() {
   });
 
   // Production: fetch real work centers from database
-  app.get('/api/production/work-centers', (req, res) => {
+  app.get('/api/production/work-centers', async (req, res) => {
     try {
-      db.all('SELECT id, name, description, hourly_rate as hourlyRate, capacity_per_day as capacityPerDay, status FROM work_centers WHERE status = ? ORDER BY name', ['Active'], (err, rows) => {
-        if (err) {
-          return res.status(500).json({ error: err.message });
-        }
-        res.json(rows || []);
+      const rows = await new Promise((resolve, reject) => {
+        db.all('SELECT id, name, description, hourly_rate as hourlyRate, capacity_per_day as capacityPerDay, status FROM work_centers WHERE status = ? ORDER BY name', ['Active'], (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        });
       });
+      res.json(rows);
     } catch (err) {
-      res.status(500).json({ error: err.message });
+      console.error('[Production] work-centers query error:', err?.message || err);
+      if (err?.message?.includes?.('no such table')) {
+        try { await createProductionTables(); } catch { /* ignore */ }
+        return res.json([]);
+      }
+      res.status(500).json({ error: err?.message || 'Unknown database error' });
     }
   });
 
   // Production: fetch real resources from database
-  app.get('/api/production/resources', (req, res) => {
+  app.get('/api/production/resources', async (req, res) => {
     try {
-      db.all('SELECT id, name, work_center_id as workCenterId, status FROM production_resources WHERE status = ? ORDER BY name', ['Active'], (err, rows) => {
-        if (err) {
-          return res.status(500).json({ error: err.message });
-        }
-        res.json(rows || []);
+      const rows = await new Promise((resolve, reject) => {
+        db.all('SELECT id, name, work_center_id as workCenterId, status FROM production_resources WHERE status = ? ORDER BY name', ['Active'], (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        });
       });
+      res.json(rows);
     } catch (err) {
-      res.status(500).json({ error: err.message });
+      console.error('[Production] resources query error:', err?.message || err);
+      if (err?.message?.includes?.('no such table')) {
+        try { await createProductionTables(); } catch { /* ignore */ }
+        return res.json([]);
+      }
+      res.status(500).json({ error: err?.message || 'Unknown database error' });
     }
   });
 
@@ -770,23 +817,19 @@ async function startServer() {
     });
   };
 
-  // Middleware for simple "permission" check (can be expanded)
+  // Middleware for simple "permission" check (uses JWT from verifyToken)
+  const ADMIN_ACTIONS = new Set(['admin_access', 'admin_settings', 'admin_users', 'delete_document', 'approve_exchange']);
   const checkPermission = (action) => (req, res, next) => {
-    const userId = req.headers['x-user-id'];
-    const userRole = req.headers['x-user-role'];
-    const userIsSuperAdmin = req.headers['x-user-is-super-admin'];
-    
-    if (!userId || !userRole || typeof userIsSuperAdmin === 'undefined') {
+    if (!req.user) {
        return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    if (action.includes('admin') && userRole !== 'Admin') {
+    if (ADMIN_ACTIONS.has(action) && String(req.user.role || '').toLowerCase() !== 'admin') {
        return sendError(res, 403, 'Forbidden: Admin access required', 'ACCESS_DENIED');
     }
 
-    req.userId = userId;
-    req.userRole = userRole;
-    req.userIsSuperAdmin = String(userIsSuperAdmin).toLowerCase() === 'true';
+    req.userId = req.user.id;
+    req.userRole = req.user.role;
     next();
   };
 
@@ -1051,39 +1094,47 @@ async function startServer() {
         return sendError(res, 400, 'Invoice ID, reason, and items are required', 'MISSING_FIELDS');
       }
 
-      const exchange_number = `SE-${Date.now().toString().slice(-6)}`;
+      const exchange_number = `SE-${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 4)}`;
 
       const exchangeId = await new Promise((resolve, reject) => {
-        db.run(
-          `INSERT INTO sales_exchanges (exchange_number, invoice_id, customer_id, customer_name, reason, remarks, created_by) 
-            VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [exchange_number, invoice_id, customer_id, customer_name, reason, remarks, req.userId],
-          function(err) {
-            if (err) return reject(err);
-            resolve(this.lastID);
-          }
-        );
-      });
+        db.serialize(() => {
+          db.run("BEGIN TRANSACTION");
 
-      await new Promise((resolve, reject) => {
-        const itemStmt = db.prepare(
-          `INSERT INTO sales_exchange_items (exchange_id, product_id, product_name, qty_returned, qty_replaced, price_difference, condition) 
-            VALUES (?, ?, ?, ?, ?, ?, ?)`
-        );
+          db.run(
+            `INSERT INTO sales_exchanges (exchange_number, invoice_id, customer_id, customer_name, reason, remarks, created_by) 
+              VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [exchange_number, invoice_id, customer_id, customer_name, reason, remarks, req.userId],
+            function(err) {
+              if (err) {
+                db.run("ROLLBACK");
+                return reject(err);
+              }
+              const newId = this.lastID;
+              const itemStmt = db.prepare(
+                `INSERT INTO sales_exchange_items (exchange_id, product_id, product_name, qty_returned, qty_replaced, price_difference, item_condition) 
+                  VALUES (?, ?, ?, ?, ?, ?, ?)`
+              );
 
-        let errorOccurred = false;
-        items.forEach(item => {
-          itemStmt.run([
-            exchangeId, item.product_id, item.product_name, item.qty_returned, 
-            item.qty_replaced, item.price_difference || 0, item.condition
-          ], (err) => {
-            if (err) errorOccurred = err;
-          });
-        });
+              let itemError = null;
+              for (const item of items) {
+                itemStmt.run([
+                  newId, item.product_id, item.product_name, item.qty_returned, 
+                  item.qty_replaced, item.price_difference || 0, item.condition
+                ], (err) => {
+                  if (err) itemError = err;
+                });
+              }
 
-        itemStmt.finalize((err) => {
-          if (err || errorOccurred) return reject(err || errorOccurred);
-          resolve();
+              itemStmt.finalize((err) => {
+                if (err || itemError) {
+                  db.run("ROLLBACK");
+                  return reject(err || itemError);
+                }
+                db.run("COMMIT");
+                resolve(newId);
+              });
+            }
+          );
         });
       });
 
@@ -1120,19 +1171,19 @@ async function startServer() {
         );
       });
 
-      // Auto-generate reprint job if needed
-      const exchange = await new Promise((resolve, reject) => {
+      // Auto-generate reprint job
+      const exchangeRow = await new Promise((resolve, reject) => {
         db.get("SELECT * FROM sales_exchanges WHERE id = ?", [exchangeId], (err, row) => {
           if (err) return reject(err);
           resolve(row);
         });
       });
 
-      if (exchange) {
+      if (exchangeRow) {
         await new Promise((resolve, reject) => {
           db.run(
             "INSERT INTO reprint_jobs (exchange_id, job_description) VALUES (?, ?)",
-            [exchangeId, `Reprint for Exchange ${exchange.exchange_number}: ${exchange.reason}`],
+            [exchangeId, `Reprint for Exchange ${exchangeRow.exchange_number}: ${exchangeRow.reason}`],
             (err) => {
               if (err) return reject(err);
               resolve();
@@ -1403,551 +1454,9 @@ async function startServer() {
   });
 });
 
-// 2.1 Calculate Variant Price - Dynamic pricing for product variants
-// SUSPECTED DEAD: No frontend or test caller found as of April 21, 2026.
-// Confirm before removing.
-app.post('/api/calculate-variant-price', (req, res) => {
-  const { parentId, variantId, pages, quantity = 1 } = req.body;
-  
-  if (!parentId) {
-    return res.status(400).json({ error: 'Parent item ID is required' });
-  }
-  
-  // Get parent item
-  db.get("SELECT * FROM inventory WHERE id = ?", [parentId], (err, parentItem) => {
-    if (err) return res.status(500).json({ error: err.message });
-    if (!parentItem) return res.status(404).json({ error: 'Parent item not found' });
-    
-    // Parse variants if stored as string
-    let variants = parentItem.variants;
-    if (typeof variants === 'string') {
-      try { variants = JSON.parse(variants); } catch (e) { variants = []; }
-    }
-    
-    // Find the variant
-    const variant = variants?.find(v => v.id === variantId);
-    if (variantId && !variant) {
-      return res.status(404).json({ error: 'Variant not found' });
-    }
-    
-    // Get all inventory for material lookups
-    db.all("SELECT * FROM inventory", [], (err, inventory) => {
-      if (err) return res.status(500).json({ error: err.message });
-      
-      // Get BOM templates
-      db.all("SELECT * FROM bom_templates", [], (err, bomTemplates) => {
-        if (err) console.error('Error fetching BOM templates:', err);
-        
-        // Get market adjustments
-        db.all("SELECT * FROM market_adjustments WHERE active = 1", [], (err, marketAdjustments) => {
-          if (err) console.error('Error fetching market adjustments:', err);
-          
-          // Parse smart pricing config
-          let smartPricing = parentItem.smart_pricing || parentItem.smartPricing;
-          if (typeof smartPricing === 'string') {
-            try { smartPricing = JSON.parse(smartPricing); } catch (e) { smartPricing = null; }
-          }
-          
-          // Check if dynamic pricing should be used
-          const hiddenBOMId = smartPricing?.hiddenBOMId || smartPricing?.bomTemplateId;
-          const useDynamicPricing = variant?.pricingSource === 'dynamic' || 
-                                     variant?.inheritsParentBOM || 
-                                     (hiddenBOMId && variant?.pricingSource !== 'static');
-          
-          if (!useDynamicPricing || !hiddenBOMId) {
-            // Return static pricing
-            return res.json({
-              price: variant?.price || parentItem.price || 0,
-              cost: variant?.cost || parentItem.cost || 0,
-              basePrice: variant?.price || parentItem.price || 0,
-              adjustmentTotal: 0,
-              adjustmentSnapshots: [],
-              consumption: null,
-              breakdown: [],
-              transactionAdjustmentSnapshots: [],
-              pricingMode: 'static'
-            });
-          }
-          
-          // Find BOM template
-          const template = bomTemplates?.find(t => t.id === hiddenBOMId);
-          if (!template) {
-            return res.json({
-              price: variant?.price || parentItem.price || 0,
-              cost: variant?.cost || parentItem.cost || 0,
-              basePrice: variant?.price || parentItem.price || 0,
-              adjustmentTotal: 0,
-              adjustmentSnapshots: [],
-              consumption: null,
-              breakdown: [],
-              transactionAdjustmentSnapshots: [],
-              pricingMode: 'static',
-              warning: 'BOM template not found, using static pricing'
-            });
-          }
-          
-          // Calculate dynamic pricing
-          const effectivePages = pages || variant?.pages || 1;
-          const totalPages = effectivePages * quantity;
-          
-          // Calculate BOM cost
-          let bomCost = 0;
-          const bomBreakdown = [];
-          
-          // Parse template components
-          let components = template.components;
-          if (typeof components === 'string') {
-            try { components = JSON.parse(components); } catch (e) { components = []; }
-          }
-          
-          for (const comp of components || []) {
-            const material = inventory.find(i => i.id === comp.itemId || i.name === comp.name);
-            if (!material) continue;
-            
-            let consumedQty = 0;
-            const isPaper = comp.itemId?.toLowerCase().includes('paper') || material.category === 'Paper';
-            const isToner = comp.itemId?.toLowerCase().includes('toner') || material.category === 'Toner';
-            
-            if (isPaper) {
-              // Sheets = ceil(pages / 2) for double-sided
-              const sheets = Math.ceil(totalPages / 2);
-              const reamSize = material.conversion_rate || material.conversionRate || 500;
-              consumedQty = sheets / reamSize;
-            } else if (isToner) {
-              // Toner per page (assume 0.05g per page)
-              consumedQty = totalPages * 0.00005; // kg
-            } else {
-              // Use formula if available
-              if (comp.quantityFormula) {
-                try {
-                  const formula = comp.quantityFormula;
-                  const variables = { pages: effectivePages, quantity: quantity };
-                  consumedQty = safeEvaluate(formula, variables);
-                } catch (e) {
-                  console.error('Formula error:', e);
-                }
-              }
-            }
-            
-            if (consumedQty > 0) {
-              const matCost = consumedQty * (material.cost || 0);
-              bomCost += matCost;
-              bomBreakdown.push({
-                materialId: material.id,
-                materialName: material.name,
-                quantity: consumedQty,
-                unit: material.unit,
-                cost: material.cost
-              });
-            }
-          }
-          
-          const unitCost = bomCost / quantity;
-          
-          // Apply market adjustments
-          let adjustmentTotal = 0;
-          const adjustmentSnapshots = [];
-          
-          for (const adj of (marketAdjustments || [])) {
-            const isActive = adj.active ?? adj.isActive;
-            if (!isActive) continue;
-            
-            let amount = 0;
-            if (adj.type === 'PERCENTAGE' || adj.type === 'PERCENT') {
-              amount = unitCost * ((adj.percentage || adj.value) / 100);
-            } else {
-              amount = adj.value;
-            }
-            
-            adjustmentTotal += amount;
-            adjustmentSnapshots.push({
-              name: adj.name,
-              type: adj.type,
-              value: adj.value,
-              calculatedAmount: Math.round(amount * 100) / 100
-            });
-          }
-          
-          const finalPrice = Math.round((unitCost + adjustmentTotal) * 100) / 100;
-          
-          res.json({
-            price: finalPrice,
-            cost: Math.round(unitCost * 100) / 100,
-            basePrice: unitCost,
-            adjustmentTotal: Math.round(adjustmentTotal * 100) / 100,
-            adjustmentSnapshots,
-            consumption: {
-              id: `SNAP-${Date.now()}`,
-              itemId: parentId,
-              variantId: variantId,
-              pages: totalPages,
-              bomBreakdown,
-              costPerUnit: unitCost,
-              timestamp: new Date().toISOString()
-            },
-            breakdown: bomBreakdown,
-            transactionAdjustmentSnapshots: [],
-            pricingMode: 'dynamic',
-            calculatedAt: new Date().toISOString()
-          });
-        });
-      });
-    });
-  });
-});
-
-// 3. GET Examinations (with status filter)
-  // SUSPECTED DEAD: No frontend or test caller found as of April 21, 2026.
-  // Confirm before removing.
-app.get('/api/examinations', (req, res) => {
-  const { status, school_id } = req.query;
-  let query = "SELECT * FROM examinations WHERE 1=1";
-  const params = [];
-
-  if (status) {
-    query += " AND status = ?";
-    params.push(status);
-  }
-  if (school_id) {
-    query += " AND school_id = ?";
-    params.push(school_id);
-  }
-
-  query += " ORDER BY created_at DESC";
-
-  db.all(query, params, (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(rows);
-  });
-});
-
-// 4. Multi-Subject Calculation API
-// SUSPECTED DEAD: No frontend or test caller found as of April 21, 2026.
-// Confirm before removing.
-app.post('/api/calculate', (req, res) => {
-  const { school_id, subjects } = req.body;
-  console.log(`Calculation requested for school_id: ${school_id}`);
-
-  db.get("SELECT * FROM schools WHERE id = ?", [school_id], (err, school) => {
-    if (err) console.error('Database error in /api/calculate:', err);
-    
-    // Fallback pricing if school not found or error
-    const effectiveSchool = school || {
-      pricing_type: 'margin-based',
-      pricing_value: 0.3 // Default 30% margin
-    };
-    
-    if (!school) {
-      console.log(`School ID ${school_id} not found, using fallback pricing.`);
-    }
-
-    // Fetch current inventory costs for accurate estimation
-    db.all("SELECT material, cost_per_unit FROM inventory WHERE material IN ('Paper', 'Toner')", [], (err, inv) => {
-      const paper = inv?.find(i => i.material === 'Paper') || { cost_per_unit: 35 };
-      const toner = inv?.find(i => i.material === 'Toner') || { cost_per_unit: 0.25 };
-      
-      // Costing logic with conversion: 
-      // Paper cost is per sheet
-      // Toner cost is per mg, so we multiply by mg per sheet
-      const internal_cost_per_sheet = paper.cost_per_unit + (toner.cost_per_unit * TONER_MG_PER_SHEET);
-
-      const results = subjects.map(subj => {
-        const pages = parseInt(subj.pages) || 0;
-        const candidates = parseInt(subj.candidates) || 0;
-        const extra_copies = parseInt(subj.extra_copies) || 0;
-        const charge_per_learner = parseFloat(subj.charge_per_learner) || 0;
-
-        // PRINTING LOGIC
-        const sheets_per_copy = Math.ceil(pages / 2);
-        const production_copies = candidates + extra_copies;
-        const base_sheets = sheets_per_copy * production_copies;
-        // Waste is now purely manual entry at completion, but we still need an internal estimate for costing
-        const estimated_waste_percent = 5; // Default 5% for internal estimation
-        const waste_sheets = Math.ceil(base_sheets * (estimated_waste_percent / 100));
-        const total_sheets_used = base_sheets + waste_sheets;
-        const billable_sheets = sheets_per_copy * candidates;
-
-        // COSTING (Estimated)
-        const estimated_internal_cost = total_sheets_used * internal_cost_per_sheet;
-        
-        let selling_price = 0;
-        if (charge_per_learner > 0) {
-          selling_price = candidates * charge_per_learner;
-        } else if (effectiveSchool.pricing_type === 'margin-based') {
-          selling_price = estimated_internal_cost * (1 + effectiveSchool.pricing_value);
-        } else if (effectiveSchool.pricing_type === 'per-sheet') {
-          selling_price = billable_sheets * effectiveSchool.pricing_value;
-        }
-
-        return {
-          ...subj,
-          sheets_per_copy,
-          production_copies,
-          base_sheets,
-          waste_sheets,
-          total_sheets_used,
-          billable_sheets,
-          internal_cost: estimated_internal_cost,
-          selling_price
-        };
-      });
-
-      res.json({ subjects: results });
-    });
-  });
-});
-
-// 5. Confirm Batch
-app.post('/api/confirm-batch', async (req, res) => {
-  try {
-    const { school_id, customer_id, class_name, subjects, academic_year, term, exam_type, sub_account_name } = req.body;
-    const batch_id = `BATCH-${Date.now()}`;
-
-    await new Promise((resolve, reject) => {
-      db.serialize(() => {
-        db.run("BEGIN TRANSACTION");
-
-        const stmt = db.prepare(`INSERT INTO examinations (
-          batch_id, school_id, customer_id, school_name, sub_account_name, class, subject, pages, candidates, extra_copies,
-          charge_per_learner, sheets_per_copy, production_copies, base_sheets, waste_sheets, 
-          total_sheets_used, billable_sheets, internal_cost, selling_price, status,
-          academic_year, term, exam_type
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)`);
-
-        let errorOccurred = false;
-        subjects.forEach(subj => {
-          stmt.run([
-            batch_id, school_id, customer_id, subj.school_name, sub_account_name, class_name, subj.subject, subj.pages, subj.candidates, 
-            subj.extra_copies, subj.charge_per_learner, subj.sheets_per_copy, subj.production_copies, 
-            subj.base_sheets, subj.waste_sheets, subj.total_sheets_used, subj.billable_sheets, 
-            subj.internal_cost, subj.selling_price, academic_year, term, exam_type
-          ], (err) => {
-            if (err) errorOccurred = true;
-          });
-        });
-
-        stmt.finalize((err) => {
-          if (err || errorOccurred) {
-            db.run("ROLLBACK");
-            return reject(err || new Error("Failed to save batch"));
-          }
-          db.run("COMMIT", (err) => {
-            if (err) return reject(err);
-            resolve();
-          });
-        });
-      });
-    });
-
-    res.json({ success: true, batch_id });
-  } catch (err) {
-    res.status(500).json({ error: err.message || "Failed to save batch" });
-  }
-});
-
-// 6. Complete Subject with Actual Waste
-// SUSPECTED DEAD: No frontend or test caller found as of April 21, 2026.
-// Confirm before removing.
-app.post('/api/complete-subject', async (req, res) => {
-  const { exam_id, actual_waste_sheets } = req.body;
-
-  try {
-    // 1. Get current exam data
-    const exam = await new Promise((resolve, reject) => {
-      db.get("SELECT * FROM examinations WHERE id = ?", [exam_id], (err, row) => {
-        if (err) return reject(err);
-        resolve(row);
-      });
-    });
-
-    if (!exam) {
-      return res.status(404).json({ error: "Examination not found" });
-    }
-
-    if (exam.status !== 'pending') {
-      return res.status(400).json({ error: "Subject already completed or invoiced" });
-    }
-
-    // 2. Recalculate based on actual waste
-    const actual_total_sheets = exam.base_sheets + parseFloat(actual_waste_sheets);
-
-    // Get current paper/toner costs from inventory
-    const inv = await new Promise((resolve, reject) => {
-      db.all("SELECT material, cost_per_unit, quantity FROM inventory WHERE material IN ('Paper', 'Toner')", [], (err, rows) => {
-        if (err) return reject(err);
-        resolve(rows);
-      });
-    });
-
-    const paper = inv.find(i => i.material === 'Paper');
-    const toner = inv.find(i => i.material === 'Toner');
-
-    if (!paper || !toner) {
-      return res.status(500).json({ error: "Required inventory items (Paper/Toner) not found" });
-    }
-
-    const actual_toner_usage_mg = actual_total_sheets * TONER_MG_PER_SHEET;
-
-    if (paper.quantity < actual_total_sheets || toner.quantity < actual_toner_usage_mg) {
-      return res.status(400).json({ error: "Insufficient inventory for actual usage" });
-    }
-
-    const actual_internal_cost_per_sheet = paper.cost_per_unit + (toner.cost_per_unit * TONER_MG_PER_SHEET);
-    const actual_internal_cost = actual_total_sheets * actual_internal_cost_per_sheet;
-
-    // Re-calculate selling price based on school rules
-    const school = await new Promise((resolve, reject) => {
-      db.get("SELECT * FROM schools WHERE id = ?", [exam.school_id], (err, row) => {
-        if (err) return reject(err);
-        resolve(row);
-      });
-    });
-
-    const effectiveSchool = school || {
-      pricing_type: 'margin-based',
-      pricing_value: 0.3
-    };
-
-    let selling_price = 0;
-    if (exam.charge_per_learner > 0) {
-      selling_price = exam.candidates * exam.charge_per_learner;
-    } else if (effectiveSchool.pricing_type === 'margin-based') {
-      selling_price = actual_internal_cost * (1 + effectiveSchool.pricing_value);
-    } else if (effectiveSchool.pricing_type === 'per-sheet') {
-      selling_price = exam.billable_sheets * effectiveSchool.pricing_value;
-    }
-
-    // 3. Update Inventory and Examination Record atomically
-    await new Promise((resolve, reject) => {
-      db.serialize(() => {
-        db.run("BEGIN TRANSACTION");
-
-        db.run("UPDATE inventory SET quantity = quantity - ? WHERE material = 'Paper'", [actual_total_sheets], (err) => {
-          if (err) {
-            db.run("ROLLBACK");
-            return reject(err);
-          }
-        });
-
-        db.run("UPDATE inventory SET quantity = quantity - ? WHERE material = 'Toner'", [actual_toner_usage_mg], (err) => {
-          if (err) {
-            db.run("ROLLBACK");
-            return reject(err);
-          }
-        });
-
-        db.run(`UPDATE examinations SET 
-                actual_waste_sheets = ?, 
-                total_sheets_used = ?, 
-                internal_cost = ?, 
-                selling_price = ?, 
-                status = 'completed' 
-                WHERE id = ?`, 
-          [actual_waste_sheets, actual_total_sheets, actual_internal_cost, selling_price, exam_id], (err) => {
-            if (err) {
-              db.run("ROLLBACK");
-              return reject(err);
-            }
-
-            db.run("COMMIT", (err) => {
-              if (err) return reject(err);
-              resolve();
-            });
-        });
-      });
-    });
-
-    res.json({ success: true, actual_total_sheets, selling_price });
-  } catch (err) {
-    res.status(500).json({ error: err.message || "Transaction failed" });
-  }
-});
-
-// 7. Generate Bulk Invoice
-// SUSPECTED DEAD: No frontend or test caller found as of April 21, 2026.
-// Confirm before removing.
-app.post('/api/generate-invoice', async (req, res) => {
-  try {
-    const { exam_ids, school_id, customer_id, sub_account_name } = req.body;
-    const placeholders = exam_ids.map(() => '?').join(',');
-
-    // Get total amount and details grouped by class
-    const rows = await new Promise((resolve, reject) => {
-      db.all(`SELECT class, SUM(candidates) as total_learners, AVG(charge_per_learner) as avg_charge, SUM(selling_price) as total_price 
-              FROM examinations 
-              WHERE id IN (${placeholders})
-              GROUP BY class`, exam_ids, (err, rows) => {
-        if (err) return reject(err);
-        resolve(rows);
-      });
-    });
-
-    const subtotal = rows.reduce((sum, row) => sum + row.total_price, 0);
-    const total_amount = subtotal;
-
-    // Create Invoice and update examinations atomically
-    const invoice_id = await new Promise((resolve, reject) => {
-      db.serialize(() => {
-        db.run("BEGIN TRANSACTION");
-
-        db.run("INSERT INTO invoices (school_id, customer_id, sub_account_name, subtotal, total_amount, status) VALUES (?, ?, ?, ?, ?, 'unpaid')", 
-          [school_id, customer_id, sub_account_name, subtotal, total_amount], function(err) {
-          if (err) {
-            db.run("ROLLBACK");
-            return reject(err);
-          }
-
-          const newInvoiceId = this.lastID;
-
-          db.run(`UPDATE examinations SET status = 'invoiced', invoice_id = ? WHERE id IN (${placeholders})`, 
-            [newInvoiceId, ...exam_ids], (err) => {
-            if (err) {
-              db.run("ROLLBACK");
-              return reject(err);
-            }
-
-            db.run("COMMIT", (err) => {
-              if (err) return reject(err);
-              resolve(newInvoiceId);
-            });
-          });
-        });
-      });
-    });
-
-    res.json({ success: true, invoice_id, subtotal, total_amount });
-  } catch (err) {
-    res.status(500).json({ error: err.message || "Failed to generate invoice" });
-  }
-});
-
-  // 8. Get All Invoices
-  // SUSPECTED DEAD: No frontend or test caller found as of April 21, 2026.
-  // Confirm before removing.
-  app.get('/api/invoices', checkPermission('view_invoices'), (req, res) => {
-    db.all(`SELECT i.*, COALESCE(s.name, 'Independent Customer') as school_name 
-            FROM invoices i 
-            LEFT JOIN schools s ON i.school_id = s.id 
-            ORDER BY i.created_at DESC`, [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(rows);
-  });
-});
-
-// 9. Mark Invoice as Paid
-// SUSPECTED DEAD: No frontend or test caller found as of April 21, 2026.
-// Confirm before removing.
-app.post('/api/invoices/:id/pay', (req, res) => {
-  const { id } = req.params;
-  const { payment_method } = req.body;
-  const paid_at = new Date().toISOString();
-
-  db.run("UPDATE invoices SET status = 'paid', payment_method = ?, paid_at = ? WHERE id = ?", 
-    [payment_method || 'Cash', paid_at, id], (err) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ success: true, paid_at });
-  });
-});
+// [REMOVED] Dead routes 2.1-9: calculate-variant-price, examinations, calculate,
+// confirm-batch, complete-subject, generate-invoice, invoices, invoices/:id/pay
+// These were marked SUSPECTED DEAD and replaced by routes/examination.cjs
 
 // 11. Delete Examination Batch
 app.delete('/api/examinations/batch/:batch_id', (req, res) => {
@@ -2081,7 +1590,7 @@ app.get('/api/invoices/:id/details', (req, res) => {
         });
       }
 
-      const newQuantity = currentQuantity + (type === 'IN' ? quantity : quantity);
+      const newQuantity = Math.max(0, currentQuantity + (isDeduction ? -Math.abs(quantity) : Math.abs(quantity)));
       const unitCost = item.cost_per_unit || item.cost || 0;
       const totalCost = Math.abs(quantity) * unitCost;
       const transactionId = `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -2171,6 +1680,139 @@ app.get('/api/invoices/:id/details', (req, res) => {
       res.json(rows || []);
     });
   });
+
+  // --- File serving API endpoints (browser platform support) ---
+  const { storageDir, tempDir } = require('./runtimePaths.cjs');
+
+  const ALLOWED_FILE_DIRS = [
+    path.resolve(storageDir || './storage'),
+    path.resolve(tempDir || './temp'),
+  ];
+
+  const isPathAllowed = (requestedPath) => {
+    if (!requestedPath || typeof requestedPath !== 'string') return false;
+    const resolved = path.resolve(requestedPath);
+    return ALLOWED_FILE_DIRS.some(allowed => resolved.startsWith(allowed));
+  };
+
+  app.get('/api/read-file', (req, res) => {
+    const filePath = req.query.path;
+    if (!filePath || typeof filePath !== 'string') {
+      return res.status(400).json({ success: false, error: 'Missing path parameter' });
+    }
+    if (!isPathAllowed(filePath)) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+    try {
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ success: false, error: 'File not found' });
+      }
+      const data = fs.readFileSync(filePath);
+      res.setHeader('Content-Type', 'application/octet-stream');
+      res.send(data);
+    } catch (err) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post('/api/write-temp-pdf', (req, res) => {
+    try {
+      const { data, filename } = req.body;
+      if (!data || !Array.isArray(data)) {
+        return res.status(400).json({ success: false, error: 'Invalid data' });
+      }
+      const safeName = String(filename || `gen_${Date.now()}.pdf`).replace(/[^a-zA-Z0-9._-]/g, '_');
+      const tempDirPath = tempDir;
+      if (!fs.existsSync(tempDirPath)) {
+        fs.mkdirSync(tempDirPath, { recursive: true });
+      }
+      const filePath = path.join(tempDirPath, safeName);
+      const buffer = Buffer.from(data);
+      fs.writeFileSync(filePath, buffer);
+      res.json({ success: true, path: filePath, size: buffer.length });
+    } catch (err) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.get('/api/serve-file', (req, res) => {
+    const filePath = req.query.path;
+    if (!filePath || typeof filePath !== 'string') {
+      return res.status(400).json({ success: false, error: 'Missing path parameter' });
+    }
+    if (!isPathAllowed(filePath)) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+    try {
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ success: false, error: 'File not found' });
+      }
+      const ext = path.extname(filePath).toLowerCase();
+      const mimeMap = {
+        '.pdf': 'application/pdf',
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.gif': 'image/gif',
+        '.svg': 'image/svg+xml',
+        '.html': 'text/html',
+        '.json': 'application/json',
+      };
+      const contentType = mimeMap[ext] || 'application/octet-stream';
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Content-Disposition', 'inline');
+      res.setHeader('Cache-Control', 'private, max-age=300');
+      const stream = fs.createReadStream(filePath);
+      stream.pipe(res);
+    } catch (err) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // --- Static file serving for production frontend ---
+  const frontendDistPath = getFrontendDistPath();
+  if (fs.existsSync(frontendDistPath)) {
+    console.log(`[BACKEND] Serving static frontend from: ${frontendDistPath}`);
+    app.use(express.static(frontendDistPath, {
+      maxAge: '1d',
+      etag: true,
+      lastModified: true,
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.html')) {
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        }
+        if (filePath.endsWith('.js')) {
+          res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+        }
+      }
+    }));
+
+    // SPA fallback: serve index.html for all non-API routes
+    app.use((req, res, next) => {
+      if (req.path.startsWith('/api/') || req.path === '/health' || req.path === '/api') {
+        return next();
+      }
+      if (req.method !== 'GET' && req.method !== 'HEAD') {
+        return next();
+      }
+      if (path.extname(req.path)) {
+        return res.status(404).type('text/plain').send('Not found');
+      }
+      const acceptsHtml = String(req.headers.accept || '').includes('text/html');
+      if (!acceptsHtml) {
+        return next();
+      }
+      const indexPath = path.join(frontendDistPath, 'index.html');
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        next();
+      }
+    });
+  } else {
+    console.log('[BACKEND] No frontend dist found at:', frontendDistPath);
+    console.log('[BACKEND] Run "npm run build" to build the frontend for production.');
+  }
 
   // Catch-all for unknown API routes to ensure JSON response
   app.use('/api', (req, res) => {

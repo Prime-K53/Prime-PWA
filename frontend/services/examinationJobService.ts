@@ -20,6 +20,7 @@ import {
   PricingRoundingMethod
 } from '../types';
 import { dbService } from './db';
+import { examinationDb } from './examinationDb';
 import { isMarketAdjustmentActive } from '../utils/marketAdjustmentUtils';
 import { generateNextId, roundToCurrency } from '../utils/helpers';
 import { generateNextSalesInvoiceNumber } from './documentNumberService';
@@ -351,19 +352,19 @@ export interface ExaminationJobState {
 
 class ExaminationJobService {
   private async listAllJobs() {
-    return dbService.getAll<ExaminationJob>('examinationJobs');
+    return examinationDb.examinationJobs.toArray();
   }
 
   private async listAllSubjects() {
-    return dbService.getAll<ExaminationJobSubject>('examinationJobSubjects');
+    return examinationDb.examinationJobSubjects.toArray();
   }
 
   private async listAllGroups() {
-    return dbService.getAll<ExaminationInvoiceGroup>('examinationInvoiceGroups');
+    return examinationDb.examinationInvoiceGroups.toArray();
   }
 
   private async listAllRecurringProfiles() {
-    return dbService.getAll<ExaminationRecurringProfile>('examinationRecurringProfiles');
+    return examinationDb.examinationRecurringProfiles.toArray();
   }
 
   private async syncGroupLineForJob(job: ExaminationJob): Promise<ExaminationJob> {
@@ -371,14 +372,14 @@ class ExaminationJobService {
       return job;
     }
 
-    const group = await dbService.get<ExaminationInvoiceGroup>('examinationInvoiceGroups', job.invoice_group_id);
+    const group = await examinationDb.examinationInvoiceGroups.get(job.invoice_group_id);
     if (!group) {
       const detachedJob: ExaminationJob = {
         ...job,
         invoice_group_id: undefined,
         updated_at: new Date().toISOString()
       };
-      await dbService.put('examinationJobs', detachedJob);
+      await examinationDb.examinationJobs.put(detachedJob);
       return detachedJob;
     }
 
@@ -409,7 +410,7 @@ class ExaminationJobService {
       total_amount: roundToCurrency(nextLines.reduce((sum, line) => sum + toNumber(line.amount), 0)),
       updated_at: new Date().toISOString()
     };
-    await dbService.put('examinationInvoiceGroups', updatedGroup);
+    await examinationDb.examinationInvoiceGroups.put(updatedGroup);
 
     return job;
   }
@@ -740,19 +741,19 @@ class ExaminationJobService {
         ...subject,
         created_at: current?.created_at || subject.created_at
       };
-      await dbService.put('examinationJobSubjects', merged);
+      await examinationDb.examinationJobSubjects.put(merged);
     }
 
     const nextIds = new Set(next.map(subject => subject.id));
     for (const stale of existing) {
       if (!nextIds.has(stale.id)) {
-        await dbService.delete('examinationJobSubjects', stale.id);
+        await examinationDb.examinationJobSubjects.delete(stale.id);
       }
     }
   }
 
   private async getJobAndSubjects(examId: string): Promise<ExaminationJobState> {
-    const job = await dbService.get<ExaminationJob>('examinationJobs', examId);
+    const job = await examinationDb.examinationJobs.get(examId);
     if (!job) throw new Error('Examination job not found.');
 
     const subjects = (await this.listAllSubjects()).filter(subject => subject.examination_job_id === job.id);
@@ -885,7 +886,7 @@ class ExaminationJobService {
     if (!job.school_id) throw new Error('School is required.');
     if (!job.class_name) throw new Error('Class is required.');
 
-    await dbService.put('examinationJobs', job);
+    await examinationDb.examinationJobs.put(job);
     await this.upsertSubjects(id, job.number_of_learners, payload.subjects);
 
     await this.recalculateExam(id);
@@ -893,7 +894,7 @@ class ExaminationJobService {
   }
 
   async updateJob(examId: string, updates: Partial<ExaminationJobPayload>): Promise<ExaminationJobState> {
-    const existing = await dbService.get<ExaminationJob>('examinationJobs', examId);
+    const existing = await examinationDb.examinationJobs.get(examId);
     if (!existing) throw new Error('Examination job not found.');
 
     this.assertEditable(existing);
@@ -959,13 +960,13 @@ class ExaminationJobService {
     if (!merged.class_name) throw new Error('Class is required.');
 
     if (existing.invoice_group_id && merged.school_id !== existing.school_id) {
-      const linkedGroup = await dbService.get<ExaminationInvoiceGroup>('examinationInvoiceGroups', existing.invoice_group_id);
+      const linkedGroup = await examinationDb.examinationInvoiceGroups.get(existing.invoice_group_id);
       if (linkedGroup && linkedGroup.status !== 'Invoiced') {
         throw new Error('Cannot change school while the job belongs to an invoice group. Remove it from the group first.');
       }
     }
 
-    await dbService.put('examinationJobs', merged);
+    await examinationDb.examinationJobs.put(merged);
 
     if (Array.isArray(updates.subjects)) {
       await this.upsertSubjects(examId, merged.number_of_learners, updates.subjects);
@@ -1019,7 +1020,7 @@ class ExaminationJobService {
     examId: string,
     subjects: ExaminationJobPayload['subjects']
   ): Promise<ExaminationJobState> {
-    const existing = await dbService.get<ExaminationJob>('examinationJobs', examId);
+    const existing = await examinationDb.examinationJobs.get(examId);
     if (!existing) throw new Error('Examination job not found.');
     this.assertEditable(existing);
 
@@ -1082,7 +1083,7 @@ class ExaminationJobService {
       updated_at: new Date().toISOString()
     };
 
-    await dbService.put('examinationJobs', updated);
+    await examinationDb.examinationJobs.put(updated);
     const syncedJob = await this.syncGroupLineForJob(updated);
     return {
       job: syncedJob,
@@ -1120,7 +1121,7 @@ class ExaminationJobService {
     );
 
     for (const subject of normalizedSubjects) {
-      await dbService.put('examinationJobSubjects', {
+      await examinationDb.examinationJobSubjects.put({
         ...subject,
         created_at: subjects.find(s => s.id === subject.id)?.created_at || subject.created_at
       });
@@ -1217,7 +1218,7 @@ class ExaminationJobService {
       updated_at: new Date().toISOString()
     };
 
-    await dbService.put('examinationJobs', updated);
+    await examinationDb.examinationJobs.put(updated);
 
     // Log significant total changes for audit purposes
     if (originalFinalAmount > 0 && updated.final_amount > 0) {
@@ -1381,7 +1382,7 @@ class ExaminationJobService {
       reference
     };
 
-    await dbService.put('examinationInventoryDeductions', deductionRecord as any);
+    await examinationDb.examinationInventoryDeductions.put(deductionRecord as any);
 
     const updatedJob: ExaminationJob = {
       ...job,
@@ -1390,7 +1391,7 @@ class ExaminationJobService {
       inventory_deduction_ref: reference,
       updated_at: new Date().toISOString()
     };
-    await dbService.put('examinationJobs', updatedJob);
+    await examinationDb.examinationJobs.put(updatedJob);
 
     return updatedJob;
   }
@@ -1406,7 +1407,7 @@ class ExaminationJobService {
       status: 'Approved',
       updated_at: new Date().toISOString()
     };
-    await dbService.put('examinationJobs', approved);
+    await examinationDb.examinationJobs.put(approved);
 
     await this.ensureInventoryDeducted(examId, `APPROVAL-${approved.id}`);
     state = await this.getJobAndSubjects(examId);
@@ -1454,7 +1455,7 @@ class ExaminationJobService {
       updated_at: now
     };
 
-    await dbService.put('examinationInvoiceGroups', group);
+    await examinationDb.examinationInvoiceGroups.put(group);
 
     if (payload.examination_job_ids?.length) {
       return this.addJobsToGroup(group.id, payload.examination_job_ids);
@@ -1464,7 +1465,7 @@ class ExaminationJobService {
   }
 
   async addJobsToGroup(groupId: string, examinationJobIds: string[]) {
-    const group = await dbService.get<ExaminationInvoiceGroup>('examinationInvoiceGroups', groupId);
+    const group = await examinationDb.examinationInvoiceGroups.get(groupId);
     if (!group) throw new Error('Invoice group not found.');
 
     const uniqueJobIds = Array.from(new Set((examinationJobIds || []).filter(Boolean)));
@@ -1497,7 +1498,7 @@ class ExaminationJobService {
 
     for (const job of resolvedJobs) {
       linesByJobId.set(job.id, buildJobLineFromJob(job));
-      await dbService.put('examinationJobs', {
+      await examinationDb.examinationJobs.put({
         ...job,
         invoice_group_id: group.id,
         updated_at: new Date().toISOString()
@@ -1514,12 +1515,12 @@ class ExaminationJobService {
       updated_at: new Date().toISOString()
     };
 
-    await dbService.put('examinationInvoiceGroups', updatedGroup);
+    await examinationDb.examinationInvoiceGroups.put(updatedGroup);
     return updatedGroup;
   }
 
   async removeJobFromGroup(groupId: string, examinationJobId: string) {
-    const group = await dbService.get<ExaminationInvoiceGroup>('examinationInvoiceGroups', groupId);
+    const group = await examinationDb.examinationInvoiceGroups.get(groupId);
     if (!group) throw new Error('Invoice group not found.');
     if (group.status === 'Invoiced') throw new Error('Cannot modify an invoiced group.');
 
@@ -1532,11 +1533,11 @@ class ExaminationJobService {
       total_amount: totalAmount,
       updated_at: new Date().toISOString()
     };
-    await dbService.put('examinationInvoiceGroups', updatedGroup);
+    await examinationDb.examinationInvoiceGroups.put(updatedGroup);
 
-    const job = await dbService.get<ExaminationJob>('examinationJobs', examinationJobId);
+    const job = await examinationDb.examinationJobs.get(examinationJobId);
     if (job?.invoice_group_id === group.id) {
-      await dbService.put('examinationJobs', {
+      await examinationDb.examinationJobs.put({
         ...job,
         invoice_group_id: undefined,
         updated_at: new Date().toISOString()
@@ -1547,14 +1548,14 @@ class ExaminationJobService {
   }
 
   async deleteInvoiceGroup(groupId: string) {
-    const group = await dbService.get<ExaminationInvoiceGroup>('examinationInvoiceGroups', groupId);
+    const group = await examinationDb.examinationInvoiceGroups.get(groupId);
     if (!group) throw new Error('Invoice group not found.');
     if (group.status === 'Invoiced') throw new Error('Invoiced groups cannot be deleted.');
 
     for (const line of group.jobs || []) {
-      const job = await dbService.get<ExaminationJob>('examinationJobs', line.examination_job_id);
+      const job = await examinationDb.examinationJobs.get(line.examination_job_id);
       if (job?.invoice_group_id === groupId) {
-        await dbService.put('examinationJobs', {
+        await examinationDb.examinationJobs.put({
           ...job,
           invoice_group_id: undefined,
           updated_at: new Date().toISOString()
@@ -1562,12 +1563,12 @@ class ExaminationJobService {
       }
     }
 
-    await dbService.delete('examinationInvoiceGroups', groupId);
+    await examinationDb.examinationInvoiceGroups.delete(groupId);
     return { success: true };
   }
 
   async deleteJob(examId: string) {
-    const job = await dbService.get<ExaminationJob>('examinationJobs', examId);
+    const job = await examinationDb.examinationJobs.get(examId);
     if (!job) throw new Error('Examination job not found.');
     if (job.status === 'Approved' || job.status === 'Invoiced') {
       throw new Error('Approved or invoiced jobs cannot be deleted.');
@@ -1584,10 +1585,10 @@ class ExaminationJobService {
 
     const subjects = await this.listAllSubjects();
     for (const subject of subjects.filter(s => s.examination_job_id === examId)) {
-      await dbService.delete('examinationJobSubjects', subject.id);
+      await examinationDb.examinationJobSubjects.delete(subject.id);
     }
 
-    await dbService.delete('examinationJobs', examId);
+    await examinationDb.examinationJobs.delete(examId);
     return { success: true };
   }
 
@@ -1662,7 +1663,7 @@ class ExaminationJobService {
     await transactionService.processInvoice(invoice);
 
     for (const job of refreshedJobs) {
-      await dbService.put('examinationJobs', {
+      await examinationDb.examinationJobs.put({
         ...job,
         status: 'Invoiced',
         invoice_id: invoiceId,
@@ -1671,9 +1672,9 @@ class ExaminationJobService {
     }
 
     if (options?.groupId) {
-      const group = await dbService.get<ExaminationInvoiceGroup>('examinationInvoiceGroups', options.groupId);
+      const group = await examinationDb.examinationInvoiceGroups.get(options.groupId);
       if (group) {
-        await dbService.put('examinationInvoiceGroups', {
+        await examinationDb.examinationInvoiceGroups.put({
           ...group,
           status: 'Invoiced',
           invoice_id: invoiceId,
@@ -1707,7 +1708,7 @@ class ExaminationJobService {
         throw new Error('Jobs linked to invoice groups must be invoiced from a single group.');
       }
 
-      const group = await dbService.get<ExaminationInvoiceGroup>('examinationInvoiceGroups', groupIds[0]);
+      const group = await examinationDb.examinationInvoiceGroups.get(groupIds[0]);
       if (!group || group.status === 'Invoiced') {
         throw new Error('The linked invoice group is not available for invoicing.');
       }
@@ -1729,7 +1730,7 @@ class ExaminationJobService {
   }
 
   async generateInvoiceForGroup(groupId: string) {
-    const group = await dbService.get<ExaminationInvoiceGroup>('examinationInvoiceGroups', groupId);
+    const group = await examinationDb.examinationInvoiceGroups.get(groupId);
     if (!group) throw new Error('Invoice group not found.');
     if (group.status === 'Invoiced' || group.invoice_id) {
       throw new Error('This invoice group has already been invoiced.');
@@ -1756,7 +1757,7 @@ class ExaminationJobService {
     profileId: string,
     status: ExaminationRecurringProfile['status']
   ) {
-    const profile = await dbService.get<ExaminationRecurringProfile>('examinationRecurringProfiles', profileId);
+    const profile = await examinationDb.examinationRecurringProfiles.get(profileId);
     if (!profile) throw new Error('Recurring profile not found.');
 
     let nextStatus = status;
@@ -1785,7 +1786,7 @@ class ExaminationJobService {
       updated_at: new Date().toISOString()
     };
 
-    await dbService.put('examinationRecurringProfiles', updatedProfile);
+    await examinationDb.examinationRecurringProfiles.put(updatedProfile);
     return updatedProfile;
   }
 
@@ -1842,7 +1843,7 @@ class ExaminationJobService {
       updated_at: now
     };
 
-    await dbService.put('examinationRecurringProfiles', profile);
+    await examinationDb.examinationRecurringProfiles.put(profile);
     return profile;
   }
 
@@ -1855,20 +1856,20 @@ class ExaminationJobService {
   }
 
   async deleteRecurringProfile(profileId: string) {
-    const profile = await dbService.get<ExaminationRecurringProfile>('examinationRecurringProfiles', profileId);
+    const profile = await examinationDb.examinationRecurringProfiles.get(profileId);
     if (!profile) throw new Error('Recurring profile not found.');
-    await dbService.delete('examinationRecurringProfiles', profileId);
+    await examinationDb.examinationRecurringProfiles.delete(profileId);
     return { success: true };
   }
 
   async convertJobToRecurring(examId: string, payload: ExaminationRecurringPayload) {
-    const job = await dbService.get<ExaminationJob>('examinationJobs', examId);
+    const job = await examinationDb.examinationJobs.get(examId);
     if (!job) throw new Error('Examination job not found.');
     return this.createRecurringProfile('job', examId, payload);
   }
 
   async convertGroupToRecurring(groupId: string, payload: ExaminationRecurringPayload) {
-    const group = await dbService.get<ExaminationInvoiceGroup>('examinationInvoiceGroups', groupId);
+    const group = await examinationDb.examinationInvoiceGroups.get(groupId);
     if (!group) throw new Error('Examination invoice group not found.');
     return this.createRecurringProfile('group', groupId, payload);
   }
@@ -1906,7 +1907,7 @@ class ExaminationJobService {
   }
 
   private async cloneGroupForRecurring(sourceGroupId: string, runDate: string) {
-    const sourceGroup = await dbService.get<ExaminationInvoiceGroup>('examinationInvoiceGroups', sourceGroupId);
+    const sourceGroup = await examinationDb.examinationInvoiceGroups.get(sourceGroupId);
     if (!sourceGroup) {
       throw new Error('Recurring source group no longer exists.');
     }
@@ -1941,7 +1942,7 @@ class ExaminationJobService {
         if (profile.end_date) {
           const endDate = new Date(profile.end_date);
           if (!Number.isNaN(endDate.getTime()) && safeNow.getTime() > endDate.getTime()) {
-            await dbService.put('examinationRecurringProfiles', {
+            await examinationDb.examinationRecurringProfiles.put({
               ...profile,
               status: 'Expired',
               updated_at: new Date().toISOString()
@@ -1970,7 +1971,7 @@ class ExaminationJobService {
           ? new Date(nextRunDate).getTime() > new Date(profile.end_date).getTime()
           : false;
 
-        await dbService.put('examinationRecurringProfiles', {
+        await examinationDb.examinationRecurringProfiles.put({
           ...profile,
           next_run_date: nextRunDate,
           last_run_date: new Date().toISOString(),
@@ -2015,7 +2016,7 @@ class ExaminationJobService {
       updated_at: new Date().toISOString()
     };
 
-    await dbService.put('examinationJobs', lockedJob);
+    await examinationDb.examinationJobs.put(lockedJob);
     return { job: lockedJob, subjects };
   }
 
@@ -2035,7 +2036,7 @@ class ExaminationJobService {
       updated_at: new Date().toISOString()
     };
 
-    await dbService.put('examinationJobs', unlockedJob);
+    await examinationDb.examinationJobs.put(unlockedJob);
     return { job: unlockedJob, subjects };
   }
 }
@@ -2044,6 +2045,8 @@ export const examinationJobService = new ExaminationJobService();
 export default examinationJobService;
 export type {
   ExaminationGroupPayload,
+  ExaminationInvoiceGroupJobLine,
   ExaminationJobPayload,
+  ExaminationRecurringFrequency,
   ExaminationRecurringPayload
 };

@@ -16,7 +16,6 @@ import {
 import { Supplier, Purchase, SupplierPayment, AuditLogEntry, LedgerEntry } from '../../../types';
 import { useProcurement } from '../../../context/ProcurementContext';
 import { useFinance } from '../../../context/FinanceContext';
-import { useData } from '../../../context/DataContext';
 import { useAuth } from '../../../context/AuthContext';
 import { format, parseISO, isAfter } from 'date-fns';
 
@@ -30,8 +29,7 @@ export const SupplierWorkspace: React.FC<SupplierWorkspaceProps> = ({ supplier, 
   const navigate = useNavigate();
   const { purchases = [] } = useProcurement();
   const { supplierPayments = [], ledger = [] } = useFinance();
-  const { companyConfig } = useData();
-  const { auditLogs = [] } = useAuth();
+  const { companyConfig, auditLogs = [] } = useAuth();
   const currency = companyConfig?.currencySymbol || '$';
 
   const [activeTab, setActiveTab] = useState<'Overview' | 'Timeline' | 'Bills' | 'Payments' | 'Ledger' | 'Documents' | 'Settings'>('Overview');

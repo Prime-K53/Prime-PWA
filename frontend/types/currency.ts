@@ -112,6 +112,9 @@ export interface MultiCurrencyTransactionLine {
   // Debit or credit
   debit: number;
   credit: number;
+  
+  // Line type for filtering
+  type?: 'debit' | 'credit';
 }
 
 /**

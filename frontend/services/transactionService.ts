@@ -74,6 +74,10 @@ const getGLConfig = () => {
     return defaultConfig;
 };
 
+const generateId = (prefix: string, randomLength = 9): string => {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, randomLength)}`;
+};
+
 const calculateBankBalance = (transactions: BankTransaction[], accountId: string): number => {
     return transactions
         .filter(tx => tx.bankAccountId === accountId)
@@ -292,6 +296,7 @@ const createMultiCurrencyJournalEntry = async (
         amount: number;
         currency: string;
         type: 'debit' | 'credit';
+        description?: string;
     }>,
     transactionCurrency: string,
     reference?: string
@@ -334,7 +339,7 @@ const createMultiCurrencyJournalEntry = async (
     const totalBaseCredit = processedLines.reduce((sum, l) => sum + (l.type === 'credit' ? l.baseAmount : 0), 0);
     
     return {
-        id: `MCJ-${Date.now()}`,
+        id: generateId('MCJ'),
         date: typeof date === 'string' ? new Date(date) : date,
         description,
         reference,
@@ -459,6 +464,21 @@ const calculateItemsCost = async (
     return roundToCurrency(totalCost);
 };
 
+const validateLedgerBalance = (entries: LedgerEntry[], context: string) => {
+    const debitAccountSums: Record<string, number> = {};
+    const creditAccountSums: Record<string, number> = {};
+    for (const entry of entries) {
+        const amount = Number(entry.amount || 0);
+        debitAccountSums[entry.debitAccountId] = (debitAccountSums[entry.debitAccountId] || 0) + amount;
+        creditAccountSums[entry.creditAccountId] = (creditAccountSums[entry.creditAccountId] || 0) + amount;
+    }
+    const totalDebits = Object.values(debitAccountSums).reduce((s, v) => s + v, 0);
+    const totalCredits = Object.values(creditAccountSums).reduce((s, v) => s + v, 0);
+    if (Math.abs(totalDebits - totalCredits) > 0.01) {
+        console.warn(`[LEDGER MISMATCH] ${context}: Debits ${totalDebits.toFixed(2)} !== Credits ${totalCredits.toFixed(2)} (diff: ${(totalDebits - totalCredits).toFixed(2)})`);
+    }
+};
+
 const distributePosRetainedAmounts = (
     payments: { method: string; amount: number; accountId?: string }[],
     totalAmount: number
@@ -529,7 +549,7 @@ export const transactionService = {
 
                     // Create audit trail record
                     const transaction = {
-                        id: `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                        id: generateId('TXN'),
                         itemId: comp.materialId,
                         type: 'OUT',
                         quantity: -comp.quantity,
@@ -561,7 +581,7 @@ export const transactionService = {
 
                     // Create audit trail record
                     const transaction = {
-                        id: `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                        id: generateId('TXN'),
                         itemId: item.id,
                         type: 'OUT',
                         quantity: -item.quantity,
@@ -808,11 +828,15 @@ export const transactionService = {
                     deliveryNotePatch?.proofOfDelivery || shipment.proofOfDelivery
                 );
 
+                const dnId = deliveryNoteId || shipment.orderId;
                 const fallbackDeliveryNote: DeliveryNote = {
-                    id: deliveryNoteId || shipment.orderId,
+                    id: dnId,
+                    number: dnId,
+                    dnNumber: dnId,
                     invoiceId: shipment.orderId,
                     date: shipment.actualArrival || shipment.estimatedDelivery || new Date().toISOString(),
                     customerName: shipment.customerName,
+                    clientName: shipment.customerName,
                     shippingAddress: '',
                     items: [],
                     status: mappedStatus || 'Pending'
@@ -1094,7 +1118,7 @@ export const transactionService = {
                     revenueAmount -= taxAmount;
 
                     const vatTx: VatTransaction = {
-                        id: `VAT-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                        id: generateId('VAT'),
                         date: sale.date,
                         type: 'Output',
                         amount: Number(taxAmount.toFixed(2)),
@@ -1113,7 +1137,7 @@ export const transactionService = {
 
                     if (paidTax > 0) {
                         const taxEntry: LedgerEntry = {
-                            id: `LG-TAX-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                            id: generateId('LG-TAX'),
                             date: sale.date,
                             description: `VAT Output - Sale #${sale.id}`,
                             debitAccountId: gl.cashDrawerAccount,
@@ -1129,7 +1153,7 @@ export const transactionService = {
 
                     if (unpaidTax > 0) {
                         const taxEntry: LedgerEntry = {
-                            id: `LG-TAX-AR-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                            id: generateId('LG-TAX-AR'),
                             date: sale.date,
                             description: `VAT Output (AR) - Sale #${sale.id}`,
                             debitAccountId: gl.accountsReceivable,
@@ -1153,7 +1177,7 @@ export const transactionService = {
 
                         if (paidMarket > 0) {
                             const marketEntry: LedgerEntry = {
-                                id: `LG-MKT-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                                id: generateId('LG-MKT'),
                                 date: sale.date,
                                 description: `Market Adjustment - Sale #${sale.id}`,
                                 debitAccountId: gl.cashDrawerAccount,
@@ -1169,7 +1193,7 @@ export const transactionService = {
 
                         if (unpaidMarket > 0) {
                             const marketEntry: LedgerEntry = {
-                                id: `LG-MKT-AR-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                                id: generateId('LG-MKT-AR'),
                                 date: sale.date,
                                 description: `Market Adjustment (AR) - Sale #${sale.id}`,
                                 debitAccountId: gl.accountsReceivable,
@@ -1195,7 +1219,7 @@ export const transactionService = {
                     if (paidMargin > 0) {
                         const marginAccount = gl.marginIncomeAccount || gl.otherIncomeAccount || '4900';
                         const marginEntry: LedgerEntry = {
-                            id: `LG-MARGIN-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                                id: generateId('LG-MARGIN'),
                             date: sale.date,
                             description: `Profit Margin - Sale #${sale.id}`,
                             debitAccountId: gl.cashDrawerAccount,
@@ -1223,7 +1247,7 @@ export const transactionService = {
                     
                     if (paidRounding !== 0) {
                          const roundingEntry: LedgerEntry = {
-                            id: `LG-RND-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                             id: generateId('LG-RND'),
                             date: sale.date,
                             description: `Rounding Difference - Sale #${sale.id}`,
                             debitAccountId: gl.cashDrawerAccount,
@@ -1248,7 +1272,7 @@ export const transactionService = {
 
                     if (unpaidRounding !== 0) {
                          const roundingEntry: LedgerEntry = {
-                            id: `LG-RND-AR-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                             id: generateId('LG-RND-AR'),
                             date: sale.date,
                             description: `Rounding Difference (AR) - Sale #${sale.id}`,
                             debitAccountId: gl.accountsReceivable,
@@ -1273,7 +1297,7 @@ export const transactionService = {
 
                 if (paidRevenue > 0) {
                     const revenueEntry: LedgerEntry = {
-                        id: `LG-REV-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                        id: generateId('LG-REV'),
                         date: sale.date,
                         description: `POS Sale Revenue #${sale.id}`,
                         debitAccountId: gl.cashDrawerAccount,
@@ -1289,7 +1313,7 @@ export const transactionService = {
 
                 if (unpaidRevenue > 0) {
                     const revenueEntry: LedgerEntry = {
-                        id: `LG-REV-AR-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                        id: generateId('LG-REV-AR'),
                         date: sale.date,
                         description: `POS Sale Revenue (AR) #${sale.id}`,
                         debitAccountId: gl.accountsReceivable,
@@ -1311,7 +1335,7 @@ export const transactionService = {
                     );
                     if (cogsTotal > 0) {
                         const cogsEntry: LedgerEntry = {
-                            id: `LG-COGS-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                            id: generateId('LG-COGS'),
                             date: sale.date,
                             description: `COGS - Sale #${sale.id}`,
                             debitAccountId: gl.defaultCOGSAccount,
@@ -1348,7 +1372,7 @@ export const transactionService = {
                     }
 
                     const payEntry: LedgerEntry = {
-                        id: `LG-PAY-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                        id: generateId('LG-PAY'),
                         date: sale.date,
                         description: `Payment [${payment.method}] - Sale #${sale.id}`,
                         debitAccountId: targetDebitAccount,
@@ -1364,7 +1388,7 @@ export const transactionService = {
                     // Automatic transfer to Main Ledger for cash payments
                     if (payment.method === 'Cash') {
                         const transferEntry: LedgerEntry = {
-                            id: `LG-TRANSFER-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                            id: generateId('LG-TRANSFER'),
                             date: sale.date,
                             description: `Auto-transfer to Main Ledger - Sale #${sale.id}`,
                             debitAccountId: gl.bankAccount,
@@ -1386,7 +1410,7 @@ export const transactionService = {
                         await customerStore.put(customer);
 
                         const walletTx: WalletTransaction = {
-                            id: `WLT-POS-${Date.now()}`,
+                            id: generateId('WLT-POS'),
                             customerId: sale.customerId,
                             amount: walletDepositAmount,
                             type: 'Deposit',
@@ -1397,7 +1421,7 @@ export const transactionService = {
                     }
 
                     const walletLedgerEntry: LedgerEntry = {
-                        id: `LG-WLT-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                        id: generateId('LG-WLT'),
                         date: sale.date,
                         description: `POS wallet deposit - Sale #${sale.id}`,
                         debitAccountId: gl.cashDrawerAccount,
@@ -1592,7 +1616,7 @@ export const transactionService = {
                 const exchange = await store.get(id);
                 if (!exchange) throw new Error("Exchange not found");
 
-                if (exchange.status === 'Approved' || exchange.status === 'Completed') {
+                if (exchange.status === 'approved' || exchange.status === 'completed') {
                     throw new Error("Cannot delete/cancel an exchange that has already been approved or completed.");
                 }
 
@@ -1694,7 +1718,7 @@ export const transactionService = {
                 if (refundCogsTotal > 0) {
                     const gl = getGLConfig();
                     const cogsReversal: LedgerEntry = {
-                        id: `LG-COGS-REV-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                        id: generateId('LG-COGS-REV'),
                         date: refund.date,
                         description: `COGS Reversal - Refund #${refund.saleId || refund.id}`,
                         debitAccountId: gl.defaultInventoryAccount,
@@ -1757,7 +1781,7 @@ export const transactionService = {
 
                             // Create Negative VAT Transaction (Input/Credit Note)
                             const vatTx: VatTransaction = {
-                                id: `VAT-REF-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                                id: generateId('VAT-REF'),
                                 date: refund.date,
                                 type: 'Input', // Treated as Input to reduce liability, or negative Output
                                 amount: Number(taxReturnAmount.toFixed(2)),
@@ -1773,7 +1797,7 @@ export const transactionService = {
 
                             // Debit VAT Account (Reduce Liability)
                             const taxEntry: LedgerEntry = {
-                                id: `LG-TAX-REF-${Date.now()}`,
+                                id: generateId('LG-TAX-REF'),
                                 date: refund.date,
                                 description: `VAT Reversal - Refund #${refund.id}`,
                                 debitAccountId: vatConfig.outputTaxAccount,
@@ -1790,7 +1814,7 @@ export const transactionService = {
                         // Market Adjustment Reversal
                         if (marketAdjustmentReturnAmount > 0 && vatConfig?.marketAdjustmentAccount) {
                             const marketEntry: LedgerEntry = {
-                                id: `LG-MKT-REF-${Date.now()}`,
+                                id: generateId('LG-MKT-REF'),
                                 date: refund.date,
                                 description: `Market Adjustment Reversal - Refund #${refund.id}`,
                                 debitAccountId: vatConfig.marketAdjustmentAccount,
@@ -1808,7 +1832,7 @@ export const transactionService = {
 
                 // Debit Revenue Return (Net Amount)
                 const revenueReturnEntry: LedgerEntry = {
-                    id: `LG-REF-REV-${Date.now()}`,
+                    id: generateId('LG-REF-REV'),
                     date: refund.date,
                     description: `Refund Revenue Return - Sale #${refund.saleId || refund.id}`,
                     debitAccountId: gl.salesReturnAccount || gl.defaultSalesAccount,
@@ -2005,7 +2029,7 @@ export const transactionService = {
 
                 // Debit AR
                 const arEntry: LedgerEntry = {
-                    id: `LG-REC-AR-${Date.now()}`,
+                    id: generateId('LG-REC-AR'),
                     date: invoice.date,
                     description: `Recurring Invoice #${invoice.id}`,
                     debitAccountId: gl.accountsReceivable,
@@ -2072,7 +2096,7 @@ export const transactionService = {
                     }
 
                     const payEntry: LedgerEntry = {
-                        id: `LG-REC-PAY-${Date.now()}`,
+                        id: generateId('LG-REC-PAY'),
                         date: invoice.date,
                         description: `Payment for Recurring Invoice #${invoice.id}`,
                         debitAccountId: targetDebitAccount,
@@ -2192,7 +2216,7 @@ export const transactionService = {
                 for (const entry of entries) {
                     const newEntry: LedgerEntry = {
                         ...entry,
-                        id: `LG-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                        id: generateId('LG'),
                         date,
                         reconciled: entry.reconciled || false
                     };
@@ -2248,13 +2272,14 @@ export const transactionService = {
                     invoice.dueDate = issuedDate;
                 }
 
-                assertInvoiceNumberFormat(invoice.id, getCompanyConfig(), 'invoice');
+                const invoiceType = String((invoice as any).originModule || (invoice as any).origin_module || '').toLowerCase() === 'examination' ? 'examination_invoice' : 'invoice';
+                assertInvoiceNumberFormat(invoice.id, getCompanyConfig(), invoiceType);
 
                 // 1. Save Invoice
                 await invoiceStore.put(invoice);
 
                 // 2. Update Inventory (Gated)
-                const shouldDeduct = invoice.status === 'Paid' || invoice.status === 'Partial' || invoice.status === 'Unpaid'; // Unpaid in Invoice terms is 'Posted'
+                const shouldDeduct = invoice.status === 'Paid' || invoice.status === 'Partial';
                 if (shouldDeduct) {
                     await this._executeDeductInventory(
                         inventoryStore,
@@ -2322,7 +2347,7 @@ export const transactionService = {
                     if (cogsTotal > 0) {
                         const gl = getGLConfig();
                         const cogsEntry: LedgerEntry = {
-                            id: `LG-COGS-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                            id: generateId('LG-COGS'),
                             date: invoice.date,
                             description: `COGS - Invoice #${invoice.id}`,
                             debitAccountId: gl.defaultCOGSAccount,
@@ -2350,7 +2375,7 @@ export const transactionService = {
 
                 // Debit AR
                 const arEntry: LedgerEntry = {
-                    id: `LG-INV-AR-${Date.now()}`,
+                    id: generateId('LG-INV-AR'),
                     date: invoice.date,
                     description: `Invoice #${invoice.id}`,
                     debitAccountId: gl.accountsReceivable,
@@ -2417,7 +2442,7 @@ export const transactionService = {
                     }
 
                     const payEntry: LedgerEntry = {
-                        id: `LG-INV-PAY-${Date.now()}`,
+                        id: generateId('LG-INV-PAY'),
                         date: invoice.date,
                         description: `Payment for Invoice #${invoice.id}`,
                         debitAccountId: targetDebitAccount,
@@ -2545,18 +2570,20 @@ export const transactionService = {
                     invoiceData.dueDate = issuedDate;
                 }
 
-                // 3. Update Inventory (Gated)
-                // Convert Quotation to Invoice usually implies it's ready for fulfillment or already delivered
-                await this._executeDeductInventory(
-                    inventoryStore,
-                    inventoryTransactionsStore,
-                    invoiceData.items,
-                    invoiceData.consumptionSnapshots || [],
-                    'Invoice',
-                    invoiceData.id,
-                    'System',
-                    inventory
-                );
+                // 3. Update Inventory (only if paid/partial — goods delivered)
+                const shouldDeductConv = invoiceData.status === 'Paid' || invoiceData.status === 'Partial';
+                if (shouldDeductConv) {
+                    await this._executeDeductInventory(
+                        inventoryStore,
+                        inventoryTransactionsStore,
+                        invoiceData.items,
+                        invoiceData.consumptionSnapshots || [],
+                        'Invoice',
+                        invoiceData.id,
+                        'System',
+                        inventory
+                    );
+                }
 
                 // 4. Process Market Adjustments using shared helper
                 const adjustmentResult = await this._processMarketAdjustments(
@@ -2586,33 +2613,37 @@ export const transactionService = {
 
                 await invoiceStore.put(invoiceData);
 
-                const cogsTotal = await calculateItemsCost(
-                    invoiceData.items || [],
-                    inventory,
-                    (item) => item.parentId || item.id
-                );
-                if (cogsTotal > 0) {
-                    const gl = getGLConfig();
-                    const cogsEntry: LedgerEntry = {
-                        id: `LG-COGS-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-                        date: invoiceData.date,
-                        description: `COGS - Invoice #${invoiceData.id}`,
-                        debitAccountId: gl.defaultCOGSAccount,
-                        creditAccountId: gl.defaultInventoryAccount,
-                        amount: Number(cogsTotal.toFixed(2)),
-                        referenceId: invoiceData.id,
-                        reconciled: false,
-                        customerId: invoiceData.customerId,
-                        customerName: invoiceData.customerName
-                    };
-                    await ledgerStore.put(cogsEntry);
+                // COGS entry (gated by delivery status)
+                if (shouldDeductConv) {
+                    const cogsTotal = await calculateItemsCost(
+                        invoiceData.items || [],
+                        inventory,
+                        (item) => item.parentId || item.id
+                    );
+                    if (cogsTotal > 0) {
+                        const gl = getGLConfig();
+                        const cogsEntry: LedgerEntry = {
+                            id: generateId('LG-COGS'),
+                            date: invoiceData.date,
+                            description: `COGS - Invoice #${invoiceData.id}`,
+                            debitAccountId: gl.defaultCOGSAccount,
+                            creditAccountId: gl.defaultInventoryAccount,
+                            amount: Number(cogsTotal.toFixed(2)),
+                            referenceId: invoiceData.id,
+                            reconciled: false,
+                            customerId: invoiceData.customerId,
+                            customerName: invoiceData.customerName
+                        };
+                        await ledgerStore.put(cogsEntry);
+                    }
                 }
 
-                // 5. Update Customer Balance
+                // 5. Update Customer Balance (only outstanding amount)
                 if (invoiceData.customerId) {
                     const customer = await customerStore.get(invoiceData.customerId);
                     if (customer) {
-                        customer.balance = (customer.balance || 0) + invoiceData.totalAmount;
+                        const outstanding = Math.max(0, (invoiceData.totalAmount || 0) - (invoiceData.paidAmount || 0));
+                        customer.balance = (customer.balance || 0) + outstanding;
                         await customerStore.put(customer);
                     }
                 }
@@ -2623,7 +2654,7 @@ export const transactionService = {
 
                 // Debit AR
                 const arEntry: LedgerEntry = {
-                    id: `LG-QTN-INV-AR-${Date.now()}`,
+                    id: generateId('LG-QTN-INV-AR'),
                     date: invoiceData.date,
                     description: `Invoice #${invoiceData.id} from QTN #${quotationId}`,
                     debitAccountId: gl.accountsReceivable,
@@ -2706,12 +2737,15 @@ export const transactionService = {
                     `${invoiceData.notes}\nConverted from [JobOrder] #[${jobOrderId}] on [${timestamp}] as accepted by [System]` :
                     `Converted from [JobOrder] #[${jobOrderId}] on [${timestamp}] as accepted by [System]`;
 
-                // 3. Update Inventory (if applicable)
-                for (const item of invoiceData.items) {
-                    const invItem = await resolveInventoryRecord(item.id, inventory, inventoryStore);
-                    if (invItem) {
-                        invItem.stock = (invItem.stock || 0) - item.quantity;
-                        await inventoryStore.put(invItem);
+                // 3. Update Inventory (only if paid/partial — goods delivered)
+                const shouldDeductJob = invoiceData.status === 'Paid' || invoiceData.status === 'Partial';
+                if (shouldDeductJob) {
+                    for (const item of invoiceData.items) {
+                        const invItem = await resolveInventoryRecord(item.id, inventory, inventoryStore);
+                        if (invItem) {
+                            invItem.stock = (invItem.stock || 0) - item.quantity;
+                            await inventoryStore.put(invItem);
+                        }
                     }
                 }
 
@@ -2743,11 +2777,12 @@ export const transactionService = {
 
                 await invoiceStore.put(invoiceData);
 
-                // 5. Update Customer Balance
+                // 5. Update Customer Balance (only outstanding amount)
                 if (invoiceData.customerId) {
                     const customer = await customerStore.get(invoiceData.customerId);
                     if (customer) {
-                        customer.balance = (customer.balance || 0) + invoiceData.totalAmount;
+                        const outstanding = Math.max(0, (invoiceData.totalAmount || 0) - (invoiceData.paidAmount || 0));
+                        customer.balance = (customer.balance || 0) + outstanding;
                         await customerStore.put(customer);
                     }
                 }
@@ -2758,7 +2793,7 @@ export const transactionService = {
 
                 // Debit AR
                 const arEntry: LedgerEntry = {
-                    id: `LG-JO-INV-AR-${Date.now()}`,
+                    id: generateId('LG-JO-INV-AR'),
                     date: invoiceData.date,
                     description: `Invoice #${invoiceData.id} (from Job Order #${jobOrderId})`,
                     debitAccountId: gl.accountsReceivable,
@@ -2895,7 +2930,7 @@ export const transactionService = {
                 // 6. Handle wallet only when explicitly selected.
                 if (snapshot.walletDeposit > 0 && payment.excessHandling === 'Wallet' && customerId) {
                     const walletTx: WalletTransaction = {
-                        id: `WLT-PAY-${Date.now()}`,
+                        id: generateId('WLT-PAY'),
                         customerId,
                         amount: snapshot.walletDeposit,
                         type: 'Deposit',
@@ -2928,7 +2963,7 @@ export const transactionService = {
                         : gl.accountsReceivable;
 
                     const ledgerEntry: LedgerEntry = {
-                        id: `LG-PAY-${Date.now()}`,
+                        id: generateId('LG-PAY'),
                         date: payment.date,
                         description: `Payment #${payment.id} from ${payment.customerName} - Status: ${snapshot.paymentStatus}`,
                         debitAccountId: targetDebitAccount,
@@ -3011,7 +3046,7 @@ export const transactionService = {
                 for (const allocation of payment.allocations) {
                     const invoice = await invoiceStore.get(allocation.invoiceId);
                     if (invoice) {
-                        invoice.paidAmount = (invoice.paidAmount || 0) - allocation.amount;
+                        invoice.paidAmount = Math.max(0, (invoice.paidAmount || 0) - allocation.amount);
                         if (invoice.paidAmount <= 0) {
                             invoice.status = 'Unpaid';
                         } else {
@@ -3043,7 +3078,7 @@ export const transactionService = {
                 );
                 if (walletDeposit > 0 && payment.excessHandling === 'Wallet') {
                     const walletTx: WalletTransaction = {
-                        id: `WLT-REV-${Date.now()}`,
+                        id: generateId('WLT-REV'),
                         customerId: payment.customerId,
                         amount: walletDeposit,
                         type: 'Deduction',
@@ -3077,7 +3112,7 @@ export const transactionService = {
                     ? gl.customerDepositAccount
                     : (gl.accountsReceivable || '1100');
                 const reversal: LedgerEntry = {
-                    id: `LG-REV-${Date.now()}`,
+                    id: generateId('LG-REV'),
                     date: new Date().toISOString(),
                     description: `VOID: Payment #${paymentId} - ${reason}`,
                     debitAccountId: originalCreditAccount,
@@ -3191,11 +3226,10 @@ export const transactionService = {
                     }
                 }
 
-                // 2. Reverse Customer Balance
+                // 2. Reverse Customer Balance — subtract full totalAmount since payment voids (step 3) will add back their allocations independently
                 const customer = await customerStore.get(invoice.customerId);
                 if (customer) {
-                    const outstanding = Math.max(0, (invoice.totalAmount || 0) - (invoice.paidAmount || 0));
-                    customer.balance = toMoney((customer.balance || 0) - outstanding);
+                    customer.balance = toMoney((customer.balance || 0) - (invoice.totalAmount || 0));
                     await customerStore.put(customer);
                 }
 
@@ -3207,6 +3241,7 @@ export const transactionService = {
                 });
 
                 const gl = getGLConfig();
+                const voidInvLedgerEntries: LedgerEntry[] = [];
 
                 for (const payment of relatedPayments) {
                     const retainedAmount = toMoney(
@@ -3224,7 +3259,7 @@ export const transactionService = {
 
                     if (walletDeposit > 0 && payment.excessHandling === 'Wallet' && payment.customerId) {
                         const walletTx: WalletTransaction = {
-                            id: `WLT-REV-${Date.now()}`,
+                            id: generateId('WLT-REV'),
                             customerId: payment.customerId,
                             amount: walletDeposit,
                             type: 'Deduction',
@@ -3253,7 +3288,7 @@ export const transactionService = {
 
                     if (retainedAmount > 0) {
                         const reversal: LedgerEntry = {
-                            id: `LG-REV-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                            id: generateId('LG-REV'),
                             date: new Date().toISOString(),
                             description: `VOID: Payment #${payment.id} - Invoice ${id} voided`,
                             debitAccountId: originalCreditAccount,
@@ -3265,6 +3300,7 @@ export const transactionService = {
                             customerName: payment.customerName
                         };
                         await ledgerStore.put(reversal);
+                        voidInvLedgerEntries.push(reversal);
                     }
 
                     const bankAccounts = await ensureBankAccounts(bankAccountsStore);
@@ -3321,7 +3357,7 @@ export const transactionService = {
                 for (const entry of relatedEntries) {
                     const reversal: LedgerEntry = {
                         ...entry,
-                        id: `LG-REV-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                        id: generateId('LG-REV'),
                         date: new Date().toISOString(),
                         description: `REVERSAL: ${entry.description}`,
                         debitAccountId: entry.creditAccountId,
@@ -3330,7 +3366,11 @@ export const transactionService = {
                         reconciled: false
                     };
                     await ledgerStore.put(reversal);
+                    voidInvLedgerEntries.push(reversal);
                 }
+
+                // Validate ledger balance for this void operation
+                validateLedgerBalance(voidInvLedgerEntries, `voidInvoice #${id}`);
 
                 // 4. Update Invoice Status
                 invoice.status = 'Cancelled';
@@ -3363,6 +3403,9 @@ export const transactionService = {
 
                 const gl = getGLConfig();
 
+                // Track all new ledger entries for validation
+                const voidLedgerEntries: LedgerEntry[] = [];
+
                 // 1. Reverse Inventory (restore stock)
                 for (const item of sale.items || []) {
                     const invItem = await inventoryStore.get(item.id);
@@ -3374,7 +3417,7 @@ export const transactionService = {
 
                         // Create inventory reversal transaction record
                         const transaction = {
-                            id: `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                            id: generateId('TXN'),
                             itemId: item.id,
                             type: 'IN',
                             quantity: item.quantity,
@@ -3410,7 +3453,7 @@ export const transactionService = {
                             await customerStore.put(customer);
 
                             const walletTx: WalletTransaction = {
-                                id: `WLT-REV-${Date.now()}`,
+                                id: generateId('WLT-REV'),
                                 customerId: sale.customerId,
                                 amount: sale.walletDeposit,
                                 type: 'Deduction',
@@ -3449,10 +3492,10 @@ export const transactionService = {
                         }
 
                         const reversal: LedgerEntry = {
-                            id: `LG-REV-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                            id: generateId('LG-REV'),
                             date: new Date().toISOString(),
                             description: `VOID: Payment #${payment.id} - Sale ${id} voided`,
-                            debitAccountId: gl.defaultSalesAccount,
+                            debitAccountId: gl.cashDrawerAccount,
                             creditAccountId: originalDebitAccount,
                             amount: retainedAmount,
                             referenceId: payment.id,
@@ -3461,6 +3504,7 @@ export const transactionService = {
                             customerName: payment.customerName
                         };
                         await ledgerStore.put(reversal);
+                        voidLedgerEntries.push(reversal);
 
                         // Reverse bank transaction
                         const bankAccounts = await ensureBankAccounts(bankAccountsStore);
@@ -3513,10 +3557,11 @@ export const transactionService = {
                 }
 
                 // 4. Reverse COGS entry
-                const cogsTotal = await calculateItemsCost(sale.items || [], inventoryStore, (item) => item.parentId || item.id);
+                const inventoryList = await inventoryStore.getAll();
+                const cogsTotal = await calculateItemsCost(sale.items || [], inventoryList, (item) => item.parentId || item.id);
                 if (cogsTotal > 0) {
                     const cogsReversal: LedgerEntry = {
-                        id: `LG-COGS-REV-${Date.now()}`,
+                        id: generateId('LG-COGS-REV'),
                         date: new Date().toISOString(),
                         description: `COGS Reversal - Void Sale #${sale.id}`,
                         debitAccountId: gl.defaultInventoryAccount,
@@ -3528,6 +3573,7 @@ export const transactionService = {
                         customerName: sale.customerName
                     };
                     await ledgerStore.put(cogsReversal);
+                    voidLedgerEntries.push(cogsReversal);
                 }
 
                 // 5. Reverse all other ledger entries for this sale
@@ -3536,7 +3582,7 @@ export const transactionService = {
                 for (const entry of relatedEntries) {
                     const reversal: LedgerEntry = {
                         ...entry,
-                        id: `LG-REV-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                        id: generateId('LG-REV'),
                         date: new Date().toISOString(),
                         description: `REVERSAL: ${entry.description}`,
                         debitAccountId: entry.creditAccountId,
@@ -3545,7 +3591,11 @@ export const transactionService = {
                         reconciled: false
                     };
                     await ledgerStore.put(reversal);
+                    voidLedgerEntries.push(reversal);
                 }
+
+                // Validate ledger balance for this void operation
+                validateLedgerBalance(voidLedgerEntries, `voidSale #${id}`);
 
                 // 6. Update Sale Status
                 sale.status = 'Voided';
@@ -3568,7 +3618,7 @@ export const transactionService = {
                 if (Math.abs(diff) > 0.01) {
                     const gl = getGLConfig();
                     const entry: LedgerEntry = {
-                        id: `LG-SYNC-${Date.now()}`,
+                        id: generateId('LG-SYNC'),
                         date: new Date().toISOString(),
                         description: `Inventory Valuation Sync: Physical(${physicalValue}) vs Ledger(${currentLedgerBalance})`,
                         debitAccountId: diff > 0 ? accountId : (gl.defaultCOGSAccount || '5000'),
@@ -3604,7 +3654,7 @@ export const transactionService = {
                 const gl = getGLConfig();
                 const totalAmount = Number(normalizedExpense.amount);
                 const expenseEntry: LedgerEntry = {
-                    id: `LG-EXP-MAIN-${Date.now()}`,
+                    id: generateId('LG-EXP-MAIN'),
                     date: new Date().toISOString(),
                     description: `Expense: ${normalizedExpense.description}`,
                     debitAccountId: gl.defaultExpenseAccount || '5000',
@@ -3672,7 +3722,7 @@ export const transactionService = {
 
                 // Debit Expense Account, Credit Payment Account
                 const expenseEntry: LedgerEntry = {
-                    id: `LG-EXP-MAIN-${Date.now()}`,
+                    id: generateId('LG-EXP-MAIN'),
                     date: new Date().toISOString(),
                     description: `Expense: ${expense.description}`,
                     debitAccountId: gl.defaultExpenseAccount || '5000',
@@ -3724,7 +3774,7 @@ export const transactionService = {
                 // Create Ledger Entry
                 const gl = getGLConfig();
                 const entry: LedgerEntry = {
-                    id: `LG-INC-${Date.now()}`,
+                    id: generateId('LG-INC'),
                     date: income.date,
                     description: `Income: ${income.description}`,
                     debitAccountId: income.accountId || gl.bankAccount || '1050',
@@ -3775,7 +3825,7 @@ export const transactionService = {
 
                 // Create Ledger Entry
                 const entry: LedgerEntry = {
-                    id: `LG-TRF-${Date.now()}`,
+                    id: generateId('LG-TRF'),
                     date: transfer.date,
                     description: `Internal Transfer: ${transfer.description || ''}`,
                     debitAccountId: transfer.toAccountId,
@@ -3832,7 +3882,7 @@ export const transactionService = {
 
                 const gl = getGLConfig();
                 const entry: LedgerEntry = {
-                    id: `LG-FEE-${Date.now()}`,
+                    id: generateId('LG-FEE'),
                     date: new Date().toISOString(),
                     description: `Late Fee for Invoice #${invoice.id}`,
                     debitAccountId: gl.accountsReceivable || '1100',
@@ -3886,7 +3936,7 @@ export const transactionService = {
 
                         // Create inventory transaction audit trail
                         const transaction = {
-                            id: `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                            id: generateId('TXN'),
                             itemId: item.itemId,
                             type: 'IN',
                             quantity: item.quantityReceived,
@@ -3917,7 +3967,7 @@ export const transactionService = {
                         if (po.status === 'Approved') {
                             // Reverse PO AP entry
                             const poReversal: LedgerEntry = {
-                                id: `LG-GRN-POREV-${Date.now()}`,
+                                id: generateId('LG-GRN-POREV'),
                                 date: grn.date,
                                 description: `PO Reversal on GRN - ${po.id}`,
                                 debitAccountId: gl.accountsPayable || '2000',
@@ -3956,7 +4006,7 @@ export const transactionService = {
 
                 // Debit Inventory, Credit AP
                 const inventoryEntry: LedgerEntry = {
-                    id: `LG-GRN-INV-${Date.now()}`,
+                    id: generateId('LG-GRN-INV'),
                     date: grn.date,
                     description: `Goods Receipt #${grn.id}${relatedPurchase ? ` (PO: ${relatedPurchase.id})` : ''}`,
                     debitAccountId: gl.defaultInventoryAccount || '1200',
@@ -3982,7 +4032,7 @@ export const transactionService = {
                 if (relatedPurchase && Math.abs(totalAmount - poAmount) > 0.01) {
                     const variance = totalAmount - poAmount;
                     const varianceEntry: LedgerEntry = {
-                        id: `LG-GRN-VAR-${Date.now()}`,
+                        id: generateId('LG-GRN-VAR'),
                         date: grn.date,
                         description: `GRN Variance - ${grn.id} (Actual: ${totalAmount.toFixed(2)} vs PO: ${poAmount.toFixed(2)})`,
                         debitAccountId: variance > 0 ? (gl.defaultCOGSAccount || '5000') : gl.accountsPayable,
@@ -4027,7 +4077,7 @@ export const transactionService = {
                 if (Math.abs(params.qtyChange * adjustmentCost) > 0) {
                     const gl = getGLConfig();
                     const entry: LedgerEntry = {
-                        id: `LG-ADJ-${Date.now()}`,
+                        id: generateId('LG-ADJ'),
                         date: new Date().toISOString(),
                         description: `Stock Adjustment: ${params.reason} (${params.notes || ''})`,
                         debitAccountId: params.qtyChange > 0 ? (gl.defaultInventoryAccount || '1200') : (gl.defaultCOGSAccount || '5000'),
@@ -4105,7 +4155,7 @@ export const transactionService = {
                 // Debit: PO Receiving Account (or Inventory Account if direct)
                 // Credit: Accounts Payable
                 const apEntry: LedgerEntry = {
-                    id: `LG-PO-AP-${Date.now()}`,
+                    id: generateId('LG-PO-AP'),
                     date: new Date().toISOString(),
                     description: `PO Commitment - ${purchase.id}`,
                     debitAccountId: gl.defaultInventoryAccount || '1200',
@@ -4158,7 +4208,7 @@ export const transactionService = {
                 // 1. Reverse AP Ledger Entry if PO was approved
                 if (purchase.status === 'Approved') {
                     const reversalEntry: LedgerEntry = {
-                        id: `LG-PO-REV-${Date.now()}`,
+                        id: generateId('LG-PO-REV'),
                         date: new Date().toISOString(),
                         description: `PO Cancellation - ${purchase.id} - ${reason}`,
                         debitAccountId: gl.accountsPayable || '2000',
@@ -4243,7 +4293,7 @@ export const transactionService = {
 
                 if (Math.abs(totalVarianceCost) > 0.01) {
                     const entry: LedgerEntry = {
-                        id: `LG-REC-${Date.now()}`,
+                        id: generateId('LG-REC'),
                         date: new Date().toISOString(),
                         description: `Inventory Reconciliation Variance`,
                         debitAccountId: totalVarianceCost < 0 ? '5000' : '1200',
@@ -4303,7 +4353,7 @@ export const transactionService = {
 
                         // Ledger entry for material consumption
                         const entry: LedgerEntry = {
-                            id: `LG-CONS-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                            id: generateId('LG-CONS'),
                             date: new Date().toISOString(),
                             description: `Material Consumption: ${item.name} (WO: ${wo.id})`,
                             debitAccountId: gl.defaultCOGSAccount || '5000',
@@ -4396,7 +4446,7 @@ export const transactionService = {
                 // 2. Create Ledger Entry (Debit COGS/Waste, Credit Inventory)
                 const gl = getGLConfig();
                 const entry: LedgerEntry = {
-                    id: `LG-WST-${Date.now()}`,
+                    id: generateId('LG-WST'),
                     date: new Date().toISOString(),
                     description: description,
                     debitAccountId: gl.defaultCOGSAccount || '5000',
@@ -4482,7 +4532,7 @@ export const transactionService = {
                     if (cogsTotal > 0) {
                         const gl = getGLConfig();
                         const cogsEntry: LedgerEntry = {
-                            id: `LG-COGS-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                            id: generateId('LG-COGS'),
                             date: order.orderDate,
                             description: `COGS - Order #${order.orderNumber}`,
                             debitAccountId: gl.defaultCOGSAccount,
@@ -4540,7 +4590,7 @@ export const transactionService = {
 
                     // Recognize Revenue immediately
                     const revenueEntry: LedgerEntry = {
-                        id: `LG-ORD-REV-NEW-${Date.now()}`,
+                        id: generateId('LG-ORD-REV-NEW'),
                         date: order.orderDate,
                         description: `Immediate Revenue recognition for Order #${order.orderNumber}`,
                         debitAccountId: '2100', // Customer Deposits (Liability decreases)
@@ -4566,7 +4616,7 @@ export const transactionService = {
                             await customerStore.put(customer);
 
                             const walletTx: WalletTransaction = {
-                                id: `WLT-ORD-${Date.now()}`,
+                                id: generateId('WLT-ORD'),
                                 customerId: order.customerId,
                                 date: new Date().toISOString(),
                                 type: 'Deduction',
@@ -4578,7 +4628,7 @@ export const transactionService = {
                     }
 
                     const entry: LedgerEntry = {
-                        id: `LG-ORD-INIT-${Date.now()}`,
+                        id: generateId('LG-ORD-INIT'),
                         date: order.orderDate,
                         description: `Initial payment for Order #${order.orderNumber} via ${lastPayment.paymentMethod}`,
                         debitAccountId: isWallet ? '1210' : '1001', // Wallet or Cash/Bank
@@ -4650,7 +4700,7 @@ export const transactionService = {
                         await customerStore.put(customer);
 
                         const walletTx: WalletTransaction = {
-                            id: `WLT-ORD-PAY-${Date.now()}`,
+                            id: generateId('WLT-ORD-PAY'),
                             customerId: order.customerId,
                             date: new Date().toISOString(),
                             type: 'Deduction',
@@ -4673,7 +4723,7 @@ export const transactionService = {
                 }
 
                 const entry: LedgerEntry = {
-                    id: `LG-ORD-PAY-${Date.now()}`,
+                    id: generateId('LG-ORD-PAY'),
                     date: payment.paymentDate,
                     description: `Payment for Order #${order.orderNumber} via ${payment.paymentMethod}`,
                     debitAccountId: targetDebitAccount,
@@ -4759,7 +4809,7 @@ export const transactionService = {
                     if (cogsTotal > 0) {
                         const gl = getGLConfig();
                         const cogsEntry: LedgerEntry = {
-                            id: `LG-COGS-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                            id: generateId('LG-COGS'),
                             date: new Date().toISOString(),
                             description: `COGS - Order #${order.orderNumber}`,
                             debitAccountId: gl.defaultCOGSAccount,
@@ -4813,7 +4863,7 @@ export const transactionService = {
 
                     // 4. Recognize Revenue
                     const revenueEntry: LedgerEntry = {
-                        id: `LG-ORD-REV-${Date.now()}`,
+                        id: generateId('LG-ORD-REV'),
                         date: new Date().toISOString(),
                         description: `Revenue recognition for Order #${order.orderNumber}`,
                         debitAccountId: '2100', // Customer Deposits
@@ -4872,7 +4922,7 @@ export const transactionService = {
                             await customerStore.put(customer);
 
                             const walletTx: WalletTransaction = {
-                                id: `WLT-CAN-${Date.now()}`,
+                                id: generateId('WLT-CAN'),
                                 customerId: order.customerId,
                                 date: new Date().toISOString(),
                                 type: 'Deposit',
@@ -4884,7 +4934,7 @@ export const transactionService = {
                     }
 
                     const reversal: LedgerEntry = {
-                        id: `LG-ORD-CAN-${Date.now()}`,
+                        id: generateId('LG-ORD-CAN'),
                         date: new Date().toISOString(),
                         description: `Order #${order.orderNumber} Cancelled - Payment refunded to Wallet`,
                         debitAccountId: '2100', // Customer Deposits
@@ -4951,7 +5001,7 @@ export const transactionService = {
                 await exchangeStore.put(exchange);
 
                 // 2. Create Approval Entry
-                const approvalId = Date.now().toString();
+                const approvalId = generateId('APPR');
                 const approval: SalesExchangeApproval = {
                     id: approvalId,
                     exchange_id: id as any,
@@ -4994,7 +5044,7 @@ export const transactionService = {
                         // Auto-generate Reprint Jobs for items requiring reprint
                         if (item.reprint_required || item.qty_replaced > 0) {
                             const reprintJob: ReprintJob = {
-                                id: (Date.now() + Math.floor(Math.random() * 1000)).toString(),
+                                id: generateId('EXCH-REPRINT'),
                                 exchange_id: id as any,
                                 job_description: `Reprint for ${item.product_name} (Exchange ${exchange.exchange_number})`,
                                 paper_used: "0",
@@ -5011,7 +5061,7 @@ export const transactionService = {
                 // 4. Financial adjustment (if price difference exists)
                 if (exchange.total_price_difference !== 0) {
                     const entry: LedgerEntry = {
-                        id: `LG-EX-${Date.now()}`,
+                        id: generateId('LG-EX'),
                         date: new Date().toISOString(),
                         description: `Exchange Adjustment for SE #${exchange.exchange_number}`,
                         debitAccountId: exchange.total_price_difference > 0 ? '1001' : '4001',
@@ -5084,7 +5134,7 @@ export const transactionService = {
                 }
 
                 const ledgerEntry: LedgerEntry = {
-                    id: `LG-SPAY-${Date.now()}`,
+                    id: generateId('LG-SPAY'),
                     date: payment.date,
                     description: `Supplier Payment #${payment.id} to ${payment.supplierId}`,
                     debitAccountId: gl.accountsPayable,
@@ -5176,7 +5226,7 @@ export const transactionService = {
                 if (payment.paymentMethod === 'Cash') targetDebitAccount = gl.cashDrawerAccount;
 
                 const reversalEntry: LedgerEntry = {
-                    id: `LG-SPAY-VOID-${Date.now()}`,
+                    id: generateId('LG-SPAY-VOID'),
                     date: new Date().toISOString(),
                     description: `REVERSAL: Supplier Payment #${payment.id} voided`,
                     debitAccountId: targetDebitAccount,

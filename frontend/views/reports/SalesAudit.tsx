@@ -1,5 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
+import { useSales } from '../../context/SalesContext';
+import { useFinance } from '../../context/FinanceContext';
+import { useExamination } from '../../context/ExaminationContext';
 import { format, parseISO, startOfWeek, startOfMonth, isWithinInterval, isSameDay } from 'date-fns';
 import {
     DollarSign, CreditCard, Wallet, Banknote, Smartphone, ArrowDownUp,
@@ -26,7 +29,10 @@ interface SalesAuditData {
 }
 
 const SalesAudit: React.FC = () => {
-    const { sales = [], invoices = [], examinationBatches = [], customerPayments = [], companyConfig, allUsers = [] } = useData();
+    const { companyConfig, allUsers = [] } = useAuth();
+    const { sales = [], customerPayments = [] } = useSales();
+    const { invoices = [] } = useFinance();
+    const { batches: examinationBatches = [] } = useExamination();
     const currency = companyConfig?.currencySymbol || '$';
     const [dateRange, setDateRange] = useState<DateRangeFilter>('today');
     const [expandedSection, setExpandedSection] = useState<string | null>('daily');

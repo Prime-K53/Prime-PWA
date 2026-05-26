@@ -559,7 +559,7 @@ const ReportBuilder: React.FC<ReportBuilderProps> = ({ definitionId, onSave, onC
             setDefinition(prev => ({
               ...prev,
               charts: [...(prev.charts || []), {
-                id: `chart-${Date.now()}`,
+                id: `chart-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
                 type: 'bar',
                 title: 'New Chart',
                 xAxisField: '',
@@ -666,8 +666,8 @@ const ReportBuilder: React.FC<ReportBuilderProps> = ({ definitionId, onSave, onC
           onClick={() => {
             setDefinition(prev => ({
               ...prev,
-              parameters: [...(prev.parameters || []), {
-                id: `param-${Date.now()}`,
+parameters: [...(prev.parameters || []), {
+                id: `param-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
                 name: '',
                 label: '',
                 type: 'string',
@@ -881,7 +881,7 @@ interface ColumnDialogProps {
 
 const ColumnDialog: React.FC<ColumnDialogProps> = ({ column, fields, onSave, onClose }) => {
   const [formData, setFormData] = useState<ReportColumn>(column || {
-    id: `col-${Date.now()}`,
+    id: `col-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
     field: '',
     label: '',
     type: 'string',
@@ -1025,7 +1025,7 @@ interface FilterDialogProps {
 
 const FilterDialog: React.FC<FilterDialogProps> = ({ filter, fields, onSave, onClose }) => {
   const [formData, setFormData] = useState<ReportFilter>(filter || {
-    id: `filter-${Date.now()}`,
+    id: `filter-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
     field: '',
     operator: 'equals',
     value: undefined,

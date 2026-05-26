@@ -4,7 +4,8 @@ import {
   Shield, Activity, X
 } from 'lucide-react';
 import { Account } from '../../../types';
-import { useData } from '../../../context/DataContext';
+import { useAuth } from '../../../context/AuthContext';
+import { useFinance } from '../../../context/FinanceContext';
 import { AuditTimeline } from '../../shared/components/AuditTimeline';
 import { 
   XAxis, YAxis, CartesianGrid, 
@@ -17,7 +18,8 @@ interface AccountDetailsDashboardProps {
 }
 
 export const AccountDetailsDashboard: React.FC<AccountDetailsDashboardProps> = ({ account, onClose }) => {
-  const { ledger, companyConfig } = useData();
+  const { companyConfig } = useAuth();
+  const { ledger } = useFinance();
   const currency = companyConfig?.currencySymbol || '$';
 
   const accountEntries = useMemo(() => {

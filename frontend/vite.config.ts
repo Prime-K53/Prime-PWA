@@ -2,7 +2,7 @@ import path from 'path';
 import fs from 'fs';
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
-import { VitePWA } from 'vite-plugin-pwa';
+import basicSsl from '@vitejs/plugin-basic-ssl';
 
 const normalizeBase = (value: string) => String(value || '').trim().replace(/\/+$/, '');
 const stripApiSuffix = (value: string) => normalizeBase(value).replace(/\/api$/i, '');
@@ -28,12 +28,9 @@ const inlineFontsPlugin = (): Plugin => ({
     try {
       const bytes = fs.readFileSync(id);
       const b64 = bytes.toString('base64');
-      // Export as a data URI string — @react-pdf/renderer calls .split() on src,
-      // so it MUST be a string. Data URIs are fetched by the browser fetch API
-      // without any file-system access, making them safe in all environments.
       return `export default 'data:${mime};base64,${b64}'`;
     } catch {
-      return null; // let Vite handle it normally if reading fails
+      return null;
     }
   },
 });
@@ -44,18 +41,34 @@ export default defineConfig(({ mode }) => {
       stripApiSuffix(env.VITE_API_PROXY_TARGET || '') ||
       stripApiSuffix(env.VITE_API_URL || '') ||
       'http://localhost:3000';
+    const isDev = mode === 'development';
+
     return {
       server: {
         port: 5173,
-        host: '0.0.0.0',
-        headers: {
-          'Content-Security-Policy': "default-src 'self' 'unsafe-inline' 'unsafe-eval' http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:* data: blob: prime-pdf:; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://127.0.0.1:* http://localhost:*; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:* data: blob:; frame-src 'self' blob: data: prime-pdf: http://127.0.0.1:* http://localhost:*; object-src 'self' blob: data: prime-pdf:; worker-src 'self' blob:; child-src 'self' blob:; font-src 'self' data: blob:;"
+        host: '127.0.0.1',
+        https: true,
+        hmr: {
+          protocol: 'wss',
+          host: '127.0.0.1',
+          port: 5173,
+          timeout: 60000,
+          overlay: true,
         },
-        proxy: mode === 'development' ? {
+        watch: {
+          usePolling: false,
+          interval: 100,
+        },
+        allowedHosts: ['127.0.0.1', 'localhost'],
+        headers: {
+          'Content-Security-Policy': "default-src 'self' 'unsafe-inline' 'unsafe-eval' http://127.0.0.1:* http://localhost:* https://127.0.0.1:* https://localhost:* ws://127.0.0.1:* ws://localhost:* wss://127.0.0.1:* wss://localhost:* data: blob: prime-pdf:; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://127.0.0.1:* http://localhost:* https://127.0.0.1:* https://localhost:*; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' http://127.0.0.1:* http://localhost:* https://127.0.0.1:* https://localhost:* ws://127.0.0.1:* ws://localhost:* wss://127.0.0.1:* wss://localhost:* data: blob:; frame-src 'self' blob: data: prime-pdf: http://127.0.0.1:* http://localhost:* https://127.0.0.1:* https://localhost:*; object-src 'self' blob: data: prime-pdf:; worker-src 'self' blob:; child-src 'self' blob:; font-src 'self' data: blob:;"
+        },
+        proxy: isDev ? {
           '/api': {
             target: apiProxyTarget,
             changeOrigin: true,
             secure: apiProxyTarget.startsWith('https://'),
+            ws: true,
             bypass: (req) => {
               if (req.headers.accept?.includes('text/html')) {
                 return null;
@@ -64,82 +77,7 @@ export default defineConfig(({ mode }) => {
           }
         } : {}
       },
-      plugins: [react(), inlineFontsPlugin(), VitePWA({
-        registerType: 'autoUpdate',
-        injectRegister: false,
-        includeAssets: ['favicon.ico', 'pwa-icon-*.png'],
-          manifest: {
-          id: '/',
-          short_name: 'PrimeERP',
-          name: 'Prime ERP System',
-          description: 'Prime ERP - Enterprise Resource Planning System',
-          icons: [
-            { src: './pwa-icon-192x192.png', sizes: '192x192', type: 'image/png' },
-            { src: './pwa-icon-512x512.png', sizes: '512x512', type: 'image/png' },
-            { src: './pwa-icon-192x192-maskable.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
-            { src: './pwa-icon-512x512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
-          ],
-          start_url: '.',
-          display: 'standalone',
-          orientation: 'any',
-          theme_color: '#2563eb',
-          background_color: '#f8fafc',
-          categories: ['business', 'productivity'],
-          lang: 'en',
-          scope: '.',
-          screenshots: [
-            { src: './screenshot-dashboard.png', sizes: '1280x800', type: 'image/png', form_factor: 'wide', label: 'Prime ERP Dashboard' },
-            { src: './screenshot-mobile.png', sizes: '390x844', type: 'image/png', form_factor: 'narrow', label: 'Prime ERP Mobile' },
-          ],
-        },
-        workbox: {
-          maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,ttf}'],
-          navigateFallback: '/index.html',
-          navigateFallbackAllowlist: [/^(?!\/api\/|\/__).*/],
-          runtimeCaching: [
-            {
-              urlPattern: /^https?:\/\/.*\/api\/.*/i,
-              handler: 'NetworkFirst',
-              options: {
-                cacheName: 'api-cache',
-                expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 },
-                networkTimeoutSeconds: 5,
-                backgroundSync: {
-                  name: 'api-sync-queue',
-                  options: {
-                    maxRetentionTime: 24 * 60,
-                  },
-                },
-              },
-            },
-            {
-              urlPattern: /\.(?:png|jpg|jpeg|svg|gif|ico)$/,
-              handler: 'CacheFirst',
-              options: {
-                cacheName: 'image-cache',
-                expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 * 30 },
-              },
-            },
-            {
-              urlPattern: /\.(?:woff|woff2|ttf|eot)$/,
-              handler: 'CacheFirst',
-              options: {
-                cacheName: 'font-cache',
-                expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 365 },
-              },
-            },
-            {
-              urlPattern: /^https?:\/\/.*/i,
-              handler: 'NetworkFirst',
-              options: {
-                cacheName: 'external-cache',
-                expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 },
-              },
-            },
-          ],
-        },
-      })],
+      plugins: [basicSsl(), react(), inlineFontsPlugin()],
       optimizeDeps: {
         include: [
           'recharts',
@@ -149,33 +87,36 @@ export default defineConfig(({ mode }) => {
           'date-fns',
           '@react-pdf/renderer',
           'zustand',
+          'dexie',
         ],
+        exclude: [],
       },
       define: {
         'process.env.API_KEY': JSON.stringify(env.VITE_GEMINI_API_KEY),
         'process.env.GEMINI_API_KEY': JSON.stringify(env.VITE_GEMINI_API_KEY),
-        // Don't hardcode API URL in production - let runtime config (Electron) take precedence
-        'process.env.VITE_API_URL': mode === 'development' ? JSON.stringify(env.VITE_API_URL || 'http://localhost:3000') : '""',
-        'process.env.API_BASE_URL': mode === 'development' ? JSON.stringify(env.VITE_API_URL || 'http://localhost:3000') : '""',
+        'process.env.VITE_API_URL': isDev ? JSON.stringify(env.VITE_API_URL || 'http://localhost:3000') : '""',
+        'process.env.API_BASE_URL': isDev ? JSON.stringify(env.VITE_API_URL || 'http://localhost:3000') : '""',
       },
       resolve: {
+        dedupe: ['react', 'react-dom', 'dexie'],
         alias: [
           { find: '@', replacement: path.resolve(__dirname, '.') },
-          { find: /^zustand$/, replacement: path.resolve(__dirname, 'node_modules/zustand/index.js') },
         ]
       },
-      base: './',
+      base: env.VITE_BASE_URL || './',
       build: {
         outDir: 'dist',
         emptyOutDir: true,
+        manifest: 'asset-manifest.json',
         sourcemap: false,
         rollupOptions: {
-          // Rollup 4.40+ has overly strict static ESM export analysis that raises
-          // false-positive "X is not exported by Y" errors for packages that use
-          // `export * from './sub-module'` re-export patterns (dequal, fontkit,
-          // zustand, etc.). shimMissingExports suppresses the error and lets the
-          // runtime resolve the export correctly (as it always could).
           shimMissingExports: true,
+          output: {
+            manualChunks: {
+              react: ['react', 'react-dom'],
+              vendor: ['date-fns', 'zustand', 'idb', 'dexie'],
+            }
+          }
         }
       }
     };
