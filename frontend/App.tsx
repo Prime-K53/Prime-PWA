@@ -127,7 +127,6 @@ const UserManagement = lazyWithRetry('./views/admin/UserManagement', () => impor
 const ProfileActivity = lazyWithRetry('./views/admin/ProfileActivity', () => import('./views/admin/ProfileActivity'));
 const BOMRecipes = lazyWithRetry('./views/production/BOMRecipes', () => import('./views/production/BOMRecipes'));
 const DataImport = lazyWithRetry('./views/admin/DataImport', () => import('./views/admin/DataImport'));
-const MigrationHealthDashboard = lazyWithRetry('./views/admin/MigrationHealthDashboard', () => import('./views/admin/MigrationHealthDashboard'));
 const GlobalSearch = lazyWithRetry('./views/GlobalSearch', () => import('./views/GlobalSearch'));
 const ChequeManager = lazyWithRetry('./views/tools/ChequeManager', () => import('./views/tools/ChequeManager'));
 const VatView = lazyWithRetry('./views/vat/VatView', () => import('./views/vat/VatView'));
@@ -513,7 +512,6 @@ const AppLayout: React.FC = () => {
                 <Route path="/audit" element={<AuditLogs />} />
                 <Route path="/admin/users" element={<ProtectedRoute permission="admin.users"><UserManagement /></ProtectedRoute>} />
                 <Route path="/admin/profile" element={<ProfileActivity />} />
-                <Route path="/admin/migration-health" element={<ProtectedRoute permission="admin.settings"><MigrationHealthDashboard /></ProtectedRoute>} />
                 <Route path="/settings" element={<ProtectedRoute permission="admin.settings"><Settings /></ProtectedRoute>} />
                 <Route path="/accounts/income" element={<ProtectedRoute permission="accounts.view"><IncomeView /></ProtectedRoute>} />
                 <Route path="/accounts/banking" element={<ProtectedRoute permission="accounts.view"><Banking /></ProtectedRoute>} />
