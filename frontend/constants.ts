@@ -150,30 +150,4 @@ export const MOCK_RESOURCES: ProductionResource[] = [
   { id: 'RES-CUT-01', name: 'Polar Cutter', workCenterId: 'WC-CUT-01', status: 'Active' },
 ];
 
-export const MOCK_USERS: User[] = [
-  {
-    id: 'USER-ADMIN',
-    username: 'admin',
-    name: 'System Administrator',
-    fullName: 'System Administrator',
-    email: 'admin@primeerp.local',
-    role: 'Admin',
-    status: 'Active',
-    active: true,
-    isSuperAdmin: true,
-    securityLevel: 'Elevated',
-    groupIds: ['GRP-ADMIN']
-  },
-  {
-    id: 'USER-ACC',
-    username: 'accountant',
-    name: 'Senior Accountant',
-    fullName: 'Senior Accountant',
-    email: 'finance@primeerp.local',
-    role: 'Accountant',
-    status: 'Active',
-    active: true,
-    securityLevel: 'Standard',
-    groupIds: ['GRP-ACCOUNTANT']
-  }
-];
+

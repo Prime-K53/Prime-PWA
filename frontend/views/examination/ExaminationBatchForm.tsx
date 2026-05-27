@@ -54,8 +54,6 @@ const ExaminationBatchForm: React.FC = () => {
     city: ''
   });
   const [addingCustomer, setAddingCustomer] = useState(false);
-  const CREATE_SUBMIT_TIMEOUT_MS = 60000;
-
   useEffect(() => {
     if (companyConfig?.currencySymbol) {
       setFormData((prev) => ({ ...prev, currency: companyConfig.currencySymbol }));
@@ -170,12 +168,7 @@ const ExaminationBatchForm: React.FC = () => {
         rounding_value: Number(companyConfig?.pricingSettings?.customStep || 50)
       };
 
-      const newBatch = await Promise.race([
-        createBatch(payload),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error(`Create request timed out after ${CREATE_SUBMIT_TIMEOUT_MS}ms`)), CREATE_SUBMIT_TIMEOUT_MS)
-        )
-      ]);
+      const newBatch = await createBatch(payload);
       toast.success('Examination batch created successfully');
       const batchRef = String(newBatch.batch_number || newBatch.batchNumber || newBatch.id || '').trim();
       navigate(`/examination/batches/${newBatch.id}`, { state: { name: batchRef } });

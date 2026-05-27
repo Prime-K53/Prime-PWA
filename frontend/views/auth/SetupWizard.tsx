@@ -56,12 +56,12 @@ const SetupWizard: React.FC = () => {
 
   const canContinueUser = [
     admin.fullName,
-    admin.username,
+    admin.email,
   ].every(value => value.trim().length > 0);
 
   const canSubmitAdmin = [
     admin.fullName,
-    admin.username,
+    admin.email,
   ].every(value => value.trim().length > 0)
     && (
       !(company as any).passwordRequired
@@ -190,11 +190,12 @@ const SetupWizard: React.FC = () => {
         },
       });
 
+      const autoUsername = admin.username.trim() || admin.email.trim().split('@')[0] || 'admin';
       await completeSetup(
         finalConfig,
         {
           id: '',
-          username: admin.username.trim(),
+          username: autoUsername,
           fullName: admin.fullName.trim(),
           name: admin.fullName.trim(),
           email: admin.email.trim(),
@@ -547,24 +548,24 @@ const SetupWizard: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Email</label>
+                      <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Email <span className="text-rose-400">*</span></label>
                       <Input
                         type="email"
                         value={admin.email}
                         onChange={e => setAdmin(prev => ({ ...prev, email: e.target.value }))}
                         className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all placeholder:text-slate-500"
-                        placeholder="admin@co.com"
+                        placeholder="admin@company.com"
+                        required
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Username *</label>
+                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Username <span className="text-slate-500">(optional)</span></label>
                     <Input
                       value={admin.username}
                       onChange={e => setAdmin(prev => ({ ...prev, username: e.target.value }))}
                       className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all placeholder:text-slate-500"
-                      placeholder="admin_prime"
-                      required
+                      placeholder="Auto-generated from email"
                     />
                   </div>
                 </div>

@@ -947,6 +947,7 @@ export const examinationBatchService = {
           updated_at: now
         }
       );
+
       await storeLocalBatch(offlineBatch);
       await enqueueOutbox('examinationBatch:create', String(offlineBatch.id), payloadWithBatchNumber as any);
       return offlineBatch as ExaminationBatch;

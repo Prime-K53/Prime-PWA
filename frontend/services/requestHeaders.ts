@@ -17,7 +17,7 @@ const applyIdentityHeaders = (headers: HeaderMap): HeaderMap => {
   if (!user) {
     const authState = ensureSessionAuthState();
     const nextHeaders = { ...headers, ...FALLBACK_HEADERS };
-    if (authState.authMode === 'token' && authState.accessToken) {
+    if (authState.accessToken) {
       nextHeaders.Authorization = `Bearer ${authState.accessToken}`;
     }
     nextHeaders['x-auth-mode'] = authState.authMode;
@@ -32,10 +32,7 @@ const applyIdentityHeaders = (headers: HeaderMap): HeaderMap => {
   if (user?.email) nextHeaders['x-user-email'] = String(user.email);
   nextHeaders['x-user-is-super-admin'] = user?.isSuperAdmin === true ? 'true' : 'false';
   nextHeaders['x-auth-mode'] = authState.authMode;
-  nextHeaders['x-dev-bypass'] = 'true';
-  // Only send Bearer token when auth mode is 'token' (real JWT from backend),
-  // not for locally-simulated tokens which will be rejected by jwt.verify.
-  if (authState.authMode === 'token' && authState.accessToken) {
+  if (authState.accessToken) {
     nextHeaders.Authorization = `Bearer ${authState.accessToken}`;
   }
 

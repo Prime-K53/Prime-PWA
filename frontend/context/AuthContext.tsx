@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { User, UserRole, UserGroup, PasswordPolicy, CompanyConfig, AuditLogEntry, SystemAlert, Reminder } from '../types';
-import { MOCK_USERS, INITIAL_USER_GROUPS, AVAILABLE_PERMISSIONS } from '../constants';
+import { INITIAL_USER_GROUPS, AVAILABLE_PERMISSIONS } from '../constants';
 import { generateNextId } from '../utils/helpers';
 import { dbService } from '../services/db';
 import { DEFAULT_PRICING_SETTINGS } from '../services/pricingRoundingService';
@@ -9,12 +9,13 @@ import { publishSystemAlert } from '../services/systemAlertService';
 import { isPasswordProtectionEnabled, normalizeSecuritySettings, withNormalizedSecurityConfig } from '../utils/securitySettings';
 import { DEFAULT_SHARED_NUMBERING_RULE, normalizeCompanyNumberingConfig } from '../utils/numbering';
 import { hydrateCompanyPdfAssets } from '../utils/companyAssetUtils';
-import {
-  clearStoredUserSession,
-  getAuthInvalidEventName,
-  getStoredUserSession,
-  persistUserSession
-} from '../services/authSession';
+import { supabase } from '../services/supabaseClient';
+
+const SUPABASE_ENABLED = Boolean(
+  import.meta.env.VITE_SUPABASE_URL &&
+  import.meta.env.VITE_SUPABASE_ANON_KEY &&
+  import.meta.env.VITE_SUPABASE_URL !== 'https://placeholder.supabase.co'
+);
 
 interface Notification {
   id: string;
@@ -81,65 +82,10 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const hashPassword = async (text: string): Promise<string> => {
-  if (!text) return '';
-  
-  // Fallback for non-secure contexts (http/IP) where crypto.subtle is unavailable
-  if (!window.isSecureContext || !crypto.subtle) {
-    console.warn('[Auth] Non-secure context detected. Password hashing is degraded.');
-    let hash = 0;
-    const salt = 'PrimeERP2024';
-    for (let i = 0; i < text.length; i++) {
-      const code = text.charCodeAt(i);
-      hash = ((hash << 7) - hash) + code + (salt.charCodeAt(i % salt.length) << 4);
-      hash = hash & 0x7FFFFFFF;
-    }
-    let h2 = 0;
-    for (let i = 0; i < text.length; i++) {
-      h2 = ((h2 << 5) - h2) + text.charCodeAt(i);
-      h2 = h2 & 0x7FFFFFFF;
-    }
-    return `INSECURE_${Math.abs(hash).toString(16).padStart(8, '0')}${Math.abs(h2).toString(16).padStart(8, '0')}`;
-  }
-
-  const msgBuffer = new TextEncoder().encode(text);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-};
-
-const isStoredHash = (value?: string) => {
-  if (!value) return false;
-  return value.startsWith('insecure_') || /^[a-f0-9]{64}$/i.test(value);
-};
-
-const PASSWORD_BYPASS_USER_ID = 'USR-PASSWORD-BYPASS';
-
-const isPasswordBypassSession = (value?: Partial<User> | null) =>
-  Boolean((value as any)?.bypassAuth || (value as any)?.authMode === 'password_bypass' || value?.id === PASSWORD_BYPASS_USER_ID);
-
-const buildPasswordBypassSession = (config: CompanyConfig, users: User[]): User => {
-  const preferredAdmin = users.find(candidate => candidate.isSuperAdmin || candidate.role === 'Admin');
-  const sessionTimeoutMinutes = Math.max(5, Number(normalizeSecuritySettings(config).sessionTimeoutMinutes) || 120);
-  const tokenExpiry = new Date(Date.now() + (sessionTimeoutMinutes * 60 * 1000)).toISOString();
-
-  return {
-    id: PASSWORD_BYPASS_USER_ID,
-    username: 'open-access',
-    fullName: 'Open Access',
-    name: config.companyName?.trim() || preferredAdmin?.fullName || preferredAdmin?.name || 'Open Access',
-    email: config.email || preferredAdmin?.email || 'open-access@prime-erp.local',
-    role: 'Admin',
-    status: 'Active',
-    active: true,
-    isSuperAdmin: true,
-    securityLevel: 'Elevated',
-    groupIds: ['GRP-ADMIN'],
-    tokenExpiry,
-    bypassAuth: true,
-    authMode: 'password_bypass'
-  } as User;
-};
+function getEmailForUser(username: string, domain = 'prime-erp.local'): string {
+  if (username.includes('@')) return username;
+  return `${username}@${domain}`;
+}
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -151,7 +97,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [userGroups, setUserGroups] = useState<UserGroup[]>(INITIAL_USER_GROUPS);
   const [passwordPolicy, setPasswordPolicy] = useState<PasswordPolicy>({ minLength: 8, requireSpecialChar: true, requireNumber: true, expirationDays: 90 });
   
-  const defaultCompanyConfig: CompanyConfig = {
+  const defaultCompanyConfig = {
       companyName: 'Prime ERP', 
       country: 'Malawi', 
       addressLine1: 'Main Street', 
@@ -224,9 +170,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       },
       transactionSettings: {
           allowBackdating: true,
+          backdatingLimitDays: 30,
+          allowPartialFulfillment: true,
+          voidingWindowHours: 24,
+          enforceCreditLimit: 'None',
+          defaultPaymentTermsDays: 30,
+          quotationExpiryDays: 30,
+          autoPrintReceipt: true,
+          quickItemEntry: true,
+          defaultPOSWarehouse: 'WH-MAIN',
+          posDefaultCustomer: '',
           allowFutureDating: true,
           numbering: {
             shared: { ...DEFAULT_SHARED_NUMBERING_RULE }
+          },
+          approvalThresholds: {},
+          paymentDetails: {
+            bankAccounts: [],
+            mobileMoneyAccounts: []
           },
           pos: {
               allowReturns: true,
@@ -265,10 +226,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         showOutstandingAndWalletBalances: false
       },
       cloudSync: {
-        enabled: false,
-        apiUrl: '',
+        enabled: SUPABASE_ENABLED,
+        apiUrl: import.meta.env.VITE_SUPABASE_URL || '',
         apiKey: '',
-        autoSyncEnabled: false,
+        autoSyncEnabled: true,
         syncIntervalMinutes: 15
       },
       securitySettings: {
@@ -290,7 +251,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       backupFrequency: 'Daily'
   };
 
-  const [companyConfig, setCompanyConfig] = useState<CompanyConfig>(() => withNormalizedSecurityConfig(defaultCompanyConfig));
+  const [companyConfig, setCompanyConfig] = useState<CompanyConfig>(() => withNormalizedSecurityConfig(defaultCompanyConfig as any));
 
   const [notification, setNotification] = useState<Notification | null>(null);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
@@ -307,25 +268,58 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Sync user to sessionStorage for API auth bypass
-    if (user) {
-      persistUserSession(user as any);
-    } else {
-      clearStoredUserSession();
-    }
-
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [user]);
+  }, []);
+
+  const syncSupabaseUserToLocal = useCallback(async (supabaseUser: import('@supabase/supabase-js').User): Promise<User | null> => {
+    try {
+      const localUsers = await dbService.getAll<User>('users');
+      const match = localUsers.find(u => u.email === supabaseUser.email || u.id === supabaseUser.id);
+      if (match) {
+        return { ...match, id: supabaseUser.id, tokenExpiry: undefined };
+      }
+      const supabaseProfile: User = {
+        id: supabaseUser.id,
+        username: supabaseUser.user_metadata?.username || supabaseUser.email?.split('@')[0] || 'user',
+        fullName: supabaseUser.user_metadata?.full_name || supabaseUser.email?.split('@')[0] || 'User',
+        name: supabaseUser.user_metadata?.full_name || supabaseUser.email?.split('@')[0] || 'User',
+        email: supabaseUser.email || '',
+        role: (supabaseUser.user_metadata?.role || 'User') as UserRole,
+        status: 'Active',
+        active: true,
+        isSuperAdmin: supabaseUser.user_metadata?.is_super_admin === true,
+        securityLevel: 'Standard',
+        groupIds: supabaseUser.user_metadata?.group_ids || ['GRP-USER'],
+        authMode: 'supabase'
+      };
+      await dbService.put('users', supabaseProfile);
+      return supabaseProfile;
+    } catch {
+      const fallback: User = {
+        id: supabaseUser.id,
+        username: supabaseUser.email?.split('@')[0] || 'user',
+        fullName: supabaseUser.user_metadata?.full_name || supabaseUser.email?.split('@')[0] || 'User',
+        name: supabaseUser.user_metadata?.full_name || supabaseUser.email?.split('@')[0] || 'User',
+        email: supabaseUser.email || '',
+        role: 'User',
+        status: 'Active',
+        active: true,
+        isSuperAdmin: false,
+        securityLevel: 'Standard',
+        groupIds: ['GRP-USER'],
+        authMode: 'supabase'
+      };
+      return fallback;
+    }
+  }, []);
 
   useEffect(() => {
     const loadInitData = async () => {
-      // Failsafe timeout to prevent indefinite loading screen
       const failsafe = setTimeout(() => {
         if (!isInitialized) {
-          // Initialization taking too long, forcing completion
           setIsInitialized(true);
         }
       }, 25000);
@@ -353,18 +347,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         let restoredSession: User | null = null;
-        const savedSession = getStoredUserSession<User>();
-        if (savedSession) {
-          const hydrated = persistUserSession(savedSession);
-          const expiry = hydrated?.tokenExpiry ? new Date(hydrated.tokenExpiry).getTime() : 0;
-          if (hydrated && (isPasswordBypassSession(hydrated) || (expiry && expiry > Date.now()))) {
-            restoredSession = hydrated as User;
-          } else {
-            clearStoredUserSession();
+
+        if (SUPABASE_ENABLED) {
+          try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user) {
+              const profile = await syncSupabaseUserToLocal(session.user);
+              if (profile) restoredSession = profile;
+            }
+          } catch {
+            await supabase.auth.signOut();
+          }
+        } else {
+          const raw = sessionStorage.getItem('nexus_user');
+          if (raw) {
+            try {
+              const parsed = JSON.parse(raw);
+              const expiry = parsed?.tokenExpiry ? new Date(parsed.tokenExpiry).getTime() : 0;
+              if (expiry && expiry > Date.now()) {
+                restoredSession = parsed;
+              } else {
+                sessionStorage.removeItem('nexus_user');
+              }
+            } catch {
+              sessionStorage.removeItem('nexus_user');
+            }
           }
         }
 
-        // 2. Load essential data
         const [u, groups] = await Promise.all([
             dbService.getAll<User>('users'),
             dbService.getAll<UserGroup>('userGroups')
@@ -372,7 +382,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         setAllUsers(u);
         setUserGroups(groups);
-        const effectiveConfig = withNormalizedSecurityConfig(parsedConfig || defaultCompanyConfig);
+        const effectiveConfig = withNormalizedSecurityConfig((parsedConfig || defaultCompanyConfig) as any);
         const hasCompanyData = Boolean(parsedConfig?.companyName?.trim());
         const hasUsers = u.length > 0;
         const initializedFlag = localStorage.getItem('nexus_initialized') === 'true';
@@ -382,22 +392,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           localStorage.setItem('nexus_initialized', 'true');
         }
         if (!setupComplete) {
-          clearStoredUserSession();
           setUser(null);
-        } else if (!isPasswordProtectionEnabled(effectiveConfig)) {
-          const activeSession = restoredSession && !isPasswordBypassSession(restoredSession)
-            ? restoredSession
-            : persistUserSession(buildPasswordBypassSession(effectiveConfig, u));
-          setUser(activeSession);
-        } else if (restoredSession && !isPasswordBypassSession(restoredSession)) {
+        } else if (restoredSession) {
           setUser(restoredSession);
-        } else {
-          clearStoredUserSession();
-          setUser(null);
         }
         setRequiresSetup(!setupComplete);
 
-        // 3. Fetch non-critical data in parallel
         const [logs, storedAlerts, storedReminders] = await Promise.all([
             dbService.getAll<AuditLogEntry>('auditLogs'),
             dbService.getAll<SystemAlert>('alerts'),
@@ -408,7 +408,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setAlerts(storedAlerts.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
         setReminders(storedReminders.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
 
-        // 4. Run Integrity Check
         const integrity = await dbService.checkIntegrity();
         if (!integrity.healthy) {
             console.error("[Auth] Database Integrity Issues:", integrity.issues);
@@ -419,7 +418,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (status === 'connected') setLastSyncTime(new Date().toISOString());
         });
 
-        // Initialize workspace directory if company name exists
         if (parsedConfig?.companyName) {
             try {
                 await (window as any).api?.system?.initializeWorkspace(parsedConfig.companyName);
@@ -428,7 +426,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
         }
 
-        // Initialization complete
+        if (SUPABASE_ENABLED && setupComplete) {
+          try {
+            const { startPeriodicSync } = await import('../services/syncService');
+            console.log("[Auth] Sync service available (data syncing to Supabase is ready)");
+          } catch (syncErr) {
+            console.warn("[Auth] Sync service init skipped:", syncErr);
+          }
+        }
+
       } catch (err) {
         console.error("[Auth] Critical system initialization failure:", err);
       } finally {
@@ -436,7 +442,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsInitialized(true);
       }
 
-      // Schedule Auto-Backup (Once per session/day)
       const lastBackup = localStorage.getItem('prime_erp_backup_date');
       const oneDay = 24 * 60 * 60 * 1000;
       if (!lastBackup || (Date.now() - new Date(lastBackup).getTime() > oneDay)) {
@@ -446,6 +451,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loadInitData();
   }, []);
 
+  useEffect(() => {
+    if (!SUPABASE_ENABLED) return;
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        const profile = await syncSupabaseUserToLocal(session.user);
+        if (profile) {
+          setUser(profile);
+          const currentUsers = await dbService.getAll<User>('users');
+          setAllUsers(currentUsers);
+        }
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+      } else if (event === 'TOKEN_REFRESHED') {
+        if (session?.user && user) {
+          const profile = await syncSupabaseUserToLocal(session.user);
+          if (profile) setUser(profile);
+        }
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [syncSupabaseUserToLocal, user]);
+
   const notify = useCallback((message: string, type: 'success' | 'error' | 'info' | 'warning') => {
     setNotification({ id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, message, type });
   }, []);
@@ -453,30 +484,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const clearNotification = useCallback(() => {
     setNotification(null);
   }, []);
-
-  useEffect(() => {
-    const authInvalidEvent = getAuthInvalidEventName();
-
-    const handleAuthInvalid = (event: Event) => {
-      const customEvent = event as CustomEvent<{ reason?: string }>;
-      const reason = customEvent.detail?.reason || 'Your session has expired. Please sign in again.';
-      const passwordProtectionEnabled = isPasswordProtectionEnabled(companyConfig);
-
-      if (!passwordProtectionEnabled && !requiresSetup) {
-        const bypassSession = persistUserSession(buildPasswordBypassSession(withNormalizedSecurityConfig(companyConfig), allUsers));
-        setUser(bypassSession);
-        notify(reason, 'info');
-        return;
-      }
-
-      clearStoredUserSession();
-      setUser(null);
-      notify(reason, 'error');
-    };
-
-    window.addEventListener(authInvalidEvent, handleAuthInvalid as EventListener);
-    return () => window.removeEventListener(authInvalidEvent, handleAuthInvalid as EventListener);
-  }, [allUsers, companyConfig, notify, requiresSetup]);
 
   const addAuditLog = useCallback(async (params: AuditParams) => {
     const entry: AuditLogEntry = {
@@ -501,25 +508,96 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (requiresSetup) {
             return 'INVALID';
         }
-        const passwordProtectionEnabled = isPasswordProtectionEnabled(companyConfig);
-        // login attempt
+
+        if (SUPABASE_ENABLED) {
+          if (!password) {
+            const dbUsersLocal = await dbService.getAll<User>('users');
+            const localFound = dbUsersLocal.find(u => u.username.toLowerCase() === username.toLowerCase());
+            if (localFound && !localFound.password) {
+              setUser({ ...localFound, authMode: 'local' });
+              return 'SUCCESS';
+            }
+            return 'INVALID';
+          }
+          const email = getEmailForUser(username);
+          const { data: signInData, error } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
+          if (error) {
+            const dbUsersLocal = await dbService.getAll<User>('users');
+            const localFound = dbUsersLocal.find(u => u.username.toLowerCase() === username.toLowerCase());
+            if (localFound && localFound.password) {
+              const hashPassword = async (text: string): Promise<string> => {
+                if (!text) return '';
+                if (!window.isSecureContext || !crypto.subtle) {
+                  let hash = 0;
+                  const salt = 'PrimeERP2024';
+                  for (let i = 0; i < text.length; i++) {
+                    const code = text.charCodeAt(i);
+                    hash = ((hash << 7) - hash) + code + (salt.charCodeAt(i % salt.length) << 4);
+                    hash = hash & 0x7FFFFFFF;
+                  }
+                  let h2 = 0;
+                  for (let i = 0; i < text.length; i++) {
+                    h2 = ((h2 << 5) - h2) + text.charCodeAt(i);
+                    h2 = h2 & 0x7FFFFFFF;
+                  }
+                  return `INSECURE_${Math.abs(hash).toString(16).padStart(8, '0')}${Math.abs(h2).toString(16).padStart(8, '0')}`;
+                }
+                const msgBuffer = new TextEncoder().encode(text);
+                const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+                const hashArray = Array.from(new Uint8Array(hashBuffer));
+                return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+              };
+              const isStoredHash = (value?: string) => !value ? false : value.startsWith('insecure_') || /^[a-f0-9]{64}$/i.test(value);
+              const hashedInput = await hashPassword(password);
+              const expectedPassword = isStoredHash(localFound.password) ? localFound.password : await hashPassword(localFound.password);
+              if (expectedPassword === hashedInput) {
+                setUser({ ...localFound, authMode: 'local' });
+                return 'SUCCESS';
+              }
+            }
+            return 'INVALID';
+          }
+          if (signInData?.user) {
+            const localUsers = await dbService.getAll<User>('users');
+            const match = localUsers.find(u => u.email === signInData.user!.email || u.id === signInData.user!.id);
+            if (match) {
+              setUser({ ...match, id: signInData.user.id, authMode: 'supabase' });
+            }
+          }
+          return 'SUCCESS';
+        }
+
         const dbUsers = await dbService.getAll<User>('users');
-        // Found users in DB
+        const passwordProtectionEnabled = isPasswordProtectionEnabled(companyConfig);
 
         if (!passwordProtectionEnabled) {
-            const bypassSession = persistUserSession(buildPasswordBypassSession(withNormalizedSecurityConfig(companyConfig), dbUsers));
-            setUser(bypassSession);
+            const fakeUser = dbUsers.find(u => u.isSuperAdmin || u.role === 'Admin') || {
+              id: 'USR-LOCAL',
+              username: username,
+              fullName: username,
+              name: username,
+              email: getEmailForUser(username),
+              role: 'Admin' as UserRole,
+              status: 'Active' as const,
+              active: true,
+              isSuperAdmin: true,
+              securityLevel: 'Elevated',
+              groupIds: ['GRP-ADMIN'],
+              authMode: 'anonymous'
+            } as User;
+            setUser(fakeUser);
             return 'SUCCESS';
         }
         
         const foundUser = dbUsers.find(u => u.username.toLowerCase() === username.toLowerCase());
         if (!foundUser) {
-            // User not found
             return 'INVALID';
         }
         
         if (foundUser.status !== 'Active') {
-            // User is not active
             return 'INVALID';
         }
 
@@ -527,13 +605,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             return 'INVALID';
         }
 
+        const hashPassword = async (text: string): Promise<string> => {
+          if (!text) return '';
+          if (!window.isSecureContext || !crypto.subtle) {
+            let hash = 0;
+            const salt = 'PrimeERP2024';
+            for (let i = 0; i < text.length; i++) {
+              const code = text.charCodeAt(i);
+              hash = ((hash << 7) - hash) + code + (salt.charCodeAt(i % salt.length) << 4);
+              hash = hash & 0x7FFFFFFF;
+            }
+            let h2 = 0;
+            for (let i = 0; i < text.length; i++) {
+              h2 = ((h2 << 5) - h2) + text.charCodeAt(i);
+              h2 = h2 & 0x7FFFFFFF;
+            }
+            return `INSECURE_${Math.abs(hash).toString(16).padStart(8, '0')}${Math.abs(h2).toString(16).padStart(8, '0')}`;
+          }
+          const msgBuffer = new TextEncoder().encode(text);
+          const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+          const hashArray = Array.from(new Uint8Array(hashBuffer));
+          return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        };
+
+        const isStoredHash = (value?: string) => {
+          if (!value) return false;
+          return value.startsWith('insecure_') || /^[a-f0-9]{64}$/i.test(value);
+        };
+
         const hashedInput = await hashPassword(password);
         const expectedPassword = isStoredHash(foundUser.password) ? foundUser.password : await hashPassword(foundUser.password);
         if (foundUser.password !== expectedPassword) {
             await dbService.put('users', { ...foundUser, password: expectedPassword });
         }
         if (expectedPassword !== hashedInput) {
-            // Password mismatch
             return 'INVALID';
         }
 
@@ -542,19 +647,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (mfaCode.length !== 6) return 'INVALID';
         }
 
-        const sessionTimeoutMinutes = Math.max(5, Number(companyConfig?.securitySettings?.sessionTimeoutMinutes) || 120);
-        const sessionDuration = sessionTimeoutMinutes * 60 * 1000;
-        const sessionUser = persistUserSession({
-            ...foundUser, 
-            tokenExpiry: new Date(Date.now() + sessionDuration).toISOString(),
-            authMode: 'local'
-        });
-
-        setUser(sessionUser);
+        setUser({ ...foundUser, authMode: 'local' });
         
-        // Login successful
-        
-        // Audit log in background
         addAuditLog({
             action: 'LOGIN',
             entityType: 'User',
@@ -567,7 +661,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.error("AuthContext: Login function error:", err);
         throw err;
     }
-  }, [addAuditLog, companyConfig, requiresSetup]);
+  }, [addAuditLog, companyConfig, requiresSetup, SUPABASE_ENABLED]);
 
   const logout = useCallback(() => {
     if (user) {
@@ -577,20 +671,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             entityId: user.id,
             details: `User ${user.username} logged out.`
         });
-        const passwordProtectionEnabled = isPasswordProtectionEnabled(companyConfig);
-        if (!passwordProtectionEnabled && !requiresSetup) {
-            const bypassSession = persistUserSession(buildPasswordBypassSession(withNormalizedSecurityConfig(companyConfig), allUsers));
-            setUser(bypassSession);
-            return;
+        if (SUPABASE_ENABLED) {
+          supabase.auth.signOut();
         }
         setUser(null);
-        clearStoredUserSession();
+        sessionStorage.removeItem('nexus_user');
     }
-  }, [user, addAuditLog, companyConfig, requiresSetup, allUsers]);
+  }, [user, addAuditLog, SUPABASE_ENABLED]);
 
   const checkPermission = useCallback((permissionId: string) => {
     if (!user) return false;
-    // Admin role, SuperAdmin flag, or 'admin' username should bypass all permission checks
     if (user.role === 'Admin' || user.isSuperAdmin || user.username.toLowerCase() === 'admin') return true;
     const groups = userGroups.filter(g => user.groupIds?.includes(g.id));
     return groups.some(g => g.permissions.includes(permissionId));
@@ -605,14 +695,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [passwordPolicy]);
 
   const manageUser = async (u: User) => {
-    const normalizedPassword = u.password
-      ? (isStoredHash(u.password) ? u.password : await hashPassword(u.password))
-      : '';
-    const userData = {
-      ...u,
-      id: u.id || generateNextId('USR', allUsers, companyConfig),
-      password: normalizedPassword
-    };
+    const userData = { ...u, id: u.id || generateNextId('USR', allUsers, companyConfig) };
+
+    if (SUPABASE_ENABLED && u.password) {
+      const email = getEmailForUser(u.email || u.username);
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password: u.password,
+        options: {
+          data: {
+            username: u.username,
+            full_name: u.fullName || u.name,
+            role: u.role,
+            is_super_admin: u.isSuperAdmin,
+            group_ids: u.groupIds,
+          }
+        }
+      });
+      if (signUpError) {
+        console.error('[Auth] Failed to create Supabase auth user:', signUpError);
+      } else if (signUpData?.user) {
+        try {
+          await supabase.from('users').insert({
+            id: signUpData.user.id,
+            username: u.username || signUpData.user.email?.split('@')[0] || 'user',
+            full_name: u.fullName || u.name,
+            name: u.fullName || u.name,
+            email: signUpData.user.email || u.email,
+            role: u.role || 'User',
+            is_super_admin: u.isSuperAdmin || false,
+            group_ids: u.groupIds || [],
+          });
+        } catch (profileErr) {
+          console.error('[Auth] Failed to create user profile:', profileErr);
+        }
+      }
+    }
+
     await dbService.put('users', userData);
     
     setAllUsers(prev => {
@@ -662,16 +781,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     void syncDocumentNumberSeriesConfig(normalizedConfig).catch((error) => {
       console.error('Failed to sync document numbering configuration', error);
     });
-    const passwordProtectionEnabled = isPasswordProtectionEnabled(normalizedConfig);
-    if (!passwordProtectionEnabled) {
-      const bypassSession = persistUserSession(buildPasswordBypassSession(normalizedConfig, allUsers));
-      if (!user || isPasswordBypassSession(user)) {
-        setUser(bypassSession);
-      }
-    } else if (isPasswordBypassSession(user)) {
-      setUser(null);
-      clearStoredUserSession();
-    }
     notify('System config saved', 'success');
   };
 
@@ -708,6 +817,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const resetSystem = async () => {
+    if (SUPABASE_ENABLED) {
+      await supabase.auth.signOut();
+    }
     await dbService.factoryReset();
     localStorage.clear();
     sessionStorage.clear();
@@ -733,6 +845,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     setCompanyConfig(normalizedConfig);
     localStorage.setItem('nexus_company_config', JSON.stringify(normalizedConfig));
+
     await manageUser({
       ...adminUser,
       role: 'Admin',
@@ -747,21 +860,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setRequiresSetup(false);
     setIsInitialized(true);
 
-    // Initialize local workspace on Desktop
     try {
       const { api } = await import('../services/api');
       await api.system.initializeWorkspace(normalizedConfig.companyName);
-      console.log('Local workspace initialized successfully.');
     } catch (err) {
       console.warn('Failed to initialize local workspace:', err);
     }
 
-    if (isPasswordProtectionEnabled(normalizedConfig)) {
+    if (!SUPABASE_ENABLED) {
       setUser(null);
-      clearStoredUserSession();
     } else {
-      const bypassSession = persistUserSession(buildPasswordBypassSession(normalizedConfig, updatedUsers));
-      setUser(bypassSession);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const profile = await syncSupabaseUserToLocal(session.user);
+        if (profile) setUser(profile);
+      }
     }
   };
 

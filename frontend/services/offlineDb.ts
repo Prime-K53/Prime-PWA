@@ -150,7 +150,7 @@ const withIndexedDbFallback = async <T>(fallback: () => T | Promise<T>, operatio
   }
 };
 
-const shouldUseDexie = (_collectionId?: string) => true;
+const shouldUseDexie = (_collectionId?: string) => false;
 const shouldMirrorLegacyWrites = (_collectionId?: string) => false;
 
 const readBatchesFromLegacy = () => withIndexedDbFallback(
@@ -427,9 +427,12 @@ export const offlineDb = {
   async getSyncQueue(statuses?: SyncQueueStatus[]): Promise<SyncQueueItem[]> {
     if (shouldUseDexie('syncOperations') && dexieQueueCoordinator.supportsDexie()) {
       try {
-        const rows = await dexieQueueCoordinator.getQueueItems(statuses);
+        const rows = await Promise.race([
+          dexieQueueCoordinator.getQueueItems(statuses),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 10000))
+        ]);
         const legacyRows = await readQueueFromLegacy(statuses);
-        const mergedRows = normalizeQueueRows(mergeByIdentifier<SyncQueueItem>(rows as unknown as SyncQueueItem[], legacyRows), statuses);
+        const mergedRows = normalizeQueueRows(mergeByIdentifier<SyncQueueItem>((rows as SyncQueueItem[]) || [] as any, legacyRows), statuses);
         if (mergedRows.length > 0) {
           return mergedRows;
         }
@@ -451,7 +454,10 @@ export const offlineDb = {
 
     if (shouldUseDexie('syncOperations') && dexieQueueCoordinator.supportsDexie()) {
       try {
-        const queued = await dexieQueueCoordinator.enqueue(next as any);
+        const queued = await Promise.race([
+          dexieQueueCoordinator.enqueue(next as any),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 10000))
+        ]);
         if (queued) {
           next = queued as SyncQueueItem;
           storedInRxDb = true;
@@ -482,7 +488,10 @@ export const offlineDb = {
 
     if (shouldUseDexie('syncOperations') && dexieQueueCoordinator.supportsDexie()) {
       try {
-        const saved = await dexieQueueCoordinator.save(next as any);
+        const saved = await Promise.race([
+          dexieQueueCoordinator.save(next as any),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 10000))
+        ]);
         storedInRxDb = Boolean(saved);
       } catch {
         storedInRxDb = false;

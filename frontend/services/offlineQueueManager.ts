@@ -1,6 +1,5 @@
 import { offlineDb } from './offlineDb';
 import type { SyncOperation, SyncQueueItem, SyncQueuePriority, SyncQueueStatus } from '../types/offline';
-import { dexieQueueCoordinator } from './dexie/queue-coordinator';
 
 export const BACKGROUND_SYNC_TAG = 'prime-erp-sync';
 
@@ -25,8 +24,16 @@ const notifySyncWorker = async () => {
     return;
   }
 
+  const registrations = await navigator.serviceWorker.getRegistrations();
+  if (registrations.length === 0) return;
+
   try {
-    const registration = await navigator.serviceWorker.ready;
+    const registration = await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
+    ]).catch(() => null);
+    if (!registration) return;
+
     const syncManager = (registration as ServiceWorkerRegistration & {
       sync?: { register: (tag: string) => Promise<void> };
     }).sync;
@@ -76,12 +83,9 @@ export const queueOfflineMutation = async <TPayload extends Record<string, unkno
     attemptHistory: []
   };
 
-  const queued = await offlineDb.enqueueSyncQueueItem(item);
-  if (!queued && dexieQueueCoordinator.supportsDexie()) {
-    await dexieQueueCoordinator.enqueue(item);
-  }
+  await offlineDb.enqueueSyncQueueItem(item);
   await notifySyncWorker();
-  return queued || item;
+  return item;
 };
 
 export const getQueuedMutations = async (statuses?: SyncQueueStatus[]) => offlineDb.getSyncQueue(statuses);

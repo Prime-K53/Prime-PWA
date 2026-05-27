@@ -37,10 +37,6 @@ const inlineFontsPlugin = (): Plugin => ({
 
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
-    const apiProxyTarget =
-      stripApiSuffix(env.VITE_API_PROXY_TARGET || '') ||
-      stripApiSuffix(env.VITE_API_URL || '') ||
-      'http://localhost:3000';
     const isDev = mode === 'development';
 
     return {
@@ -61,21 +57,8 @@ export default defineConfig(({ mode }) => {
         },
         allowedHosts: ['127.0.0.1', 'localhost'],
         headers: {
-          'Content-Security-Policy': "default-src 'self' 'unsafe-inline' 'unsafe-eval' http://127.0.0.1:* http://localhost:* https://127.0.0.1:* https://localhost:* ws://127.0.0.1:* ws://localhost:* wss://127.0.0.1:* wss://localhost:* data: blob: prime-pdf:; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://127.0.0.1:* http://localhost:* https://127.0.0.1:* https://localhost:*; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' http://127.0.0.1:* http://localhost:* https://127.0.0.1:* https://localhost:* ws://127.0.0.1:* ws://localhost:* wss://127.0.0.1:* wss://localhost:* data: blob:; frame-src 'self' blob: data: prime-pdf: http://127.0.0.1:* http://localhost:* https://127.0.0.1:* https://localhost:*; object-src 'self' blob: data: prime-pdf:; worker-src 'self' blob:; child-src 'self' blob:; font-src 'self' data: blob:;"
-        },
-        proxy: isDev ? {
-          '/api': {
-            target: apiProxyTarget,
-            changeOrigin: true,
-            secure: apiProxyTarget.startsWith('https://'),
-            ws: true,
-            bypass: (req) => {
-              if (req.headers.accept?.includes('text/html')) {
-                return null;
-              }
-            }
-          }
-        } : {}
+          'Content-Security-Policy': "default-src 'self' 'unsafe-inline' 'unsafe-eval' http://127.0.0.1:* http://localhost:* https://127.0.0.1:* https://localhost:* ws://127.0.0.1:* ws://localhost:* wss://127.0.0.1:* wss://localhost:* data: blob: prime-pdf: https://*.supabase.co wss://*.supabase.co; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://127.0.0.1:* http://localhost:* https://127.0.0.1:* https://localhost:*; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' http://127.0.0.1:* http://localhost:* https://127.0.0.1:* https://localhost:* ws://127.0.0.1:* ws://localhost:* wss://127.0.0.1:* wss://localhost:* data: blob: https://*.supabase.co wss://*.supabase.co; frame-src 'self' blob: data: prime-pdf: http://127.0.0.1:* http://localhost:* https://127.0.0.1:* https://localhost:*; object-src 'self' blob: data: prime-pdf:; worker-src 'self' blob:; child-src 'self' blob:; font-src 'self' data: blob:;"
+        }
       },
       plugins: [basicSsl(), react(), inlineFontsPlugin()],
       optimizeDeps: {
@@ -94,8 +77,6 @@ export default defineConfig(({ mode }) => {
       define: {
         'process.env.API_KEY': JSON.stringify(env.VITE_GEMINI_API_KEY),
         'process.env.GEMINI_API_KEY': JSON.stringify(env.VITE_GEMINI_API_KEY),
-        'process.env.VITE_API_URL': isDev ? JSON.stringify(env.VITE_API_URL || 'http://localhost:3000') : '""',
-        'process.env.API_BASE_URL': isDev ? JSON.stringify(env.VITE_API_URL || 'http://localhost:3000') : '""',
       },
       resolve: {
         dedupe: ['react', 'react-dom', 'dexie'],

@@ -94,12 +94,11 @@ const buildAuthHeaders = (headers: Record<string, string> = {}) => {
   const session = ensureSessionAuthState();
   const nextHeaders = getJsonRequestHeaders(headers);
 
-  if (session.authMode === 'token' && session.accessToken) {
+  if (session.accessToken) {
     nextHeaders.Authorization = `Bearer ${session.accessToken}`;
   }
 
   nextHeaders['x-auth-mode'] = session.authMode;
-  nextHeaders['x-dev-bypass'] = 'true';
   return nextHeaders;
 };
 

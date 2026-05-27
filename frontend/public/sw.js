@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'primeerp-offline-v2';
+const CACHE_VERSION = 'primeerp-offline-v3';
 const STATIC_CACHE = `${CACHE_VERSION}:static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}:runtime`;
 const API_CACHE = `${CACHE_VERSION}:api`;

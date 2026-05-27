@@ -94,9 +94,8 @@ const mapPriorityToType = (priority: NotificationEntity['priority'], metadata?: 
 };
 
 const toRepositoryEntity = (notification: Notification): NotificationEntity => {
-  const timestamp = notification.timestamp instanceof Date
-    ? notification.timestamp.toISOString()
-    : new Date(notification.timestamp).toISOString();
+  const ts = notification.timestamp instanceof Date ? notification.timestamp : new Date(notification.timestamp);
+  const timestamp = isNaN(ts.getTime()) ? new Date().toISOString() : ts.toISOString();
 
   return {
     id: notification.id,

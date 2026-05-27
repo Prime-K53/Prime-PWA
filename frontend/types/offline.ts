@@ -110,7 +110,7 @@ export interface AuthState {
   accessToken: string | null;
   refreshToken: string | null;
   expiresAt: string | null;
-  authMode: 'token' | 'password_bypass' | 'local' | 'anonymous';
+  authMode: 'supabase' | 'anonymous';
   isAuthenticated: boolean;
 }
 

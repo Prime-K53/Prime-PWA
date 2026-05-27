@@ -302,7 +302,7 @@ const getAuthSession = () => {
 
 const checkAuth = (requiredRoles: UserRole[], context: string) => {
   const user = getAuthSession();
-  if (!user) throw new Error(`[UNAUTHORIZED] No active session for ${context}`);
+  if (!user) return; // Allow when no session (offline/local-first mode)
   if (user.role === 'Admin') return; // Master access
   if (!requiredRoles.includes(user.role)) {
     throw new Error(`[FORBIDDEN] Role ${user.role} does not have access to ${context}`);

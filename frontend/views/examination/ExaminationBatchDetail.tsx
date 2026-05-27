@@ -607,6 +607,7 @@ const ExaminationBatchDetail: React.FC = () => {
         adjustment: 0,
         marketAdjustment: 0,
         roundingAdjustment: 0,
+        manualOverride: 0,
         total: 0,
         totalPages: 0,
         totalSheets: 0,

@@ -1,12 +1,12 @@
 import React, { useMemo, useState } from 'react';
-import { Lock, ShieldCheck, User as UserIcon, ArrowRight, Loader2, Sparkles, Receipt, AlertCircle, Key } from 'lucide-react';
+import { Lock, ShieldCheck, Mail, ArrowRight, Loader2, Sparkles, Receipt, AlertCircle, Key } from 'lucide-react';
 import { Input } from '../../components/Input';
 import AuthLayout from './AuthLayout';
 import { useAuth } from '../../context/AuthContext';
 
 const Login: React.FC = () => {
   const { login, notification, clearNotification, companyConfig } = useAuth();
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [mfaCode, setMfaCode] = useState('');
   const [requiresMfa, setRequiresMfa] = useState(false);
@@ -14,10 +14,10 @@ const Login: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const canSubmit = useMemo(() => {
-    if (!username.trim()) return false;
+    if (!email.trim()) return false;
     if (requiresMfa) return mfaCode.trim().length === 6;
     return password.length > 0;
-  }, [mfaCode, password, requiresMfa, username]);
+  }, [mfaCode, password, requiresMfa, email]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,7 +26,7 @@ const Login: React.FC = () => {
     if (notification) clearNotification();
 
     try {
-      const result = await login(username.trim(), password, requiresMfa ? mfaCode.trim() : undefined);
+      const result = await login(email.trim(), password, requiresMfa ? mfaCode.trim() : undefined);
       if (result === 'MFA_REQUIRED') {
         setRequiresMfa(true);
         setSubmitting(false);
@@ -88,24 +88,24 @@ const Login: React.FC = () => {
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="bg-white/3 border border-white/6 rounded-xl p-5 space-y-4">
           <div className="flex items-center gap-2 mb-1">
-            <UserIcon size={16} className="text-emerald-400" />
-            <h3 className="text-sm font-semibold text-white">Credentials</h3>
+            <Mail size={16} className="text-emerald-400" />
+            <h3 className="text-sm font-semibold text-white">Sign In</h3>
           </div>
 
           <div>
             <label className="text-xs font-semibold text-slate-300 mb-1.5 block">
-              Username <span className="text-rose-400">*</span>
+              Email <span className="text-rose-400">*</span>
             </label>
             <div className="relative">
               <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500">
-                <UserIcon size={16} />
+                <Mail size={16} />
               </div>
               <Input
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className={`${inputClass} pl-10`}
-                placeholder="admin"
-                autoComplete="username"
+                placeholder="admin@company.com"
+                autoComplete="email"
                 disabled={submitting}
                 required
               />
