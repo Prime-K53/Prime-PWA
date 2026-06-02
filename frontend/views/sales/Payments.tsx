@@ -584,8 +584,8 @@ const Payments: React.FC = () => {
         customerName: '',
         subAccountName: 'Main',
         amount: 0,
-        paymentMethod: 'Bank Transfer',
-        accountId: '1050',
+        paymentMethod: 'Cash',
+        accountId: '1000',
         reference: '',
         notes: '',
         bankCharges: 0,
@@ -593,7 +593,7 @@ const Payments: React.FC = () => {
         reconciled: false,
         excessHandling: 'Change'
     });
-
+ 
     const [allocations, setAllocations] = useState<InvoiceAllocation[]>([]);
     const [previewState, setPreviewState] = useState<{ isOpen: boolean, data: any, type: 'RECEIPT' | 'ACCOUNT_STATEMENT' | 'POS_RECEIPT' | 'SUPPLIER_PAYMENT' }>({
         isOpen: false,
@@ -738,8 +738,8 @@ const Payments: React.FC = () => {
         date: new Date().toISOString().split('T')[0],
         supplierId: '',
         amount: 0,
-        paymentMethod: 'Bank Transfer',
-        accountId: '1050',
+        paymentMethod: 'Cash',
+        accountId: '1000',
         reference: '',
         notes: '',
         status: 'Cleared',
@@ -900,8 +900,8 @@ const Payments: React.FC = () => {
             customerId: '',
             subAccountName: 'Main',
             amount: 0,
-            paymentMethod: 'Bank Transfer',
-            accountId: '1050',
+            paymentMethod: 'Cash',
+            accountId: '1000',
             reference: '',
             notes: '',
             bankCharges: 0,
@@ -1825,7 +1825,7 @@ const Payments: React.FC = () => {
                                             supplierId: '',
                                             amount: 0,
                                             paymentMethod: 'Bank Transfer',
-                                            accountId: '1050',
+        accountId: '1000',
                                             reference: '',
                                             notes: '',
                                             status: 'Cleared',

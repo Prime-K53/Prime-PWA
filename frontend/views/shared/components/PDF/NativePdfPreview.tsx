@@ -72,7 +72,7 @@ export const NativePdfPreview: React.FC<NativePdfPreviewProps> = ({
         if (platform.isDesktop) {
           tempFileRef.current = directPath;
           const url = platform.api.getPdfPreviewUrl(directPath);
-          d.push({ label: 'Engine', value: platform.type === 'tauri' ? 'Tauri' : 'Electron' });
+          d.push({ label: 'Engine', value: (platform.type as string) === 'tauri' ? 'Tauri' : 'Electron' });
           setPreviewUrl(url);
           setSize('from worker');
           if (dead) return;
@@ -105,11 +105,11 @@ export const NativePdfPreview: React.FC<NativePdfPreviewProps> = ({
           tempFileRef.current = r.path;
           const url = platform.api.getPdfPreviewUrl(r.path);
           if (!url) throw new Error('Preview URL generation failed');
-          d.push({ label: 'Engine', value: platform.type === 'tauri' ? 'Tauri' : 'Electron' });
+          d.push({ label: 'Engine', value: (platform.type as string) === 'tauri' ? 'Tauri' : 'Electron' });
           setPreviewUrl(url);
           previewLog('temp-written', { path: r.path, bytes: bytes.byteLength });
         } else {
-          const blob = new Blob([bytes], { type: 'application/pdf' });
+          const blob = new Blob([bytes as BlobPart], { type: 'application/pdf' });
           blobUrlRef.current = URL.createObjectURL(blob);
           d.push({ label: 'Engine', value: 'Browser' });
           setPreviewUrl(blobUrlRef.current);

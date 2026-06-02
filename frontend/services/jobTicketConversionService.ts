@@ -72,7 +72,7 @@ const mergeBatchSnapshot = async (storedBatch: any, hydratedBatch: any) => {
   
   if (!customerName && schoolId) {
     try {
-      const customers = await dbService.getAll('customers');
+      const customers = await dbService.getAll<any>('customers');
       const customer = customers.find((c: any) => String(c.id) === String(schoolId));
       if (customer) {
         customerName = customer.name;
@@ -216,7 +216,7 @@ const mapBatchToWorkOrder = async (batch: any, workOrderId: string) => {
   let customerName = batch.customerName || batch.customer_name || batch.schoolName || batch.school_name || batch.name;
   if (!customerName && schoolId) {
     try {
-      const customers = await dbService.getAll('customers');
+      const customers = await dbService.getAll<any>('customers');
       const customer = customers.find((c: any) => String(c.id) === String(schoolId));
       if (customer) {
         customerName = customer.name;
@@ -273,7 +273,7 @@ const mapBatchToTicket = async (batch: any, jobTicketId: string, linkedWorkOrder
   let customerName = batch.customerName || batch.customer_name || batch.schoolName || batch.school_name || batch.name;
   if (!customerName && schoolId) {
     try {
-      const customers = await dbService.getAll('customers');
+      const customers = await dbService.getAll<any>('customers');
       const customer = customers.find((c: any) => String(c.id) === String(schoolId));
       if (customer) {
         customerName = customer.name;

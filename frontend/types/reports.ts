@@ -163,6 +163,7 @@ export interface ReportColumn {
   aggregation?: AggregationType;
   format?: string; // e.g., '#,##0.00', 'MM/DD/YYYY'
   sortable?: boolean;
+  filterable?: boolean;
   groupable?: boolean;
   hidden?: boolean;
   formula?: string; // For calculated columns

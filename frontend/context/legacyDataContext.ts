@@ -7,6 +7,7 @@ export interface LegacyDataSlices {
   procurement?: Record<string, any> | null;
   orders?: Record<string, any> | null;
   examination?: Record<string, any> | null;
+  banking?: { fetchBankingData: () => Promise<void> } | null;
 }
 
 export const runLegacyRefreshTasks = async (slices: LegacyDataSlices) => {
@@ -17,6 +18,7 @@ export const runLegacyRefreshTasks = async (slices: LegacyDataSlices) => {
     () => slices.procurement?.fetchProcurementData?.(),
     () => slices.production?.fetchProductionData?.(),
     () => slices.orders?.fetchOrders?.(),
+    () => slices.banking?.fetchBankingData?.(),
   ];
 
   return Promise.allSettled(tasks.map((task) => task()));

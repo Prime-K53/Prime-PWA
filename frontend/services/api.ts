@@ -1,7 +1,8 @@
 import axios from 'axios';
 import { dbService } from './db.ts';
 import { productionDb } from './productionDb.ts';
-import { getUrl, API_BASE_URL, HAS_REMOTE_BACKEND } from '@/config/api.js';
+import { getUrl, API_BASE_URL, HAS_REMOTE_BACKEND, SUPABASE_CONFIGURED } from '@/config/api.js';
+import { supabase } from './supabaseClient';
 import { platform } from './platform';
 import { isVerboseApiLoggingEnabled } from '../utils/debugFlags';
 import {
@@ -35,11 +36,21 @@ import {
 // Initialize axios - baseURL is centralized from api config
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    'x-user-id': 'USR-0001',
-    'x-user-role': 'Admin',
-    'x-user-is-super-admin': 'true'
-  }
+  headers: {}
+});
+
+// Attach auth headers from session on every request
+apiClient.interceptors.request.use((config) => {
+  try {
+    const raw = sessionStorage.getItem('nexus_user');
+    if (raw) {
+      const user = JSON.parse(raw);
+      if (user?.id) config.headers['x-user-id'] = user.id;
+      if (user?.role) config.headers['x-user-role'] = user.role;
+      if (user?.email) config.headers['x-user-email'] = user.email;
+    }
+  } catch { /* non-fatal */ }
+  return config;
 });
 
 // Log all non-2xx API responses with full diagnostic details
@@ -479,10 +490,15 @@ export const api = {
         if (!found) return { status: 401, error: 'User not found in local database' };
         return { status: 200, data: found };
       }, 'Auth.Login');
-    }
-  },
-
-  dashboard: {
+    },
+    changePassword: async (oldPassword: string, newPassword: string) => {
+      const dbUsers = await dbService.getAll<User>('users');
+      const currentUser = dbUsers[0];
+      if (!currentUser) {
+        throw new Error('No local user found');
+      }
+      return dbService.put('users', { ...currentUser, password: newPassword });
+    },
     getDashboard: (days?: number) => handle(async () => {
       const safeDays = Math.max(1, Math.min(Number(days) || 30, 365));
 
@@ -574,14 +590,18 @@ export const api = {
       checkAuth(['Admin', 'Accountant', 'Clerk'], 'Sales.Create');
       await transactionService.processSale(sale);
       try {
-        const response = await apiClient.post('/sales', sale);
-        const persistedSale = mergeSalePayload(sale, response.data);
-        await dbService.put('sales', persistedSale);
-        if (typeof window !== 'undefined') {
-          console.log('Sale created successfully');
-          window.dispatchEvent(new Event('primeerp:dashboard-refresh'));
+        if (!SUPABASE_CONFIGURED) {
+          const response = await apiClient.post('/sales', sale);
+          const persistedSale = mergeSalePayload(sale, response.data);
+          await dbService.put('sales', persistedSale);
+          if (typeof window !== 'undefined') {
+            console.log('Sale created successfully');
+            window.dispatchEvent(new Event('primeerp:dashboard-refresh'));
+          }
+          return persistedSale;
         }
-        return persistedSale;
+        await dbService.put('sales', sale);
+        return sale;
       } catch (err) {
         ensureBackendInProd('Sales.Create', err);
         await dbService.put('sales', sale);
@@ -1897,7 +1917,7 @@ export const api = {
     }, 'System.ActivateLicense'),
 
     initializeWorkspace: (companyName: string) => handle(async () => {
-      if (!HAS_REMOTE_BACKEND) {
+      if (!HAS_REMOTE_BACKEND || SUPABASE_CONFIGURED) {
         const workspaceConfig = {
           mode: 'offline-file',
           companyName,

@@ -135,10 +135,14 @@ export const useSalesStore = create<SalesState>((set, get) => ({
 
   addSale: async (sale) => {
     const newSale = { ...sale, id: sale.id || generateNextId('SALE', get().sales) };
+    const prev = get().sales;
     set(state => ({ sales: [...state.sales, newSale] }));
-    await api.sales.createSale(newSale);
-    
-    // Trigger customer notification
+    try {
+      await api.sales.createSale(newSale);
+    } catch (error) {
+      set({ sales: prev });
+      throw error;
+    }
     if (newSale.customerPhone) {
       await customerNotificationService.triggerNotification('SALES_ORDER', {
         id: newSale.id,
@@ -149,16 +153,26 @@ export const useSalesStore = create<SalesState>((set, get) => ({
     }
   },
   updateSale: async (sale) => {
+    const prev = get().sales;
     set(state => ({ sales: state.sales.map(s => s.id === sale.id ? sale : s) }));
-    await transactionService.updateSale(sale);
+    try {
+      await transactionService.updateSale(sale);
+    } catch (error) {
+      set({ sales: prev });
+      throw error;
+    }
   },
 
   addQuotation: async (quotation) => {
     const newQuotation = { ...quotation, id: quotation.id || generateNextId('QTN', get().quotations) };
+    const prev = get().quotations;
     set(state => ({ quotations: [...state.quotations, newQuotation] }));
-    await api.sales.saveQuotation(newQuotation);
-    
-    // Trigger customer notification
+    try {
+      await api.sales.saveQuotation(newQuotation);
+    } catch (error) {
+      set({ quotations: prev });
+      throw error;
+    }
     if (newQuotation.customerPhone) {
       await customerNotificationService.triggerNotification('QUOTATION', {
         id: newQuotation.id,
@@ -169,26 +183,56 @@ export const useSalesStore = create<SalesState>((set, get) => ({
     }
   },
   updateQuotation: async (quotation) => {
+    const prev = get().quotations;
     set(state => ({ quotations: state.quotations.map(q => q.id === quotation.id ? quotation : q) }));
-    await api.sales.saveQuotation(quotation);
+    try {
+      await api.sales.saveQuotation(quotation);
+    } catch (error) {
+      set({ quotations: prev });
+      throw error;
+    }
   },
   deleteQuotation: async (id) => {
+    const prev = get().quotations;
     set(state => ({ quotations: state.quotations.filter(q => q.id !== id) }));
-    await api.sales.deleteQuotation(id);
+    try {
+      await api.sales.deleteQuotation(id);
+    } catch (error) {
+      set({ quotations: prev });
+      throw error;
+    }
   },
 
   addJobOrder: async (jobOrder) => {
     const newJob = { ...jobOrder, id: jobOrder.id || generateNextId('JO', get().jobOrders) };
+    const prev = get().jobOrders;
     set(state => ({ jobOrders: [...state.jobOrders, newJob] }));
-    await api.sales.saveJobOrder(newJob);
+    try {
+      await api.sales.saveJobOrder(newJob);
+    } catch (error) {
+      set({ jobOrders: prev });
+      throw error;
+    }
   },
   updateJobOrder: async (jobOrder) => {
+    const prev = get().jobOrders;
     set(state => ({ jobOrders: state.jobOrders.map(j => j.id === jobOrder.id ? jobOrder : j) }));
-    await api.sales.saveJobOrder(jobOrder);
+    try {
+      await api.sales.saveJobOrder(jobOrder);
+    } catch (error) {
+      set({ jobOrders: prev });
+      throw error;
+    }
   },
   deleteJobOrder: async (id) => {
+    const prev = get().jobOrders;
     set(state => ({ jobOrders: state.jobOrders.filter(j => j.id !== id) }));
-    await api.sales.deleteJobOrder(id);
+    try {
+      await api.sales.deleteJobOrder(id);
+    } catch (error) {
+      set({ jobOrders: prev });
+      throw error;
+    }
   },
 
   addHeldOrder: async (order) => {
@@ -201,10 +245,14 @@ export const useSalesStore = create<SalesState>((set, get) => ({
 
 addCustomerPayment: async (payment) => {
       const newPayment = { ...payment, id: payment.id || generateNextId('RCPT', get().customerPayments) };
+      const prev = get().customerPayments;
       set(state => ({ customerPayments: [...state.customerPayments, newPayment] }));
-      await api.sales.saveCustomerPayment(newPayment);
-      
-      // Trigger customer notification
+      try {
+        await api.sales.saveCustomerPayment(newPayment);
+      } catch (error) {
+        set({ customerPayments: prev });
+        throw error;
+      }
       if (newPayment.customerPhone) {
         await customerNotificationService.triggerNotification('PAYMENT', {
           id: newPayment.id,
@@ -215,56 +263,122 @@ addCustomerPayment: async (payment) => {
       }
     },
   updateCustomerPayment: async (payment) => {
+      const prev = get().customerPayments;
       set(state => ({ customerPayments: state.customerPayments.map(p => p.id === payment.id ? payment : p) }));
-      await api.sales.saveCustomerPayment(payment);
+      try {
+        await api.sales.saveCustomerPayment(payment);
+      } catch (error) {
+        set({ customerPayments: prev });
+        throw error;
+      }
   },
   deleteCustomerPayment: async (id) => {
+      const prev = get().customerPayments;
       set(state => ({ customerPayments: state.customerPayments.filter(p => p.id !== id) }));
-      await api.sales.deleteCustomerPayment(id);
+      try {
+        await api.sales.deleteCustomerPayment(id);
+      } catch (error) {
+        set({ customerPayments: prev });
+        throw error;
+      }
   },
 
   addShipment: async (shipment, deliveryNotePatch) => {
     const newShipment = { ...shipment, id: shipment.id || generateNextId('SHP', get().shipments) };
+    const prev = get().shipments;
     set(state => ({ shipments: [...state.shipments, newShipment] }));
-    await transactionService.updateShipmentStatus(newShipment, deliveryNotePatch || buildDeliveryNotePatchFromShipment(newShipment));
+    try {
+      await transactionService.updateShipmentStatus(newShipment, deliveryNotePatch || buildDeliveryNotePatchFromShipment(newShipment));
+    } catch (error) {
+      set({ shipments: prev });
+      throw error;
+    }
   },
 
   updateShipment: async (shipment, deliveryNotePatch) => {
+    const prev = get().shipments;
     set(state => ({ shipments: state.shipments.map(s => s.id === shipment.id ? shipment : s) }));
-    await transactionService.updateShipmentStatus(shipment, deliveryNotePatch || buildDeliveryNotePatchFromShipment(shipment));
+    try {
+      await transactionService.updateShipmentStatus(shipment, deliveryNotePatch || buildDeliveryNotePatchFromShipment(shipment));
+    } catch (error) {
+      set({ shipments: prev });
+      throw error;
+    }
   },
 
   deleteShipment: async (id) => {
+    const prev = get().shipments;
     set(state => ({ shipments: state.shipments.filter(s => s.id !== id) }));
-    await api.sales.deleteShipment(id);
+    try {
+      await api.sales.deleteShipment(id);
+    } catch (error) {
+      set({ shipments: prev });
+      throw error;
+    }
   },
 
   addCustomer: async (customer) => {
     const newCustomer = { ...customer, id: customer.id || generateNextId('CUST', get().customers) };
+    const prev = get().customers;
     set(state => ({ customers: [...state.customers, newCustomer] }));
-    await api.customers.save(newCustomer);
+    try {
+      await api.customers.save(newCustomer);
+    } catch (error) {
+      set({ customers: prev });
+      throw error;
+    }
   },
   updateCustomer: async (customer) => {
+    const prev = get().customers;
     set(state => ({ customers: state.customers.map(c => c.id === customer.id ? customer : c) }));
-    await api.customers.save(customer);
+    try {
+      await api.customers.save(customer);
+    } catch (error) {
+      set({ customers: prev });
+      throw error;
+    }
   },
   deleteCustomer: async (id) => {
+    const prev = get().customers;
     set(state => ({ customers: state.customers.filter(c => c.id !== id) }));
-    await api.customers.delete(id);
+    try {
+      await api.customers.delete(id);
+    } catch (error) {
+      set({ customers: prev });
+      throw error;
+    }
   },
 
   addSalesOrder: async (order) => {
     const newOrder = { ...order, id: order.id || generateNextId('SO', get().salesOrders) };
+    const prev = get().salesOrders;
     set(state => ({ salesOrders: [...state.salesOrders, newOrder] }));
-    await api.sales.saveSalesOrder(newOrder);
+    try {
+      await api.sales.saveSalesOrder(newOrder);
+    } catch (error) {
+      set({ salesOrders: prev });
+      throw error;
+    }
   },
   updateSalesOrder: async (order) => {
+    const prev = get().salesOrders;
     set(state => ({ salesOrders: state.salesOrders.map(o => o.id === order.id ? order : o) }));
-    await api.sales.saveSalesOrder(order);
+    try {
+      await api.sales.saveSalesOrder(order);
+    } catch (error) {
+      set({ salesOrders: prev });
+      throw error;
+    }
   },
   deleteSalesOrder: async (id) => {
+    const prev = get().salesOrders;
     set(state => ({ salesOrders: state.salesOrders.filter(o => o.id !== id) }));
-    await api.sales.deleteSalesOrder(id);
+    try {
+      await api.sales.deleteSalesOrder(id);
+    } catch (error) {
+      set({ salesOrders: prev });
+      throw error;
+    }
   },
 
   createSalesExchange: async (exchange) => {

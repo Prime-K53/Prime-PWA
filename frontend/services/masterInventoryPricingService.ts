@@ -236,7 +236,7 @@ const applyRoundedFieldsToItem = (
         existingCalculatedPrice: Number.isFinite(existingCalculatedPrice) ? existingCalculatedPrice : undefined,
         existingRoundedPrice: Number.isFinite(existingRoundedPrice) ? existingRoundedPrice : undefined,
         existingRoundingDifference: Number.isFinite(existingDifference) ? existingDifference : undefined,
-        existingRoundingMethod: sourceItem.rounding_method,
+        existingRoundingMethod: sourceItem.rounding_method as PricingRoundingMethod,
         skipIfAlreadyRounded: true
     });
 
@@ -571,7 +571,7 @@ const repriceItem = (
             calculatedPrice: roundToCurrency(resolveStoredCalculatedPrice(nextItem)),
             roundedPrice: roundToCurrency(resolveStoredSellingPrice(nextItem)),
             roundingDifference: roundToCurrency(nextItem.rounding_difference ?? 0),
-            roundingMethod: nextItem.rounding_method || DEFAULT_ROUNDING_METHOD,
+            roundingMethod: (nextItem.rounding_method || DEFAULT_ROUNDING_METHOD) as PricingRoundingMethod,
             date: new Date().toISOString()
         });
     }

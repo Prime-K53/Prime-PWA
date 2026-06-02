@@ -10,6 +10,8 @@ export interface PricingSettings {
   toner_item_name: string | null;
   toner_unit_cost: number;
   conversion_rate: number;
+  adjustment_rate?: number;
+  profit_margin?: number;
   constants?: {
     toner_pages_per_unit?: number;
   };
@@ -32,6 +34,8 @@ export interface ClassPricingResult {
   totalBomCost: number;
   totalAdjustments: number;
   totalCost: number;
+  marketAdjustmentTotal?: number;
+  roundingAdjustment?: number;
   // Three Critical Financial Metrics (Examination Pricing Redesign)
   expectedFeePerLearner: number;     // Mirrors Pricing Settings calculation exactly
   finalFeePerLearner: number;        // Mutable, initialized = expectedFeePerLearner

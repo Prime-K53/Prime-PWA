@@ -78,7 +78,7 @@ export const syncQueuedChanges = async (processor?: (item: SyncQueueItem) => Pro
 
         if (processor) {
           const result = await processor(item);
-          if (result?.remove === false) {
+          if (result && result.remove === false) {
             continue;
           }
         }
@@ -88,7 +88,7 @@ export const syncQueuedChanges = async (processor?: (item: SyncQueueItem) => Pro
       } catch (error) {
         if (error instanceof UnauthorizedRequestError) {
           blocked += 1;
-          await saveQueuedMutation(dexieQueueCoordinator.createFailurePatch(item, 'blocked', error, null));
+          await saveQueuedMutation(dexieQueueCoordinator.createFailurePatch(item as any, 'blocked', error, null) as any);
           break;
         }
 
@@ -96,11 +96,11 @@ export const syncQueuedChanges = async (processor?: (item: SyncQueueItem) => Pro
           failed += 1;
           await saveQueuedMutation(
             dexieQueueCoordinator.createFailurePatch(
-              item,
+              item as any,
               'failed',
               error,
               new Date(Date.now() + buildBackoff(item.retries + 1)).toISOString()
-            )
+            ) as any
           );
           break;
         }
@@ -108,11 +108,11 @@ export const syncQueuedChanges = async (processor?: (item: SyncQueueItem) => Pro
         failed += 1;
         await saveQueuedMutation(
           dexieQueueCoordinator.createFailurePatch(
-            item,
+            item as any,
             'failed',
             error,
             new Date(Date.now() + buildBackoff(item.retries + 1)).toISOString()
-          )
+          ) as any
         );
       }
     }

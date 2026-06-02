@@ -47,7 +47,8 @@ import { api } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { PreviewModal } from '../shared/components/PDF/PreviewModal';
 import { FinancialDoc } from '../shared/components/PDF/schemas';
-import { MarketAdjustment, BOMTemplate, ExamPricingResult, SubjectJob, ExamSchoolLocal as School, ExamClassLocal as Class, ExamSubjectLocal as Subject, ExamPaper as Examination } from '../../types';
+import { MarketAdjustment, BOMTemplate, ExamPricingResult, SubjectJob, ProductionSettingsConfig,
+  ExamSchoolLocal as School, ExamClassLocal as Class, ExamSubjectLocal as Subject, ExamPaper as Examination } from '../../types';
 import { dbService } from '../../services/db';
 import { SafeFormulaEngine } from '../../services/formulaEngine';
 import { inventoryTransactionService } from '../../services/inventoryTransactionService';
@@ -136,7 +137,7 @@ const ExaminationPrinting: React.FC = () => {
   const [newSubjectCode, setNewSubjectCode] = useState('');
 
   // --- Exam BOM State ---
-  const productionSettings = companyConfig?.productionSettings || {};
+  const productionSettings = (companyConfig?.productionSettings || {}) as ProductionSettingsConfig;
 
   const paperMaterialOptions = useMemo(() => {
     return (inventory || []).filter(item => {

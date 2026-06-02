@@ -23,7 +23,9 @@ export async function getEffectiveMargin(
     return cache.get(cacheKey)!;
   }
 
-  if (!HAS_REMOTE_BACKEND) {
+  const apiBaseUrl = getApiBaseUrl();
+
+  if (!HAS_REMOTE_BACKEND || !apiBaseUrl) {
     const localMargin = resolveOfflineEffectiveMargin(lineItemId, categoryId);
     if (useCache) cache.set(cacheKey, localMargin);
     return localMargin;
@@ -35,7 +37,7 @@ export async function getEffectiveMargin(
     if (categoryId) params.set('categoryId', categoryId);
 
     const response = await fetch(
-      `${getApiBaseUrl()}/settings/profit-margins/resolve?${params.toString()}`,
+      `${apiBaseUrl}/settings/profit-margins/resolve?${params.toString()}`,
       {
         headers: {
           'x-user-id': localStorage.getItem('prime_user_id') || 'guest',
@@ -44,7 +46,8 @@ export async function getEffectiveMargin(
       }
     );
 
-    if (!response.ok) {
+    const contentType = response.headers.get('content-type') || '';
+    if (!response.ok || !contentType.includes('json')) {
       const localMargin = resolveOfflineEffectiveMargin(lineItemId, categoryId);
       if (useCache) cache.set(cacheKey, localMargin);
       return localMargin;

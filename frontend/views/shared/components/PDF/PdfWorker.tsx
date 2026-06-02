@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { pdf, Document as RDocument, Page, Text, Font } from '@react-pdf/renderer';
 import { PrimeDocument } from './PrimeDocument';
 import { initializePrimePdfFonts } from './templateSettings';
@@ -122,7 +122,7 @@ const logSanitizationDiff = (original: any, sanitized: any, type: string) => {
 
 // ── Real document self-tests ──
 
-const testRender = async (label: string, doc: JSX.Element): Promise<Result> => {
+const testRender = async (label: string, doc: React.JSX.Element): Promise<Result> => {
   const blob = await pdf(doc).toBlob();
   const buf = await blob.arrayBuffer();
   const bytes = new Uint8Array(buf);

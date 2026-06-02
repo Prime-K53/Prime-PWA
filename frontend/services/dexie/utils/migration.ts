@@ -49,7 +49,7 @@ export async function runMigration(): Promise<MigrationSummary> {
     warnings: [],
   };
 
-  await db.settings.put({ id: MIGRATION_STATE_KEY, settingKey: MIGRATION_STATE_KEY, value: summary } as any);
+  await db.settings.put({ id: MIGRATION_STATE_KEY, settingKey: MIGRATION_STATE_KEY, value: summary, isDeleted: false } as any);
 
   try {
     for (const legacyDb of LEGACY_DATABASES) {
@@ -81,7 +81,7 @@ export async function runMigration(): Promise<MigrationSummary> {
 
     summary.status = 'completed';
     summary.completedAt = nowIso();
-    await db.settings.put({ id: MIGRATION_STATE_KEY, settingKey: MIGRATION_STATE_KEY, value: summary } as any);
+    await db.settings.put({ id: MIGRATION_STATE_KEY, settingKey: MIGRATION_STATE_KEY, value: summary, isDeleted: false } as any);
   } catch (error) {
     summary.status = 'failed';
     summary.warnings.push(error instanceof Error ? error.message : String(error));

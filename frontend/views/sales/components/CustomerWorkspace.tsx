@@ -26,6 +26,7 @@ import { useModuleRefresh } from '../../../hooks/useModuleRefresh';
 import { format, parseISO, isAfter } from 'date-fns';
 import { attachDocumentSecurity } from '../../../utils/documentSecurity';
 import { AuditTimeline } from '../../shared/components/AuditTimeline';
+import AICustomerInsights from '../../../components/ai/AICustomerInsights';
 
 interface CustomerWorkspaceProps {
   customer: Customer;
@@ -332,6 +333,11 @@ export const CustomerWorkspace: React.FC<CustomerWorkspaceProps> = ({ customer, 
             <Edit2 size={16} />
             Edit Profile
           </button>
+          <AICustomerInsights
+            customer={customer}
+            invoices={(invoices || []).filter((i: any) => i.customerId === customer.id || i.customerName === customer.name)}
+            payments={(customerPayments || []).filter((p: any) => p.customerName === customer.name)}
+          />
           <button
             onClick={toggleCreditHold}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-semibold text-[13px] ${customer.creditHold ? 'bg-rose-600 text-white hover:bg-rose-700' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'}`}

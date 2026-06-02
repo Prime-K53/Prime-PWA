@@ -1,10 +1,949 @@
-﻿views/inventory/components/ProductForecastDetail.tsx(185,6): error TS17008: JSX element 'div' has no corresponding closing tag.
-views/inventory/components/ProductForecastDetail.tsx(231,8): error TS17008: JSX element 'div' has no corresponding closing tag.
-views/inventory/components/ProductForecastDetail.tsx(234,12): error TS17008: JSX element 'div' has no corresponding closing tag.
-views/inventory/components/ProductForecastDetail.tsx(291,16): error TS17008: JSX element 'div' has no corresponding closing tag.
-views/inventory/components/ProductForecastDetail.tsx(295,20): error TS17008: JSX element 'div' has no corresponding closing tag.
-views/inventory/components/ProductForecastDetail.tsx(296,24): error TS17008: JSX element 'ResponsiveContainer' has no corresponding closing tag.
-views/inventory/components/ProductForecastDetail.tsx(297,28): error TS17008: JSX element 'ComposedChart' has no corresponding closing tag.
-views/inventory/components/ProductForecastDetail.tsx(314,32): error TS1109: Expression expected.
-views/inventory/components/ProductForecastDetail.tsx(314,54): error TS1005: '</' expected.
-views/inventory/components/ProductForecastDetail.tsx(314,54): error TS1005: '}' expected.
+﻿[96mcontext/DataContext.tsx[0m:[93m176[0m:[93m81[0m - [91merror[0m[90m TS2345: [0mArgument of type '{ companyName: string; }' is not assignable to parameter of type 'CompanyConfig'.
+  Type '{ companyName: string; }' is missing the following properties from type 'CompanyConfig': email, phone, addressLine1, currencySymbol, and 16 more.
+
+[7m176[0m         const newTask = { ...task, id: task.id || generateNextId('TASK', tasks, { companyName: '' }) };
+[7m   [0m [91m                                                                                ~~~~~~~~~~~~~~~~~~~[0m
+
+[96mcontext/DataContext.tsx[0m:[93m239[0m:[93m13[0m - [91merror[0m[90m TS2353: [0mObject literal may only specify known properties, and 'addTask' does not exist in type 'DataContextValue'.
+
+[7m239[0m             addTask,
+[7m   [0m [91m            ~~~~~~~[0m
+
+  [96m../node_modules/@types/react/index.d.ts[0m:[93m545[0m:[93m9[0m
+    [7m545[0m         value: T;
+    [7m   [0m [96m        ~~~~~[0m
+    The expected type comes from property 'value' which is declared here on type 'IntrinsicAttributes & ProviderProps<DataContextValue>'
+
+[96mcontext/PricingCalculatorContext.tsx[0m:[93m99[0m:[93m9[0m - [91merror[0m[90m TS2353: [0mObject literal may only specify known properties, and 'priceAdjustment' does not exist in type 'FinishingOptionWithMaterial'.
+
+[7m99[0m         priceAdjustment: 0,
+[7m  [0m [91m        ~~~~~~~~~~~~~~~[0m
+
+[96mcontext/PricingCalculatorContext.tsx[0m:[93m109[0m:[93m9[0m - [91merror[0m[90m TS2353: [0mObject literal may only specify known properties, and 'priceAdjustment' does not exist in type 'FinishingOptionWithMaterial'.
+
+[7m109[0m         priceAdjustment: 0,
+[7m   [0m [91m        ~~~~~~~~~~~~~~~[0m
+
+[96mcontext/PricingCalculatorContext.tsx[0m:[93m119[0m:[93m9[0m - [91merror[0m[90m TS2353: [0mObject literal may only specify known properties, and 'priceAdjustment' does not exist in type 'FinishingOptionWithMaterial'.
+
+[7m119[0m         priceAdjustment: 0,
+[7m   [0m [91m        ~~~~~~~~~~~~~~~[0m
+
+[96mhooks/useAuditLogs.ts[0m:[93m29[0m:[93m7[0m - [91merror[0m[90m TS2353: [0mObject literal may only specify known properties, and 'correlationId' does not exist in type 'AuditLogEntry'.
+
+[7m29[0m       correlationId: `cid-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`
+[7m  [0m [91m      ~~~~~~~~~~~~~[0m
+
+[96mhooks/useDocumentPreview.ts[0m:[93m78[0m:[93m32[0m - [91merror[0m[90m TS2345: [0mArgument of type 'FunctionComponentElement<DocProps>' is not assignable to parameter of type 'ReactElement<DocumentProps, string | JSXElementConstructor<any>>'.
+  Types of property 'props' are incompatible.
+    Type 'DocProps' has no properties in common with type 'DocumentProps'.
+
+[7m78[0m         const blob = await pdf(createElement(PrimeDocument, {
+[7m  [0m [91m                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[7m79[0m           type: effectiveType,
+[7m  [0m [91m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[7m80[0m           data: securedData as PrimeDocData
+[7m  [0m [91m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[7m81[0m         })).toBlob();
+[7m  [0m [91m~~~~~~~~~~[0m
+
+[96mservices/examinationBatchService.ts[0m:[93m369[0m:[93m39[0m - [91merror[0m[90m TS2339: [0mProperty 'classes' does not exist on type '{ _lastModifiedAt: any; created_at: string; updated_at: string; batch_number?: string; batchNumber?: string; id: string; }'.
+
+[7m369[0m       classes: Array.isArray(existing.classes) ? existing.classes.map((row: any) => ({ ...row })) : [],
+[7m   [0m [91m                                      ~~~~~~~[0m
+
+[96mservices/examinationBatchService.ts[0m:[93m369[0m:[93m59[0m - [91merror[0m[90m TS2339: [0mProperty 'classes' does not exist on type '{ _lastModifiedAt: any; created_at: string; updated_at: string; batch_number?: string; batchNumber?: string; id: string; }'.
+
+[7m369[0m       classes: Array.isArray(existing.classes) ? existing.classes.map((row: any) => ({ ...row })) : [],
+[7m   [0m [91m                                                          ~~~~~~~[0m
+
+[96mservices/examinationBatchService.ts[0m:[93m370[0m:[93m40[0m - [91merror[0m[90m TS2339: [0mProperty 'subjects' does not exist on type '{ _lastModifiedAt: any; created_at: string; updated_at: string; batch_number?: string; batchNumber?: string; id: string; }'.
+
+[7m370[0m       subjects: Array.isArray(existing.subjects) ? [...existing.subjects] : []
+[7m   [0m [91m                                       ~~~~~~~~[0m
+
+[96mservices/examinationBatchService.ts[0m:[93m370[0m:[93m65[0m - [91merror[0m[90m TS2339: [0mProperty 'subjects' does not exist on type '{ _lastModifiedAt: any; created_at: string; updated_at: string; batch_number?: string; batchNumber?: string; id: string; }'.
+
+[7m370[0m       subjects: Array.isArray(existing.subjects) ? [...existing.subjects] : []
+[7m   [0m [91m                                                                ~~~~~~~~[0m
+
+[96mservices/examinationBatchService.ts[0m:[93m463[0m:[93m51[0m - [91merror[0m[90m TS2339: [0mProperty 'marketAdjustmentTotal' does not exist on type 'ClassPricingResult'.
+
+[7m463[0m       market_adjustment_total: Number(pricingRow?.marketAdjustmentTotal ?? entry?.market_adjustment_total ?? pricingRow?.totalAdjustments ?? 0) || 0,
+[7m   [0m [91m                                                  ~~~~~~~~~~~~~~~~~~~~~[0m
+
+[96mservices/examinationBatchService.ts[0m:[93m464[0m:[93m47[0m - [91merror[0m[90m TS2339: [0mProperty 'roundingAdjustment' does not exist on type 'ClassPricingResult'.
+
+[7m464[0m       rounding_adjustment: Number(pricingRow?.roundingAdjustment ?? entry?.rounding_adjustment ?? 0) || 0,
+[7m   [0m [91m                                              ~~~~~~~~~~~~~~~~~~[0m
+
+[96mservices/examinationBatchService.ts[0m:[93m589[0m:[93m26[0m - [91merror[0m[90m TS2869: [0mRight operand of ?? is unreachable because the left operand is never nullish.
+
+[7m589[0m     const total = Number(cls?.live_total_preview ?? (unitPrice * learners) ?? 0);
+[7m   [0m [91m                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[96mservices/examinationBatchService.ts[0m:[93m1208[0m:[93m21[0m - [91merror[0m[90m TS2352: [0mConversion of type '{ _lastModifiedAt: any; created_at: string; updated_at: string; batch_number?: string; batchNumber?: string; id: string; }' to type 'Promise<any>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type '{ _lastModifiedAt: any; created_at: string; updated_at: string; batch_number?: string; batchNumber?: string; id: string; }' is missing the following properties from type 'Promise<any>': then, catch, finally, [Symbol.toStringTag]
+
+[7m1208[0m       const batch = await updateLocalBatch(id, (b) => ({
+[7m    [0m [91m                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[7m1209[0m         ...b,
+[7m    [0m [91m~~~~~~~~~~~~~[0m
+[7m1210[0m         status: 'Approved'
+[7m    [0m [91m~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[7m1211[0m       })) as Promise<ExaminationBatch>;
+[7m    [0m [91m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[96mservices/examinationBatchService.ts[0m:[93m1448[0m:[93m34[0m - [91merror[0m[90m TS2339: [0mProperty 'status' does not exist on type '{ _lastModifiedAt: any; created_at: string; updated_at: string; batch_number?: string; batchNumber?: string; id: string; }'.
+
+[7m1448[0m             status: String(batch.status || 'Draft'),
+[7m    [0m [91m                                 ~~~~~~[0m
+
+[96mservices/examinationBatchService.ts[0m:[93m1594[0m:[93m30[0m - [91merror[0m[90m TS2339: [0mProperty 'status' does not exist on type '{ _lastModifiedAt: any; created_at: string; updated_at: string; batch_number?: string; batchNumber?: string; id: string; }'.
+
+[7m1594[0m         status: updatedBatch.status || 'Draft'
+[7m    [0m [91m                             ~~~~~~[0m
+
+[96mservices/examinationBatchService.ts[0m:[93m1890[0m:[93m26[0m - [91merror[0m[90m TS2339: [0mProperty 'classes' does not exist on type '{ _lastModifiedAt: any; created_at: string; updated_at: string; batch_number?: string; batchNumber?: string; id: string; }'.
+
+[7m1890[0m       return owner.batch.classes?.[owner.classIndex] as ExaminationClass;
+[7m    [0m [91m                         ~~~~~~~[0m
+
+[96mservices/examinationBatchService.ts[0m:[93m1958[0m:[93m52[0m - [91merror[0m[90m TS2339: [0mProperty 'classes' does not exist on type '{ _lastModifiedAt: any; created_at: string; updated_at: string; batch_number?: string; batchNumber?: string; id: string; }'.
+
+[7m1958[0m       const classRow = (Array.isArray(recalculated.classes) ? recalculated.classes : []).find((row: any) => String(row.id) === String(classId));
+[7m    [0m [91m                                                   ~~~~~~~[0m
+
+[96mservices/examinationBatchService.ts[0m:[93m1958[0m:[93m76[0m - [91merror[0m[90m TS2339: [0mProperty 'classes' does not exist on type '{ _lastModifiedAt: any; created_at: string; updated_at: string; batch_number?: string; batchNumber?: string; id: string; }'.
+
+[7m1958[0m       const classRow = (Array.isArray(recalculated.classes) ? recalculated.classes : []).find((row: any) => String(row.id) === String(classId));
+[7m    [0m [91m                                                                           ~~~~~~~[0m
+
+[96mservices/examinationNotificationService.ts[0m:[93m25[0m:[93m5[0m - [91merror[0m[90m TS2322: [0mType 'DexieExaminationBatchNotification[]' is not assignable to type 'ExaminationBatchNotification[]'.
+  Type 'DexieExaminationBatchNotification' is not assignable to type 'ExaminationBatchNotification'.
+    Property 'user_id' is optional in type 'DexieExaminationBatchNotification' but required in type 'ExaminationBatchNotification'.
+
+[7m25[0m     localNotifications = await examinationDb.examinationBatchNotifications.toArray();
+[7m  [0m [91m    ~~~~~~~~~~~~~~~~~~[0m
+
+[96mservices/examinationNotificationService.ts[0m:[93m324[0m:[93m9[0m - [91merror[0m[90m TS2322: [0mType 'DexieExaminationBatchNotification[]' is not assignable to type 'ExaminationBatchNotification[]'.
+  Type 'DexieExaminationBatchNotification' is not assignable to type 'ExaminationBatchNotification'.
+    Property 'user_id' is optional in type 'DexieExaminationBatchNotification' but required in type 'ExaminationBatchNotification'.
+
+[7m324[0m         notifications = await examinationDb.examinationBatchNotifications.toArray();
+[7m   [0m [91m        ~~~~~~~~~~~~~[0m
+
+[96mservices/examinationNotificationService.ts[0m:[93m362[0m:[93m11[0m - [91merror[0m[90m TS2322: [0mType 'DexieExaminationBatchNotification[]' is not assignable to type 'ExaminationBatchNotification[]'.
+  Type 'DexieExaminationBatchNotification' is not assignable to type 'ExaminationBatchNotification'.
+    Property 'user_id' is optional in type 'DexieExaminationBatchNotification' but required in type 'ExaminationBatchNotification'.
+
+[7m362[0m           notifications = await examinationDb.examinationBatchNotifications.toArray();
+[7m   [0m [91m          ~~~~~~~~~~~~~[0m
+
+[96mservices/jobTicketConversionService.ts[0m:[93m78[0m:[93m33[0m - [91merror[0m[90m TS2339: [0mProperty 'name' does not exist on type 'unknown'.
+
+[7m78[0m         customerName = customer.name;
+[7m  [0m [91m                                ~~~~[0m
+
+[96mservices/jobTicketConversionService.ts[0m:[93m222[0m:[93m33[0m - [91merror[0m[90m TS2339: [0mProperty 'name' does not exist on type 'unknown'.
+
+[7m222[0m         customerName = customer.name;
+[7m   [0m [91m                                ~~~~[0m
+
+[96mservices/jobTicketConversionService.ts[0m:[93m279[0m:[93m33[0m - [91merror[0m[90m TS2339: [0mProperty 'name' does not exist on type 'unknown'.
+
+[7m279[0m         customerName = customer.name;
+[7m   [0m [91m                                ~~~~[0m
+
+[96mservices/jobTicketService.ts[0m:[93m264[0m:[93m18[0m - [91merror[0m[90m TS2552: [0mCannot find name 'JobTicketType'. Did you mean 'JobTicket'?
+
+[7m264[0m     ticketType?: JobTicketType
+[7m   [0m [91m                 ~~~~~~~~~~~~~[0m
+
+[96mservices/masterInventoryPricingService.ts[0m:[93m239[0m:[93m9[0m - [91merror[0m[90m TS2322: [0mType 'string' is not assignable to type 'PricingRoundingMethod'.
+
+[7m239[0m         existingRoundingMethod: sourceItem.rounding_method,
+[7m   [0m [91m        ~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  [96mservices/pricingRoundingService.ts[0m:[93m315[0m:[93m3[0m
+    [7m315[0m   existingRoundingMethod?: PricingRoundingMethod;
+    [7m   [0m [96m  ~~~~~~~~~~~~~~~~~~~~~~[0m
+    The expected type comes from property 'existingRoundingMethod' which is declared here on type '{ calculatedPrice: number; companyConfig?: CompanyConfig; methodOverride?: PricingRoundingMethod; customStepOverride?: number; applyRoundingOverride?: boolean; ... 5 more ...; trackAnalytics?: boolean; }'
+
+[96mservices/masterInventoryPricingService.ts[0m:[93m574[0m:[93m13[0m - [91merror[0m[90m TS2322: [0mType 'string' is not assignable to type 'PricingRoundingMethod'.
+
+[7m574[0m             roundingMethod: nextItem.rounding_method || DEFAULT_ROUNDING_METHOD,
+[7m   [0m [91m            ~~~~~~~~~~~~~~[0m
+
+  [96mservices/roundingAnalyticsService.ts[0m:[93m40[0m:[93m3[0m
+    [7m40[0m   roundingMethod: PricingRoundingMethod;
+    [7m  [0m [96m  ~~~~~~~~~~~~~~[0m
+    The expected type comes from property 'roundingMethod' which is declared here on type 'LogRoundingEventInput'
+
+[96mservices/pricingRoundingService.ts[0m:[93m214[0m:[93m5[0m - [91merror[0m[90m TS2322: [0mType '{ totalExtraProfit?: number; roundedTransactions?: number; lastUpdatedAt?: string; byMethod?: Record<string, number>; }' is not assignable to type 'RoundingAnalytics'.
+  Property 'totalExtraProfit' is optional in type '{ totalExtraProfit?: number; roundedTransactions?: number; lastUpdatedAt?: string; byMethod?: Record<string, number>; }' but required in type 'RoundingAnalytics'.
+
+[7m214[0m     analytics: {
+[7m   [0m [91m    ~~~~~~~~~[0m
+
+  [96mtypes.ts[0m:[93m697[0m:[93m3[0m
+    [7m697[0m   analytics: RoundingAnalytics;
+    [7m   [0m [96m  ~~~~~~~~~[0m
+    The expected type comes from property 'analytics' which is declared here on type 'PricingSettings'
+
+[96mservices/revenueReportingService.ts[0m:[93m58[0m:[93m7[0m - [91merror[0m[90m TS2741: [0mProperty 'manualOverrideAmount' is missing in type '{ source: "ALL"; transactionCount: number; lineCount: number; quantity: number; revenue: number; materialCost: number; adjustmentTotal: number; profitMargin: number; roundingTotal: number; grossGain: number; reconciliationDelta: number; }' but required in type 'RevenueSourceSummary'.
+
+[7m58[0m const zeroSummary: RevenueSourceSummary = {
+[7m  [0m [91m      ~~~~~~~~~~~[0m
+
+  [96mservices/revenueAnalysisService.ts[0m:[93m83[0m:[93m3[0m
+    [7m83[0m   manualOverrideAmount: number;
+    [7m  [0m [96m  ~~~~~~~~~~~~~~~~~~~~[0m
+    'manualOverrideAmount' is declared here.
+
+[96mservices/syncManager.ts[0m:[93m81[0m:[93m23[0m - [91merror[0m[90m TS2339: [0mProperty 'remove' does not exist on type 'void | SyncProcessorResult'.
+  Property 'remove' does not exist on type 'void'.
+
+[7m81[0m           if (result?.remove === false) {
+[7m  [0m [91m                      ~~~~~~[0m
+
+[96mservices/syncManager.ts[0m:[93m91[0m:[93m36[0m - [91merror[0m[90m TS2345: [0mArgument of type 'SyncQueueItem' is not assignable to parameter of type 'SyncQueueItem<Record<string, unknown>>'.
+  Types of property 'entityType' are incompatible.
+    Type 'string' is not assignable to type '"examination-batch"'.
+
+[7m91[0m           await saveQueuedMutation(dexieQueueCoordinator.createFailurePatch(item, 'blocked', error, null));
+[7m  [0m [91m                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[96mservices/syncManager.ts[0m:[93m91[0m:[93m77[0m - [91merror[0m[90m TS2345: [0mArgument of type 'SyncQueueItem<Record<string, unknown>>' is not assignable to parameter of type 'SyncQueueItem'.
+  Property 'priority' is optional in type 'SyncQueueItem<Record<string, unknown>>' but required in type 'SyncQueueItem'.
+
+[7m91[0m           await saveQueuedMutation(dexieQueueCoordinator.createFailurePatch(item, 'blocked', error, null));
+[7m  [0m [91m                                                                            ~~~~[0m
+
+[96mservices/syncManager.ts[0m:[93m98[0m:[93m13[0m - [91merror[0m[90m TS2345: [0mArgument of type 'SyncQueueItem' is not assignable to parameter of type 'SyncQueueItem<Record<string, unknown>>'.
+  Types of property 'entityType' are incompatible.
+    Type 'string' is not assignable to type '"examination-batch"'.
+
+[7m 98[0m             dexieQueueCoordinator.createFailurePatch(
+[7m   [0m [91m            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[7m 99[0m               item,
+[7m   [0m [91m~~~~~~~~~~~~~~~~~~~[0m
+[7m...[0m 
+[7m102[0m               new Date(Date.now() + buildBackoff(item.retries + 1)).toISOString()
+[7m   [0m [91m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[7m103[0m             )
+[7m   [0m [91m~~~~~~~~~~~~~[0m
+
+[96mservices/syncManager.ts[0m:[93m99[0m:[93m15[0m - [91merror[0m[90m TS2345: [0mArgument of type 'SyncQueueItem<Record<string, unknown>>' is not assignable to parameter of type 'SyncQueueItem'.
+  Property 'priority' is optional in type 'SyncQueueItem<Record<string, unknown>>' but required in type 'SyncQueueItem'.
+
+[7m99[0m               item,
+[7m  [0m [91m              ~~~~[0m
+
+[96mservices/syncManager.ts[0m:[93m110[0m:[93m11[0m - [91merror[0m[90m TS2345: [0mArgument of type 'SyncQueueItem' is not assignable to parameter of type 'SyncQueueItem<Record<string, unknown>>'.
+  Types of property 'entityType' are incompatible.
+    Type 'string' is not assignable to type '"examination-batch"'.
+
+[7m110[0m           dexieQueueCoordinator.createFailurePatch(
+[7m   [0m [91m          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[7m111[0m             item,
+[7m   [0m [91m~~~~~~~~~~~~~~~~~[0m
+[7m...[0m 
+[7m114[0m             new Date(Date.now() + buildBackoff(item.retries + 1)).toISOString()
+[7m   [0m [91m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[7m115[0m           )
+[7m   [0m [91m~~~~~~~~~~~[0m
+
+[96mservices/syncManager.ts[0m:[93m111[0m:[93m13[0m - [91merror[0m[90m TS2345: [0mArgument of type 'SyncQueueItem<Record<string, unknown>>' is not assignable to parameter of type 'SyncQueueItem'.
+  Property 'priority' is optional in type 'SyncQueueItem<Record<string, unknown>>' but required in type 'SyncQueueItem'.
+
+[7m111[0m             item,
+[7m   [0m [91m            ~~~~[0m
+
+[96mservices/whatsAppMarketingService.ts[0m:[93m2[0m:[93m10[0m - [91merror[0m[90m TS2305: [0mModule '"../utils/helpers"' has no exported member 'v4'.
+
+[7m2[0m import { v4 as uuidv4 } from '../utils/helpers';
+[7m [0m [91m         ~~[0m
+
+[96mstores/jobTicketStore.ts[0m:[93m31[0m:[93m3[0m - [91merror[0m[90m TS1117: [0mAn object literal cannot have multiple properties with the same name.
+
+[7m31[0m   defaultRushFeePercent: 25,
+[7m  [0m [91m  ~~~~~~~~~~~~~~~~~~~~~[0m
+
+[96mstores/jobTicketStore.ts[0m:[93m74[0m:[93m83[0m - [91merror[0m[90m TS2339: [0mProperty 'set' does not exist on type '{ initDB: () => Promise<IDBPDatabase<NexusDB>>; setSyncListener(cb: (status: SyncStatus) => void): void; executeAtomicOperation<T>(stores: (keyof NexusDB)[], operation: (tx: any) => Promise<...>): Promise<...>; ... 16 more ...; performAutoBackup(): Promise<...>; }'.
+
+[7m74[0m     try { await productionDb.jobTickets.put(newTicket); } catch { await dbService.set('jobTickets', newTicket.id, newTicket); }
+[7m  [0m [91m                                                                                  ~~~[0m
+
+[96mstores/jobTicketStore.ts[0m:[93m82[0m:[93m81[0m - [91merror[0m[90m TS2339: [0mProperty 'set' does not exist on type '{ initDB: () => Promise<IDBPDatabase<NexusDB>>; setSyncListener(cb: (status: SyncStatus) => void): void; executeAtomicOperation<T>(stores: (keyof NexusDB)[], operation: (tx: any) => Promise<...>): Promise<...>; ... 16 more ...; performAutoBackup(): Promise<...>; }'.
+
+[7m82[0m     try { await productionDb.jobTickets.put(updated); } catch { await dbService.set('jobTickets', ticket.id, updated); }
+[7m  [0m [91m                                                                                ~~~[0m
+
+[96mstores/jobTicketStore.ts[0m:[93m109[0m:[93m81[0m - [91merror[0m[90m TS2339: [0mProperty 'set' does not exist on type '{ initDB: () => Promise<IDBPDatabase<NexusDB>>; setSyncListener(cb: (status: SyncStatus) => void): void; executeAtomicOperation<T>(stores: (keyof NexusDB)[], operation: (tx: any) => Promise<...>): Promise<...>; ... 16 more ...; performAutoBackup(): Promise<...>; }'.
+
+[7m109[0m     try { await productionDb.jobTickets.put(updated); } catch { await dbService.set('jobTickets', id, updated); }
+[7m   [0m [91m                                                                                ~~~[0m
+
+[96mstores/jobTicketStore.ts[0m:[93m125[0m:[93m81[0m - [91merror[0m[90m TS2339: [0mProperty 'set' does not exist on type '{ initDB: () => Promise<IDBPDatabase<NexusDB>>; setSyncListener(cb: (status: SyncStatus) => void): void; executeAtomicOperation<T>(stores: (keyof NexusDB)[], operation: (tx: any) => Promise<...>): Promise<...>; ... 16 more ...; performAutoBackup(): Promise<...>; }'.
+
+[7m125[0m     try { await productionDb.jobTickets.put(updated); } catch { await dbService.set('jobTickets', id, updated); }
+[7m   [0m [91m                                                                                ~~~[0m
+
+[96mstores/jobTicketStore.ts[0m:[93m131[0m:[93m110[0m - [91merror[0m[90m TS2339: [0mProperty 'set' does not exist on type '{ initDB: () => Promise<IDBPDatabase<NexusDB>>; setSyncListener(cb: (status: SyncStatus) => void): void; executeAtomicOperation<T>(stores: (keyof NexusDB)[], operation: (tx: any) => Promise<...>): Promise<...>; ... 16 more ...; performAutoBackup(): Promise<...>; }'.
+
+[7m131[0m     try { await productionDb.jobTicketSettings.put({ id: 'default', ...updated }); } catch { await dbService.set('jobTicketSettings', 'default', updated); }
+[7m   [0m [91m                                                                                                             ~~~[0m
+
+[96mstores/procurementStore.ts[0m:[93m136[0m:[93m25[0m - [91merror[0m[90m TS2339: [0mProperty 'delete' does not exist on type '{ getAll: () => Promise<any[]>; save: (s: any) => Promise<string>; deleteSupplier: (id: string) => Promise<void>; }'.
+
+[7m136[0m     await api.suppliers.delete(id);
+[7m   [0m [91m                        ~~~~~~[0m
+
+[96mutils/documentMapper.tsx[0m:[93m157[0m:[93m25[0m - [91merror[0m[90m TS2367: [0mThis comparison appears to be unintentional because the types '"Invoice" | "Quotation" | "Examination Invoice" | "Delivery Note" | "Statement" | "Receipt" | "Subscription Invoice" | "Work Order"' and '"Order"' have no overlap.
+
+[7m157[0m     const displayType = type === 'Order' ? 'Sales Order' : type;
+[7m   [0m [91m                        ~~~~~~~~~~~~~~~~[0m
+
+[96mutils/documentMapper.tsx[0m:[93m418[0m:[93m9[0m - [91merror[0m[90m TS2367: [0mThis comparison appears to be unintentional because the types '"Invoice" | "Examination Invoice" | "Delivery Note" | "Statement" | "Receipt" | "Subscription Invoice" | "Work Order" | "Purchase Order"' and '"Order"' have no overlap.
+
+[7m418[0m     if (type === 'Order') return 'SALES ORDER';
+[7m   [0m [91m        ~~~~~~~~~~~~~~~~[0m
+
+[96mutils/pricing/recalculateVariants.ts[0m:[93m79[0m:[93m29[0m - [91merror[0m[90m TS2339: [0mProperty 'update' does not exist on type '{ initDB: () => Promise<IDBPDatabase<NexusDB>>; setSyncListener(cb: (status: SyncStatus) => void): void; executeAtomicOperation<T>(stores: (keyof NexusDB)[], operation: (tx: any) => Promise<...>): Promise<...>; ... 16 more ...; performAutoBackup(): Promise<...>; }'.
+
+[7m79[0m             await dbService.update('inventory', item.id, item);
+[7m  [0m [91m                            ~~~~~~[0m
+
+[96mutils/securitySettings.ts[0m:[93m24[0m:[93m63[0m - [91merror[0m[90m TS2339: [0mProperty 'passwordProtectionEnabled' does not exist on type '{}'.
+
+[7m24[0m   const passwordProtectionEnabled = typeof configuredSettings.passwordProtectionEnabled === 'boolean'
+[7m  [0m [91m                                                              ~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[96mutils/securitySettings.ts[0m:[93m25[0m:[93m26[0m - [91merror[0m[90m TS2339: [0mProperty 'passwordProtectionEnabled' does not exist on type '{}'.
+
+[7m25[0m     ? configuredSettings.passwordProtectionEnabled
+[7m  [0m [91m                         ~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[96mutils/securitySettings.ts[0m:[93m30[0m:[93m63[0m - [91merror[0m[90m TS2339: [0mProperty 'enforcePasswordComplexity' does not exist on type '{}'.
+
+[7m30[0m   const enforcePasswordComplexity = typeof configuredSettings.enforcePasswordComplexity === 'boolean'
+[7m  [0m [91m                                                              ~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[96mutils/securitySettings.ts[0m:[93m31[0m:[93m26[0m - [91merror[0m[90m TS2339: [0mProperty 'enforcePasswordComplexity' does not exist on type '{}'.
+
+[7m31[0m     ? configuredSettings.enforcePasswordComplexity
+[7m  [0m [91m                         ~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[96mviews/admin/UserManagement.tsx[0m:[93m78[0m:[93m73[0m - [91merror[0m[90m TS2353: [0mObject literal may only specify known properties, and 'mfaSecret' does not exist in type 'User'.
+
+[7m78[0m               await manageUser({ ...editUser as User, mfaEnabled: true, mfaSecret: tempMfaSecret, securityLevel: 'Elevated' });
+[7m  [0m [91m                                                                        ~~~~~~~~~[0m
+
+[96mviews/admin/UserManagement.tsx[0m:[93m141[0m:[93m44[0m - [91merror[0m[90m TS2339: [0mProperty 'avatar' does not exist on type 'User'.
+
+[7m141[0m                       <OfflineImage src={u.avatar} alt={u.name} className="w-full h-full object-cover" fallback={u.name.substring(0, 2)}/>
+[7m   [0m [91m                                           ~~~~~~[0m
+
+[96mviews/admin/UserManagement.tsx[0m:[93m291[0m:[93m39[0m - [91merror[0m[90m TS2339: [0mProperty 'avatar' does not exist on type 'Partial<User>'.
+
+[7m291[0m                             {editUser.avatar ? (
+[7m   [0m [91m                                      ~~~~~~[0m
+
+[96mviews/admin/UserManagement.tsx[0m:[93m292[0m:[93m61[0m - [91merror[0m[90m TS2339: [0mProperty 'avatar' does not exist on type 'Partial<User>'.
+
+[7m292[0m                                 <OfflineImage src={editUser.avatar} alt="Avatar" className="w-full h-full object-cover"/>
+[7m   [0m [91m                                                            ~~~~~~[0m
+
+[96mviews/examination/components/ManageSubjectsDialog.tsx[0m:[93m371[0m:[93m40[0m - [91merror[0m[90m TS2339: [0mProperty 'marketAdjustmentTotal' does not exist on type '{ totalSheets: number; totalPages: number; totalBomCost: number; totalAdjustments: number; totalCost: number; expectedFeePerLearner: number; materialTotalCost: number; adjustmentTotalCost: number; calculatedTotalCost: number; marginAmount?: number; }'.
+
+[7m371[0m       market_adjustment_total: preview.marketAdjustmentTotal,
+[7m   [0m [91m                                       ~~~~~~~~~~~~~~~~~~~~~[0m
+
+[96mviews/examination/components/ManageSubjectsDialog.tsx[0m:[93m372[0m:[93m36[0m - [91merror[0m[90m TS2339: [0mProperty 'roundingAdjustment' does not exist on type '{ totalSheets: number; totalPages: number; totalBomCost: number; totalAdjustments: number; totalCost: number; expectedFeePerLearner: number; materialTotalCost: number; adjustmentTotalCost: number; calculatedTotalCost: number; marginAmount?: number; }'.
+
+[7m372[0m       rounding_adjustment: preview.roundingAdjustment,
+[7m   [0m [91m                                   ~~~~~~~~~~~~~~~~~~[0m
+
+[96mviews/examination/components/ManageSubjectsDialog.tsx[0m:[93m570[0m:[93m42[0m - [91merror[0m[90m TS2339: [0mProperty 'marketAdjustmentTotal' does not exist on type '{ totalSheets: number; totalPages: number; totalBomCost: number; totalAdjustments: number; totalCost: number; expectedFeePerLearner: number; materialTotalCost: number; adjustmentTotalCost: number; calculatedTotalCost: number; marginAmount?: number; }'.
+
+[7m570[0m         market_adjustment_total: preview.marketAdjustmentTotal,
+[7m   [0m [91m                                         ~~~~~~~~~~~~~~~~~~~~~[0m
+
+[96mviews/examination/components/ManageSubjectsDialog.tsx[0m:[93m571[0m:[93m38[0m - [91merror[0m[90m TS2339: [0mProperty 'roundingAdjustment' does not exist on type '{ totalSheets: number; totalPages: number; totalBomCost: number; totalAdjustments: number; totalCost: number; expectedFeePerLearner: number; materialTotalCost: number; adjustmentTotalCost: number; calculatedTotalCost: number; marginAmount?: number; }'.
+
+[7m571[0m         rounding_adjustment: preview.roundingAdjustment,
+[7m   [0m [91m                                     ~~~~~~~~~~~~~~~~~~[0m
+
+[96mviews/examination/components/ManageSubjectsDialog.tsx[0m:[93m911[0m:[93m202[0m - [91merror[0m[90m TS2339: [0mProperty 'marketAdjustmentTotal' does not exist on type '{ totalSheets: number; totalPages: number; totalBomCost: number; totalAdjustments: number; totalCost: number; expectedFeePerLearner: number; materialTotalCost: number; adjustmentTotalCost: number; calculatedTotalCost: number; marginAmount?: number; }'.
+
+[7m911[0m                 <span className="text-slate-900 inline-flex items-center"><span className="text-indigo-400 mr-1 uppercase text-[11px]">Mkt Adj:</span> {companyConfig?.currencySymbol || 'MWK'} {preview.marketAdjustmentTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+[7m   [0m [91m                                                                                                                                                                                                         ~~~~~~~~~~~~~~~~~~~~~[0m
+
+[96mviews/examination/components/ManageSubjectsDialog.tsx[0m:[93m913[0m:[93m201[0m - [91merror[0m[90m TS2339: [0mProperty 'roundingAdjustment' does not exist on type '{ totalSheets: number; totalPages: number; totalBomCost: number; totalAdjustments: number; totalCost: number; expectedFeePerLearner: number; materialTotalCost: number; adjustmentTotalCost: number; calculatedTotalCost: number; marginAmount?: number; }'.
+
+[7m913[0m                 <span className="text-slate-900 inline-flex items-center"><span className="text-blue-400 mr-1 uppercase text-[11px]">Rounding:</span> {companyConfig?.currencySymbol || 'MWK'} {preview.roundingAdjustment.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+[7m   [0m [91m                                                                                                                                                                                                        ~~~~~~~~~~~~~~~~~~[0m
+
+[96mviews/examination/ExaminationHub.tsx[0m:[93m364[0m:[93m37[0m - [91merror[0m[90m TS2339: [0mProperty 'warning' does not exist on type '{ success: (message: string) => void; error: (message: string) => void; info: (message: string) => void; }'.
+
+[7m364[0m         warnings.forEach(w => toast.warning(w.message));
+[7m   [0m [91m                                    ~~~~~~~[0m
+
+[96mviews/examination/ExaminationHub.tsx[0m:[93m365[0m:[93m15[0m - [91merror[0m[90m TS2339: [0mProperty 'warning' does not exist on type '{ success: (message: string) => void; error: (message: string) => void; info: (message: string) => void; }'.
+
+[7m365[0m         toast.warning('Batch approved with inventory warnings.');
+[7m   [0m [91m              ~~~~~~~[0m
+
+[96mviews/examination/ExaminationJobForm.tsx[0m:[93m408[0m:[93m19[0m - [91merror[0m[90m TS2345: [0mArgument of type '{ exam_name: any; school_id: any; sub_account_name: any; class_name: any; number_of_learners: any; bom_id: any; adjustment_id: any; adjustment_type: any; adjustment_value: any; rounding_method: PricingRoundingMethod; ... 5 more ...; subjects: { ...; }[]; }' is not assignable to parameter of type 'SetStateAction<{ exam_name: string; school_id: string; sub_account_name: string; class_name: string; number_of_learners: number; bom_id: string; adjustment_id: string; adjustment_type: "percentage" | "fixed"; ... 8 more ...; subjects: { ...; }[]; }>'.
+  Property 'pricing_locked' is missing in type '{ exam_name: any; school_id: any; sub_account_name: any; class_name: any; number_of_learners: any; bom_id: any; adjustment_id: any; adjustment_type: any; adjustment_value: any; rounding_method: PricingRoundingMethod; ... 5 more ...; subjects: { ...; }[]; }' but required in type '{ exam_name: string; school_id: string; sub_account_name: string; class_name: string; number_of_learners: number; bom_id: string; adjustment_id: string; adjustment_type: "fixed" | "percentage"; ... 8 more ...; subjects: Array<{ id?: string; subject_name: string; pages_per_paper: number; extra_copies: number; }>; }'.
+
+[7m408[0m       setFormData({
+[7m   [0m [91m                  ~[0m
+[7m409[0m         exam_name: job.exam_name,
+[7m   [0m [91m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[7m...[0m 
+[7m429[0m         }))
+[7m   [0m [91m~~~~~~~~~~~[0m
+[7m430[0m       });
+[7m   [0m [91m~~~~~~~[0m
+
+  [96mviews/examination/ExaminationJobForm.tsx[0m:[93m91[0m:[93m5[0m
+    [7m91[0m     pricing_locked: false,
+    [7m  [0m [96m    ~~~~~~~~~~~~~~~~~~~~~[0m
+    'pricing_locked' is declared here.
+
+[96mviews/pos/components/PosModals.tsx[0m:[93m369[0m:[93m25[0m - [91merror[0m[90m TS2739: [0mType '{ pages: number; copies: number; totalPages: number; unitCostPerPage: number; unitPricePerPage: number; unitCostPerCopy: number; unitPricePerCopy: number; totalCost: number; totalPrice: number; calculatedTotalPrice: number; }' is missing the following properties from type 'DynamicServiceDetails': materials, adjustments
+
+[7m369[0m                         serviceDetails: {
+[7m   [0m [91m                        ~~~~~~~~~~~~~~[0m
+
+  [96mservices/pricingService.ts[0m:[93m51[0m:[93m5[0m
+    [7m51[0m     serviceDetails: DynamicServiceDetails;
+    [7m  [0m [96m    ~~~~~~~~~~~~~~[0m
+    The expected type comes from property 'serviceDetails' which is declared here on type 'DynamicServicePricingResult'
+
+[96mviews/production/components/ProductionForms.tsx[0m:[93m895[0m:[93m31[0m - [91merror[0m[90m TS2304: [0mCannot find name 'useFinance'.
+
+[7m895[0m     const { invoices = [] } = useFinance();
+[7m   [0m [91m                              ~~~~~~~~~~[0m
+
+[96mviews/production/components/ProductionForms.tsx[0m:[93m896[0m:[93m51[0m - [91merror[0m[90m TS2304: [0mCannot find name 'useProduction'.
+
+[7m896[0m     const { workOrders = [], workCenters = [] } = useProduction();
+[7m   [0m [91m                                                  ~~~~~~~~~~~~~[0m
+
+[96mviews/production/ExaminationPrinting.tsx[0m:[93m163[0m:[93m94[0m - [91merror[0m[90m TS2339: [0mProperty 'paperId' does not exist on type '{}'.
+
+[7m163[0m       const resolvedPaper = resolveExamMaterial(inventory || [], 'paper', productionSettings.paperId);
+[7m   [0m [91m                                                                                             ~~~~~~~[0m
+
+[96mviews/production/ExaminationPrinting.tsx[0m:[93m164[0m:[93m94[0m - [91merror[0m[90m TS2339: [0mProperty 'tonerId' does not exist on type '{}'.
+
+[7m164[0m       const resolvedToner = resolveExamMaterial(inventory || [], 'toner', productionSettings.tonerId);
+[7m   [0m [91m                                                                                             ~~~~~~~[0m
+
+[96mviews/production/ExaminationPrinting.tsx[0m:[93m169[0m:[93m39[0m - [91merror[0m[90m TS2339: [0mProperty 'laborCostPerHour' does not exist on type '{}'.
+
+[7m169[0m         laborCost: productionSettings.laborCostPerHour || 10,
+[7m   [0m [91m                                      ~~~~~~~~~~~~~~~~[0m
+
+[96mviews/production/ExaminationPrinting.tsx[0m:[93m170[0m:[93m40[0m - [91merror[0m[90m TS2339: [0mProperty 'baseMargin' does not exist on type '{}'.
+
+[7m170[0m         baseMargin: productionSettings.baseMargin || 20,
+[7m   [0m [91m                                       ~~~~~~~~~~[0m
+
+[96mviews/production/ExaminationPrinting.tsx[0m:[93m190[0m:[93m28[0m - [91merror[0m[90m TS2339: [0mProperty 'defaultExamBomId' does not exist on type '{}'.
+
+[7m190[0m         productionSettings.defaultExamBomId !== EXAM_HIDDEN_BOM_TEMPLATE_ID ||
+[7m   [0m [91m                           ~~~~~~~~~~~~~~~~[0m
+
+[96mviews/production/ExaminationPrinting.tsx[0m:[93m191[0m:[93m28[0m - [91merror[0m[90m TS2339: [0mProperty 'paperId' does not exist on type '{}'.
+
+[7m191[0m         productionSettings.paperId !== nextPaperId ||
+[7m   [0m [91m                           ~~~~~~~[0m
+
+[96mviews/production/ExaminationPrinting.tsx[0m:[93m192[0m:[93m28[0m - [91merror[0m[90m TS2339: [0mProperty 'tonerId' does not exist on type '{}'.
+
+[7m192[0m         productionSettings.tonerId !== nextTonerId;
+[7m   [0m [91m                           ~~~~~~~[0m
+
+[96mviews/production/ExaminationPrinting.tsx[0m:[93m200[0m:[93m13[0m - [91merror[0m[90m TS2353: [0mObject literal may only specify known properties, and 'paperId' does not exist in type 'ProductionSettingsConfig'.
+
+[7m200[0m             paperId: nextPaperId,
+[7m   [0m [91m            ~~~~~~~[0m
+
+  [96mtypes.ts[0m:[93m216[0m:[93m3[0m
+    [7m216[0m   productionSettings: ProductionSettingsConfig;
+    [7m   [0m [96m  ~~~~~~~~~~~~~~~~~~[0m
+    The expected type comes from property 'productionSettings' which is declared here on type 'CompanyConfig'
+
+[96mviews/production/ExaminationPrinting.tsx[0m:[93m217[0m:[93m92[0m - [91merror[0m[90m TS2339: [0mProperty 'paperId' does not exist on type '{}'.
+
+[7m217[0m     const resolvedPaper = resolveExamMaterial(inventory || [], 'paper', productionSettings.paperId);
+[7m   [0m [91m                                                                                           ~~~~~~~[0m
+
+[96mviews/production/ExaminationPrinting.tsx[0m:[93m218[0m:[93m92[0m - [91merror[0m[90m TS2339: [0mProperty 'tonerId' does not exist on type '{}'.
+
+[7m218[0m     const resolvedToner = resolveExamMaterial(inventory || [], 'toner', productionSettings.tonerId);
+[7m   [0m [91m                                                                                           ~~~~~~~[0m
+
+[96mviews/production/ExaminationPrinting.tsx[0m:[93m219[0m:[93m48[0m - [91merror[0m[90m TS2339: [0mProperty 'defaultExamBomId' does not exist on type '{}'.
+
+[7m219[0m     const configuredBomId = productionSettings.defaultExamBomId || EXAM_HIDDEN_BOM_TEMPLATE_ID;
+[7m   [0m [91m                                               ~~~~~~~~~~~~~~~~[0m
+
+[96mviews/production/ExaminationPrinting.tsx[0m:[93m227[0m:[93m37[0m - [91merror[0m[90m TS2339: [0mProperty 'laborCostPerHour' does not exist on type '{}'.
+
+[7m227[0m       laborCost: productionSettings.laborCostPerHour || 10,
+[7m   [0m [91m                                    ~~~~~~~~~~~~~~~~[0m
+
+[96mviews/production/ExaminationPrinting.tsx[0m:[93m228[0m:[93m38[0m - [91merror[0m[90m TS2339: [0mProperty 'baseMargin' does not exist on type '{}'.
+
+[7m228[0m       baseMargin: productionSettings.baseMargin || 20,
+[7m   [0m [91m                                     ~~~~~~~~~~[0m
+
+[96mviews/production/ExaminationPrinting.tsx[0m:[93m249[0m:[93m65[0m - [91merror[0m[90m TS2339: [0mProperty 'laborCostPerHour' does not exist on type '{}'.
+
+[7m249[0m       laborCost: sourceTemplate.laborCost || productionSettings.laborCostPerHour || 10,
+[7m   [0m [91m                                                                ~~~~~~~~~~~~~~~~[0m
+
+[96mviews/production/ExaminationPrinting.tsx[0m:[93m414[0m:[93m50[0m - [91merror[0m[90m TS2339: [0mProperty 'tonerId' does not exist on type '{}'.
+
+[7m414[0m           comp.materialId === productionSettings.tonerId ||
+[7m   [0m [91m                                                 ~~~~~~~[0m
+
+[96mviews/production/ExaminationPrinting.tsx[0m:[93m415[0m:[93m46[0m - [91merror[0m[90m TS2339: [0mProperty 'tonerId' does not exist on type '{}'.
+
+[7m415[0m           comp.itemId === productionSettings.tonerId ||
+[7m   [0m [91m                                             ~~~~~~~[0m
+
+[96mviews/production/ExaminationPrinting.tsx[0m:[93m496[0m:[93m96[0m - [91merror[0m[90m TS2339: [0mProperty 'tonerId' does not exist on type '{}'.
+
+[7m496[0m     [subjects, totalCandidature, batchChargePerLearner, inventory, examBOM, productionSettings.tonerId]
+[7m   [0m [91m                                                                                               ~~~~~~~[0m
+
+[96mviews/production/ExaminationPrinting.tsx[0m:[93m1786[0m:[93m53[0m - [91merror[0m[90m TS2339: [0mProperty 'paperId' does not exist on type '{}'.
+
+[7m1786[0m                           value={productionSettings.paperId || ''}
+[7m    [0m [91m                                                    ~~~~~~~[0m
+
+[96mviews/production/ExaminationPrinting.tsx[0m:[93m1792[0m:[93m33[0m - [91merror[0m[90m TS2353: [0mObject literal may only specify known properties, and 'paperId' does not exist in type 'ProductionSettingsConfig'.
+
+[7m1792[0m                                 paperId: e.target.value,
+[7m    [0m [91m                                ~~~~~~~[0m
+
+  [96mtypes.ts[0m:[93m216[0m:[93m3[0m
+    [7m216[0m   productionSettings: ProductionSettingsConfig;
+    [7m   [0m [96m  ~~~~~~~~~~~~~~~~~~[0m
+    The expected type comes from property 'productionSettings' which is declared here on type 'CompanyConfig'
+
+[96mviews/production/ExaminationPrinting.tsx[0m:[93m1812[0m:[93m53[0m - [91merror[0m[90m TS2339: [0mProperty 'tonerId' does not exist on type '{}'.
+
+[7m1812[0m                           value={productionSettings.tonerId || ''}
+[7m    [0m [91m                                                    ~~~~~~~[0m
+
+[96mviews/production/ExaminationPrinting.tsx[0m:[93m1818[0m:[93m33[0m - [91merror[0m[90m TS2353: [0mObject literal may only specify known properties, and 'tonerId' does not exist in type 'ProductionSettingsConfig'.
+
+[7m1818[0m                                 tonerId: e.target.value,
+[7m    [0m [91m                                ~~~~~~~[0m
+
+  [96mtypes.ts[0m:[93m216[0m:[93m3[0m
+    [7m216[0m   productionSettings: ProductionSettingsConfig;
+    [7m   [0m [96m  ~~~~~~~~~~~~~~~~~~[0m
+    The expected type comes from property 'productionSettings' which is declared here on type 'CompanyConfig'
+
+[96mviews/production/MachineMaintenance.tsx[0m:[93m31[0m:[93m16[0m - [91merror[0m[90m TS2339: [0mProperty 'maintenanceLogs' does not exist on type 'ProductionContextType'.
+
+[7m31[0m     resources, maintenanceLogs, addMaintenanceLog,
+[7m  [0m [91m               ~~~~~~~~~~~~~~~[0m
+
+[96mviews/production/MachineMaintenance.tsx[0m:[93m31[0m:[93m33[0m - [91merror[0m[90m TS2339: [0mProperty 'addMaintenanceLog' does not exist on type 'ProductionContextType'.
+
+[7m31[0m     resources, maintenanceLogs, addMaintenanceLog,
+[7m  [0m [91m                                ~~~~~~~~~~~~~~~~~[0m
+
+[96mviews/production/MachineMaintenance.tsx[0m:[93m32[0m:[93m5[0m - [91merror[0m[90m TS2339: [0mProperty 'deleteMaintenanceLog' does not exist on type 'ProductionContextType'.
+
+[7m32[0m     deleteMaintenanceLog, workOrders
+[7m  [0m [91m    ~~~~~~~~~~~~~~~~~~~~[0m
+
+[96mviews/production/MachineMaintenance.tsx[0m:[93m34[0m:[93m11[0m - [91merror[0m[90m TS2339: [0mProperty 'addTask' does not exist on type 'AuthContextType'.
+
+[7m34[0m   const { addTask, user, notify, companyConfig } = useAuth();
+[7m  [0m [91m          ~~~~~~~[0m
+
+[96mviews/production/NewBatch.tsx[0m:[93m11[0m:[93m17[0m - [91merror[0m[90m TS2339: [0mProperty 'produceBatch' does not exist on type 'ProductionContextType'.
+
+[7m11[0m   const { boms, produceBatch } = useProduction();
+[7m  [0m [91m                ~~~~~~~~~~~~[0m
+
+[96mviews/production/NewExamJobModal.tsx[0m:[93m117[0m:[93m94[0m - [91merror[0m[90m TS2339: [0mProperty 'paperId' does not exist on type '{}'.
+
+[7m117[0m       const resolvedPaper = resolveExamMaterial(inventory || [], 'paper', productionSettings.paperId);
+[7m   [0m [91m                                                                                             ~~~~~~~[0m
+
+[96mviews/production/NewExamJobModal.tsx[0m:[93m118[0m:[93m94[0m - [91merror[0m[90m TS2339: [0mProperty 'tonerId' does not exist on type '{}'.
+
+[7m118[0m       const resolvedToner = resolveExamMaterial(inventory || [], 'toner', productionSettings.tonerId);
+[7m   [0m [91m                                                                                             ~~~~~~~[0m
+
+[96mviews/production/NewExamJobModal.tsx[0m:[93m123[0m:[93m39[0m - [91merror[0m[90m TS2339: [0mProperty 'laborCostPerHour' does not exist on type '{}'.
+
+[7m123[0m         laborCost: productionSettings.laborCostPerHour || 10,
+[7m   [0m [91m                                      ~~~~~~~~~~~~~~~~[0m
+
+[96mviews/production/NewExamJobModal.tsx[0m:[93m124[0m:[93m40[0m - [91merror[0m[90m TS2339: [0mProperty 'baseMargin' does not exist on type '{}'.
+
+[7m124[0m         baseMargin: productionSettings.baseMargin || 20,
+[7m   [0m [91m                                       ~~~~~~~~~~[0m
+
+[96mviews/production/NewExamJobModal.tsx[0m:[93m144[0m:[93m28[0m - [91merror[0m[90m TS2339: [0mProperty 'defaultExamBomId' does not exist on type '{}'.
+
+[7m144[0m         productionSettings.defaultExamBomId !== EXAM_HIDDEN_BOM_TEMPLATE_ID ||
+[7m   [0m [91m                           ~~~~~~~~~~~~~~~~[0m
+
+[96mviews/production/NewExamJobModal.tsx[0m:[93m145[0m:[93m28[0m - [91merror[0m[90m TS2339: [0mProperty 'paperId' does not exist on type '{}'.
+
+[7m145[0m         productionSettings.paperId !== nextPaperId ||
+[7m   [0m [91m                           ~~~~~~~[0m
+
+[96mviews/production/NewExamJobModal.tsx[0m:[93m146[0m:[93m28[0m - [91merror[0m[90m TS2339: [0mProperty 'tonerId' does not exist on type '{}'.
+
+[7m146[0m         productionSettings.tonerId !== nextTonerId;
+[7m   [0m [91m                           ~~~~~~~[0m
+
+[96mviews/production/NewExamJobModal.tsx[0m:[93m154[0m:[93m13[0m - [91merror[0m[90m TS2353: [0mObject literal may only specify known properties, and 'paperId' does not exist in type 'ProductionSettingsConfig'.
+
+[7m154[0m             paperId: nextPaperId,
+[7m   [0m [91m            ~~~~~~~[0m
+
+  [96mtypes.ts[0m:[93m216[0m:[93m3[0m
+    [7m216[0m   productionSettings: ProductionSettingsConfig;
+    [7m   [0m [96m  ~~~~~~~~~~~~~~~~~~[0m
+    The expected type comes from property 'productionSettings' which is declared here on type 'CompanyConfig'
+
+[96mviews/production/NewExamJobModal.tsx[0m:[93m173[0m:[93m92[0m - [91merror[0m[90m TS2339: [0mProperty 'paperId' does not exist on type '{}'.
+
+[7m173[0m     const resolvedPaper = resolveExamMaterial(inventory || [], 'paper', productionSettings.paperId);
+[7m   [0m [91m                                                                                           ~~~~~~~[0m
+
+[96mviews/production/NewExamJobModal.tsx[0m:[93m174[0m:[93m92[0m - [91merror[0m[90m TS2339: [0mProperty 'tonerId' does not exist on type '{}'.
+
+[7m174[0m     const resolvedToner = resolveExamMaterial(inventory || [], 'toner', productionSettings.tonerId);
+[7m   [0m [91m                                                                                           ~~~~~~~[0m
+
+[96mviews/production/NewExamJobModal.tsx[0m:[93m175[0m:[93m48[0m - [91merror[0m[90m TS2339: [0mProperty 'defaultExamBomId' does not exist on type '{}'.
+
+[7m175[0m     const configuredBomId = productionSettings.defaultExamBomId || EXAM_HIDDEN_BOM_TEMPLATE_ID;
+[7m   [0m [91m                                               ~~~~~~~~~~~~~~~~[0m
+
+[96mviews/production/NewExamJobModal.tsx[0m:[93m183[0m:[93m37[0m - [91merror[0m[90m TS2339: [0mProperty 'laborCostPerHour' does not exist on type '{}'.
+
+[7m183[0m       laborCost: productionSettings.laborCostPerHour || 10,
+[7m   [0m [91m                                    ~~~~~~~~~~~~~~~~[0m
+
+[96mviews/production/NewExamJobModal.tsx[0m:[93m184[0m:[93m38[0m - [91merror[0m[90m TS2339: [0mProperty 'baseMargin' does not exist on type '{}'.
+
+[7m184[0m       baseMargin: productionSettings.baseMargin || 20,
+[7m   [0m [91m                                     ~~~~~~~~~~[0m
+
+[96mviews/production/NewExamJobModal.tsx[0m:[93m205[0m:[93m65[0m - [91merror[0m[90m TS2339: [0mProperty 'laborCostPerHour' does not exist on type '{}'.
+
+[7m205[0m       laborCost: sourceTemplate.laborCost || productionSettings.laborCostPerHour || 10,
+[7m   [0m [91m                                                                ~~~~~~~~~~~~~~~~[0m
+
+[96mviews/production/NewExamJobModal.tsx[0m:[93m358[0m:[93m50[0m - [91merror[0m[90m TS2339: [0mProperty 'tonerId' does not exist on type '{}'.
+
+[7m358[0m           comp.materialId === productionSettings.tonerId ||
+[7m   [0m [91m                                                 ~~~~~~~[0m
+
+[96mviews/production/NewExamJobModal.tsx[0m:[93m359[0m:[93m46[0m - [91merror[0m[90m TS2339: [0mProperty 'tonerId' does not exist on type '{}'.
+
+[7m359[0m           comp.itemId === productionSettings.tonerId ||
+[7m   [0m [91m                                             ~~~~~~~[0m
+
+[96mviews/production/NewExamJobModal.tsx[0m:[93m433[0m:[93m36[0m - [91merror[0m[90m TS2304: [0mCannot find name 'adjustmentSnapshots'.
+
+[7m433[0m       const profitMarginSnapshot = adjustmentSnapshots.find(s => s.name === 'Profit Margin');
+[7m   [0m [91m                                   ~~~~~~~~~~~~~~~~~~~[0m
+
+[96mviews/production/NewExamJobModal.tsx[0m:[93m554[0m:[93m69[0m - [91merror[0m[90m TS2551: [0mProperty 'batchId' does not exist on type '{ success: boolean; batch_id: string; }'. Did you mean 'batch_id'?
+
+[7m554[0m       const returnedBatchId = confirmData?.batch_id || confirmData?.batchId;
+[7m   [0m [91m                                                                    ~~~~~~~[0m
+
+  [96mservices/api.ts[0m:[93m1216[0m:[93m35[0m
+    [7m1216[0m           return { success: true, batch_id: String(remoteBatchId) };
+    [7m    [0m [96m                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+    'batch_id' is declared here.
+
+[96mviews/reports/ReportBuilder.tsx[0m:[93m487[0m:[93m27[0m - [91merror[0m[90m TS2345: [0mArgument of type '(prev: Partial<ReportDefinition>) => { groupBy: (ReportGrouping | { field: string; showSubtotals: true; })[]; id?: string; name?: string; description?: string; ... 24 more ...; version?: number; }' is not assignable to parameter of type 'SetStateAction<Partial<ReportDefinition>>'.
+  Type '(prev: Partial<ReportDefinition>) => { groupBy: (ReportGrouping | { field: string; showSubtotals: true; })[]; id?: string; name?: string; description?: string; ... 24 more ...; version?: number; }' is not assignable to type '(prevState: Partial<ReportDefinition>) => Partial<ReportDefinition>'.
+    Call signature return types '{ groupBy: (ReportGrouping | { field: string; showSubtotals: true; })[]; id?: string; name?: string; description?: string; category?: ReportCategory; type?: ReportType; ... 22 more ...; version?: number; }' and 'Partial<ReportDefinition>' are incompatible.
+      The types of 'groupBy' are incompatible between these types.
+        Type '(ReportGrouping | { field: string; showSubtotals: true; })[]' is not assignable to type 'ReportGrouping[]'.
+          Type 'ReportGrouping | { field: string; showSubtotals: true; }' is not assignable to type 'ReportGrouping'.
+            Property 'label' is missing in type '{ field: string; showSubtotals: true; }' but required in type 'ReportGrouping'.
+
+[7m487[0m             setDefinition(prev => ({
+[7m   [0m [91m                          ~~~~~~~~~~[0m
+[7m488[0m               ...prev,
+[7m   [0m [91m~~~~~~~~~~~~~~~~~~~~~~[0m
+[7m489[0m               groupBy: [...(prev.groupBy || []), { field: '', showSubtotals: true }],
+[7m   [0m [91m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[7m490[0m             }));
+[7m   [0m [91m~~~~~~~~~~~~~~[0m
+
+  [96mtypes/reports.ts[0m:[93m207[0m:[93m3[0m
+    [7m207[0m   label: string;
+    [7m   [0m [96m  ~~~~~[0m
+    'label' is declared here.
+
+[96mviews/reports/ReportBuilder.tsx[0m:[93m667[0m:[93m27[0m - [91merror[0m[90m TS2345: [0mArgument of type '(prev: Partial<ReportDefinition>) => { parameters: (ReportParameter | { id: string; name: string; label: string; type: "string"; required: false; })[]; ... 27 more ...; version?: number; }' is not assignable to parameter of type 'SetStateAction<Partial<ReportDefinition>>'.
+  Type '(prev: Partial<ReportDefinition>) => { parameters: (ReportParameter | { id: string; name: string; label: string; type: "string"; required: false; })[]; ... 27 more ...; version?: number; }' is not assignable to type '(prevState: Partial<ReportDefinition>) => Partial<ReportDefinition>'.
+    Call signature return types '{ parameters: (ReportParameter | { id: string; name: string; label: string; type: "string"; required: false; })[]; id?: string; name?: string; description?: string; category?: ReportCategory; ... 23 more ...; version?: number; }' and 'Partial<ReportDefinition>' are incompatible.
+      The types of 'parameters' are incompatible between these types.
+        Type '(ReportParameter | { id: string; name: string; label: string; type: "string"; required: false; })[]' is not assignable to type 'ReportParameter[]'.
+          Type 'ReportParameter | { id: string; name: string; label: string; type: "string"; required: false; }' is not assignable to type 'ReportParameter'.
+            Property 'order' is missing in type '{ id: string; name: string; label: string; type: "string"; required: false; }' but required in type 'ReportParameter'.
+
+[7m667[0m             setDefinition(prev => ({
+[7m   [0m [91m                          ~~~~~~~~~~[0m
+[7m668[0m               ...prev,
+[7m   [0m [91m~~~~~~~~~~~~~~~~~~~~~~[0m
+[7m...[0m 
+[7m675[0m               }],
+[7m   [0m [91m~~~~~~~~~~~~~~~~~[0m
+[7m676[0m             }));
+[7m   [0m [91m~~~~~~~~~~~~~~[0m
+
+  [96mtypes/reports.ts[0m:[93m314[0m:[93m3[0m
+    [7m314[0m   order: number;
+    [7m   [0m [96m  ~~~~~[0m
+    'order' is declared here.
+
+[96mviews/reports/ReportBuilder.tsx[0m:[93m889[0m:[93m5[0m - [91merror[0m[90m TS2345: [0mArgument of type 'ReportColumn | { id: string; field: string; label: string; type: "string"; sortable: true; filterable: boolean; hidden: false; width: number; }' is not assignable to parameter of type 'ReportColumn | (() => ReportColumn)'.
+  Object literal may only specify known properties, and 'filterable' does not exist in type 'ReportColumn | (() => ReportColumn)'.
+
+[7m889[0m     filterable: false,
+[7m   [0m [91m    ~~~~~~~~~~[0m
+
+[96mviews/reports/ReportBuilder.tsx[0m:[93m988[0m:[93m33[0m - [91merror[0m[90m TS2339: [0mProperty 'filterable' does not exist on type 'ReportColumn'.
+
+[7m988[0m               checked={formData.filterable}
+[7m   [0m [91m                                ~~~~~~~~~~[0m
+
+[96mviews/reports/ReportDashboard.tsx[0m:[93m536[0m:[93m18[0m - [91merror[0m[90m TS2367: [0mThis comparison appears to be unintentional because the types '"string" | "number" | "boolean" | "select" | "date" | "datetime" | "multi_select"' and '"dateRange"' have no overlap.
+
+[7m536[0m                 {param.type === 'dateRange' && (
+[7m   [0m [91m                 ~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[96mviews/sales/components/OrderForm.tsx[0m:[93m1408[0m:[93m17[0m - [91merror[0m[90m TS2367: [0mThis comparison appears to be unintentional because the types '"Raw Material" | "Product" | "Stationery" | "Material"' and '"Service"' have no overlap.
+
+[7m1408[0m             if (item.type !== 'Service') {
+[7m    [0m [91m                ~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[96mviews/Settings.tsx[0m:[93m132[0m:[93m13[0m - [91merror[0m[90m TS2739: [0mType '{ showItemImages: false; enableShortcuts: false; allowReturns: false; allowDiscounts: false; gridColumns: number; showCategoryFilters: false; showShortcutHints: true; shortcutLabels: { F1: string; F2: string; F3: string; F10: string; }; ... 5 more ...; receiptFooter: string; }' is missing the following properties from type '{ showItemImages: boolean; enableShortcuts: boolean; allowReturns: boolean; allowDiscounts: boolean; gridColumns: number; showCategoryFilters: boolean; photocopyPrice: number; photocopyCostPerPage: number; ... 8 more ...; paymentDetails?: { ...; }; }': typePrintingPrice, requireCustomer, defaultPaymentMethod
+
+[7m132[0m             pos: {
+[7m   [0m [91m            ~~~[0m
+
+  [96mtypes.ts[0m:[93m39[0m:[93m3[0m
+    [7m39[0m   pos: {
+    [7m  [0m [96m  ~~~[0m
+    The expected type comes from property 'pos' which is declared here on type 'TransactionSettingsConfig'
+
+[96mviews/Settings.tsx[0m:[93m2529[0m:[93m159[0m - [91merror[0m[90m TS2741: [0mProperty 'triggerCloudSync' is missing in type '{ auth: { login: (username: string, password?: string, mfaCode?: string) => Promise<{ status: number; error: string; data?: undefined; } | { status: number; data: User; error?: undefined; }>; }; ... 11 more ...; system: { ...; }; }' but required in type '{ triggerCloudSync: () => Promise<void>; }'.
+
+[7m2529[0m                                 <CloudTab config={config} setConfig={setConfig} notify={notify} isProcessing={isProcessing} setIsProcessing={setIsProcessing} api={api} />
+[7m    [0m [91m                                                                                                                                                              ~~~[0m
+
+  [96mviews/settings/tabs/CloudTab.tsx[0m:[93m11[0m:[93m10[0m
+    [7m11[0m   api: { triggerCloudSync: () => Promise<void> };
+    [7m  [0m [96m         ~~~~~~~~~~~~~~~~[0m
+    'triggerCloudSync' is declared here.
+  [96mviews/settings/tabs/CloudTab.tsx[0m:[93m11[0m:[93m3[0m
+    [7m11[0m   api: { triggerCloudSync: () => Promise<void> };
+    [7m  [0m [96m  ~~~[0m
+    The expected type comes from property 'api' which is declared here on type 'IntrinsicAttributes & CloudTabProps'
+
+[96mviews/settings/ProfitMarginSettings.tsx[0m:[93m268[0m:[93m9[0m - [91merror[0m[90m TS2367: [0mThis comparison appears to be unintentional because the types '"category" | "line_item"' and '"global"' have no overlap.
+
+[7m268[0m     if (state.scope !== 'global' && !scopeRefId.trim()) { setError(`Please enter a ${state.scope === 'category' ? 'category' : 'SKU / product ID'}`); return; }
+[7m   [0m [91m        ~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[96mviews/shared/components/AuditTimeline.tsx[0m:[93m103[0m:[93m52[0m - [91merror[0m[90m TS2339: [0mProperty 'correlationId' does not exist on type 'AuditLogEntry'.
+
+[7m103[0m                                 CorrelationId: log.correlationId
+[7m   [0m [91m                                                   ~~~~~~~~~~~~~[0m
+
+[96mviews/shared/components/AuditTimeline.tsx[0m:[93m189[0m:[93m105[0m - [91merror[0m[90m TS2339: [0mProperty 'correlationId' does not exist on type 'AuditLogEntry'.
+
+[7m189[0m                                             <span className="text-[10px] font-mono text-slate-600">{log.correlationId}</span>
+[7m   [0m [91m                                                                                                        ~~~~~~~~~~~~~[0m
+
+[96mviews/shared/components/PDF/NativePdfPreview.tsx[0m:[93m75[0m:[93m44[0m - [91merror[0m[90m TS2367: [0mThis comparison appears to be unintentional because the types '"browser"' and '"tauri"' have no overlap.
+
+[7m75[0m           d.push({ label: 'Engine', value: platform.type === 'tauri' ? 'Tauri' : 'Electron' });
+[7m  [0m [91m                                           ~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[96mviews/shared/components/PDF/NativePdfPreview.tsx[0m:[93m108[0m:[93m44[0m - [91merror[0m[90m TS2367: [0mThis comparison appears to be unintentional because the types '"browser"' and '"tauri"' have no overlap.
+
+[7m108[0m           d.push({ label: 'Engine', value: platform.type === 'tauri' ? 'Tauri' : 'Electron' });
+[7m   [0m [91m                                           ~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[96mviews/shared/components/PDF/NativePdfPreview.tsx[0m:[93m112[0m:[93m34[0m - [91merror[0m[90m TS2322: [0mType 'Uint8Array<ArrayBufferLike>' is not assignable to type 'BlobPart'.
+  Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'ArrayBufferView<ArrayBuffer>'.
+    Types of property 'buffer' are incompatible.
+      Type 'ArrayBufferLike' is not assignable to type 'ArrayBuffer'.
+        Type 'SharedArrayBuffer' is not assignable to type 'ArrayBuffer'.
+          Types of property '[Symbol.toStringTag]' are incompatible.
+            Type '"SharedArrayBuffer"' is not assignable to type '"ArrayBuffer"'.
+
+[7m112[0m           const blob = new Blob([bytes], { type: 'application/pdf' });
+[7m   [0m [91m                                 ~~~~~[0m
+
+[96mviews/shared/components/PDF/pdfPreviewUtils.ts[0m:[93m151[0m:[93m26[0m - [91merror[0m[90m TS2322: [0mType 'Uint8Array<ArrayBufferLike>' is not assignable to type 'BlobPart'.
+  Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'ArrayBufferView<ArrayBuffer>'.
+    Types of property 'buffer' are incompatible.
+      Type 'ArrayBufferLike' is not assignable to type 'ArrayBuffer'.
+        Type 'SharedArrayBuffer' is not assignable to type 'ArrayBuffer'.
+          Types of property '[Symbol.toStringTag]' are incompatible.
+            Type '"SharedArrayBuffer"' is not assignable to type '"ArrayBuffer"'.
+
+[7m151[0m   const blob = new Blob([bytes], { type: 'application/pdf' });
+[7m   [0m [91m                         ~~~~~[0m
+
+[96mviews/shared/components/PDF/PdfWorker.tsx[0m:[93m125[0m:[93m47[0m - [91merror[0m[90m TS2503: [0mCannot find namespace 'JSX'.
+
+[7m125[0m const testRender = async (label: string, doc: JSX.Element): Promise<Result> => {
+[7m   [0m [91m                                              ~~~[0m
+
+[96mviews/Tasks.tsx[0m:[93m60[0m:[93m14[0m - [91merror[0m[90m TS2552: [0mCannot find name 'tasks'. Did you mean 'Tasks'?
+
+[7m60[0m       return tasks.filter(t => {
+[7m  [0m [91m             ~~~~~[0m
+
+  [96mviews/Tasks.tsx[0m:[93m13[0m:[93m7[0m
+    [7m13[0m const Tasks: React.FC = () => {
+    [7m  [0m [96m      ~~~~~[0m
+    'Tasks' is declared here.
+
+[96mviews/Tasks.tsx[0m:[93m66[0m:[93m7[0m - [91merror[0m[90m TS2552: [0mCannot find name 'tasks'. Did you mean 'Tasks'?
+
+[7m66[0m   }, [tasks, filter, user, searchTerm]);
+[7m  [0m [91m      ~~~~~[0m
+
+  [96mviews/Tasks.tsx[0m:[93m13[0m:[93m7[0m
+    [7m13[0m const Tasks: React.FC = () => {
+    [7m  [0m [96m      ~~~~~[0m
+    'Tasks' is declared here.
+
+[96mviews/Tasks.tsx[0m:[93m109[0m:[93m11[0m - [91merror[0m[90m TS2304: [0mCannot find name 'updateTask'.
+
+[7m109[0m           updateTask({ ...editingTask, ...taskData } as CRMTask);
+[7m   [0m [91m          ~~~~~~~~~~[0m
+
+[96mviews/Tasks.tsx[0m:[93m112[0m:[93m11[0m - [91merror[0m[90m TS2304: [0mCannot find name 'addTask'.
+
+[7m112[0m           addTask({ ...taskData, id: '' } as CRMTask);
+[7m   [0m [91m          ~~~~~~~[0m
+
+[96mviews/Tasks.tsx[0m:[93m125[0m:[93m15[0m - [91merror[0m[90m TS2304: [0mCannot find name 'updateTask'.
+
+[7m125[0m               updateTask({ ...task, status });
+[7m   [0m [91m              ~~~~~~~~~~[0m
+
+[96mviews/Tasks.tsx[0m:[93m130[0m:[93m11[0m - [91merror[0m[90m TS2304: [0mCannot find name 'updateTask'.
+
+[7m130[0m           updateTask({ ...task, status });
+[7m   [0m [91m          ~~~~~~~~~~[0m
+
+[96mviews/Tasks.tsx[0m:[93m137[0m:[93m11[0m - [91merror[0m[90m TS2304: [0mCannot find name 'deleteTask'.
+
+[7m137[0m           deleteTask(id);
+[7m   [0m [91m          ~~~~~~~~~~[0m
+
+[96mviews/Tasks.tsx[0m:[93m152[0m:[93m20[0m - [91merror[0m[90m TS2552: [0mCannot find name 'tasks'. Did you mean 'task'?
+
+[7m152[0m       const task = tasks.find(t => t.id === id);
+[7m   [0m [91m                   ~~~~~[0m
+
+  [96mviews/Tasks.tsx[0m:[93m152[0m:[93m13[0m
+    [7m152[0m       const task = tasks.find(t => t.id === id);
+    [7m   [0m [96m            ~~~~[0m
+    'task' is declared here.
+
+[96mviews/Tasks.tsx[0m:[93m157[0m:[93m19[0m - [91merror[0m[90m TS2304: [0mCannot find name 'updateTask'.
+
+[7m157[0m                   updateTask({ ...task, status });
+[7m   [0m [91m                  ~~~~~~~~~~[0m
+
+[96mviews/Tasks.tsx[0m:[93m161[0m:[93m15[0m - [91merror[0m[90m TS2304: [0mCannot find name 'updateTask'.
+
+[7m161[0m               updateTask({ ...task, status });
+[7m   [0m [91m              ~~~~~~~~~~[0m
+
+[96mviews/Tasks.tsx[0m:[93m235[0m:[93m48[0m - [91merror[0m[90m TS2339: [0mProperty 'avatar' does not exist on type 'User'.
+
+[7m235[0m                             src={assignedUser?.avatar}
+[7m   [0m [91m                                               ~~~~~~[0m
+
+[96mviews/Tasks.tsx[0m:[93m277[0m:[93m18[0m - [91merror[0m[90m TS2304: [0mCannot find name 'tasks'.
+
+[7m277[0m     const task = tasks.find(t => t.id === openMenuId);
+[7m   [0m [91m                 ~~~~~[0m
+
+[96mviews/tools/MarketingMessages.tsx[0m:[93m192[0m:[93m18[0m - [91merror[0m[90m TS2345: [0mArgument of type '(prev: WhatsAppCampaign[]) => (string | WhatsAppCampaign)[]' is not assignable to parameter of type 'SetStateAction<WhatsAppCampaign[]>'.
+  Type '(prev: WhatsAppCampaign[]) => (string | WhatsAppCampaign)[]' is not assignable to type '(prevState: WhatsAppCampaign[]) => WhatsAppCampaign[]'.
+    Type '(string | WhatsAppCampaign)[]' is not assignable to type 'WhatsAppCampaign[]'.
+      Type 'string | WhatsAppCampaign' is not assignable to type 'WhatsAppCampaign'.
+        Type 'string' is not assignable to type 'WhatsAppCampaign'.
+
+[7m192[0m     setCampaigns(prev => [campaign, ...prev]);
+[7m   [0m [91m                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+Found 142 errors in 39 files.
+
+Errors  Files
+     2  context/DataContext.tsx[90m:176[0m
+     3  context/PricingCalculatorContext.tsx[90m:99[0m
+     1  hooks/useAuditLogs.ts[90m:29[0m
+     1  hooks/useDocumentPreview.ts[90m:78[0m
+    13  services/examinationBatchService.ts[90m:369[0m
+     3  services/examinationNotificationService.ts[90m:25[0m
+     3  services/jobTicketConversionService.ts[90m:78[0m
+     1  services/jobTicketService.ts[90m:264[0m
+     2  services/masterInventoryPricingService.ts[90m:239[0m
+     1  services/pricingRoundingService.ts[90m:214[0m
+     1  services/revenueReportingService.ts[90m:58[0m
+     7  services/syncManager.ts[90m:81[0m
+     1  services/whatsAppMarketingService.ts[90m:2[0m
+     6  stores/jobTicketStore.ts[90m:31[0m
+     1  stores/procurementStore.ts[90m:136[0m
+     2  utils/documentMapper.tsx[90m:157[0m
+     1  utils/pricing/recalculateVariants.ts[90m:79[0m
+     4  utils/securitySettings.ts[90m:24[0m
+     4  views/admin/UserManagement.tsx[90m:78[0m
+     6  views/examination/components/ManageSubjectsDialog.tsx[90m:371[0m
+     2  views/examination/ExaminationHub.tsx[90m:364[0m
+     1  views/examination/ExaminationJobForm.tsx[90m:408[0m
+     1  views/pos/components/PosModals.tsx[90m:369[0m
+     2  views/production/components/ProductionForms.tsx[90m:895[0m
+    21  views/production/ExaminationPrinting.tsx[90m:163[0m
+     4  views/production/MachineMaintenance.tsx[90m:31[0m
+     1  views/production/NewBatch.tsx[90m:11[0m
+    18  views/production/NewExamJobModal.tsx[90m:117[0m
+     4  views/reports/ReportBuilder.tsx[90m:487[0m
+     1  views/reports/ReportDashboard.tsx[90m:536[0m
+     1  views/sales/components/OrderForm.tsx[90m:1408[0m
+     2  views/Settings.tsx[90m:132[0m
+     1  views/settings/ProfitMarginSettings.tsx[90m:268[0m
+     2  views/shared/components/AuditTimeline.tsx[90m:103[0m
+     3  views/shared/components/PDF/NativePdfPreview.tsx[90m:75[0m
+     1  views/shared/components/PDF/pdfPreviewUtils.ts[90m:151[0m
+     1  views/shared/components/PDF/PdfWorker.tsx[90m:125[0m
+    12  views/Tasks.tsx[90m:60[0m
+     1  views/tools/MarketingMessages.tsx[90m:192[0m

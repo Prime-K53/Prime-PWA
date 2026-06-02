@@ -533,7 +533,7 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ initialCategory }) =>
                   />
                 )}
                 
-                {param.type === 'dateRange' && (
+                {(param.type as string) === 'dateRange' && (
                   <div className="flex space-x-2">
                     <Input
                       type="date"

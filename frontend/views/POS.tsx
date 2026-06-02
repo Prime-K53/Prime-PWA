@@ -33,7 +33,7 @@ import { calculateSellingPrice, calculateServicePrice } from '../utils/pricing/p
 import { aggregateMarketAdjustmentSnapshots, attachPricingBreakdown, getMarketAdjustmentSnapshots, getSnapshotCalculatedAmount, resolveItemAdjustmentSnapshots, summarizePricingBreakdown } from '../utils/pricingBreakdown';
 
 const POS: React.FC = () => {
-  const { companyConfig, user, notify, addAlert, updateCompanyConfig } = useAuth();
+  const { companyConfig, user, allUsers, notify, addAlert, updateCompanyConfig } = useAuth();
   const { sales, customers, parkOrder, heldOrders, retrieveOrder, generateZReport, fetchSalesData } = useSales();
   const { invoices, accounts } = useFinance();
   const { inventory, updateReservedStock, marketAdjustments } = useInventory();
@@ -80,7 +80,10 @@ const POS: React.FC = () => {
   const buildValidatedPosReceipt = (sale: Sale) => {
     const receipt = buildPosReceiptDoc({
       sale,
-      cashierName: sale.cashierId === user?.id ? (user?.name || 'Cashier') : (sale.cashierId || user?.name || 'Cashier'),
+      cashierName: (() => {
+        const cashierUser = allUsers?.find(u => u.id === sale.cashierId);
+        return cashierUser?.name || cashierUser?.fullName || cashierUser?.username || user?.name || 'Cashier';
+      })(),
       customerName: sale.customerName || 'Walk-in Customer',
       itemDescriptionFormatter: formatServiceDescription,
       footerMessage: getPosReceiptFooter(),
@@ -447,7 +450,9 @@ const POS: React.FC = () => {
         basePrice: isVariant ? (variantStoredPrice || undefined) : (resolveStoredSellingPrice(baseItem) || undefined),
         quantity: newQty,
         adjustments: marketAdjustmentsInput,
-        context: 'POS'
+        context: 'POS',
+        quantityTiers: baseItem?.volumePricing,
+        allowQuantityTiering: baseItem?.allowVolumePricing,
       });
       resolvedPrice = pricing.unitPrice;
       resolvedCost = pricing.cost;
@@ -741,7 +746,9 @@ const handleQuickPrintConfirm = (quantity: number, pagesPerCopy: number, total: 
       basePrice: effectiveBasePrice || undefined,
       quantity: itemInCart.quantity,
       adjustments: marketAdjustmentsInput,
-      context: 'POS'
+      context: 'POS',
+      quantityTiers: baseItem?.volumePricing,
+      allowQuantityTiering: baseItem?.allowVolumePricing,
     });
 
     setCart(prev => prev.map(i => i.id === id ? {
@@ -961,7 +968,9 @@ const handleQuickPrintConfirm = (quantity: number, pagesPerCopy: number, total: 
       basePrice: effectiveBasePrice || undefined,
       quantity: newQty,
       adjustments: marketAdjustmentsInput,
-      context: 'POS'
+      context: 'POS',
+      quantityTiers: baseItem?.volumePricing,
+      allowQuantityTiering: baseItem?.allowVolumePricing,
     });
 
     setCart(prev => prev.map(i => i.id === id ? {

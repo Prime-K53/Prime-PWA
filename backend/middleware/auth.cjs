@@ -38,16 +38,9 @@ const isTrustedLocalOrigin = (value) => {
 };
 
 const canUseHeaderAuth = (req) => {
-  if (process.env.ALLOW_HEADER_AUTH === 'true') {
-    return true;
-  }
-
-  if (readBooleanHeader(req.headers['x-dev-bypass'])) {
-    return true;
-  }
-
-  if (isTrustedLocalOrigin(req.headers.origin)) {
-    return true;
+  // Only allow header-based auth when explicitly enabled AND from loopback
+  if (process.env.ALLOW_HEADER_AUTH !== 'true') {
+    return false;
   }
 
   const remoteAddress = req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress;

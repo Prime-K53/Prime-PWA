@@ -65,6 +65,7 @@ const zeroSummary: RevenueSourceSummary = {
   adjustmentTotal: 0,
   profitMargin: 0,
   roundingTotal: 0,
+  manualOverrideAmount: 0,
   grossGain: 0,
   reconciliationDelta: 0,
 };

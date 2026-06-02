@@ -48,6 +48,11 @@ const Banking: React.FC = () => {
   const { recurringInvoices } = useFinance();
   const currency = companyConfig?.currencySymbol || '$';
 
+  // Initial fetch on mount
+  useEffect(() => {
+    fetchBankingData();
+  }, [fetchBankingData]);
+
   // 5-minute poll + focus refresh
   useModuleRefresh(async () => {
     await Promise.allSettled([

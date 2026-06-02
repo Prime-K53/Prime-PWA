@@ -694,6 +694,22 @@ const initDb = () => {
       db.run(`CREATE INDEX IF NOT EXISTS idx_exam_bom_calc_batch_class ON examination_bom_calculations(batch_id, class_id)`);
       db.run(`CREATE INDEX IF NOT EXISTS idx_bom_default_materials_preferred ON bom_default_materials(preferred_item_id)`);
 
+      db.run(`CREATE TABLE IF NOT EXISTS email_verifications (
+        id TEXT PRIMARY KEY,
+        email TEXT NOT NULL,
+        code TEXT NOT NULL,
+        purpose TEXT NOT NULL,
+        verified INTEGER DEFAULT 0,
+        attempts INTEGER DEFAULT 0,
+        expires_at TEXT NOT NULL,
+        verified_at TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      )`);
+
+      db.run(`CREATE INDEX IF NOT EXISTS idx_ev_email ON email_verifications(email)`);
+      db.run(`CREATE INDEX IF NOT EXISTS idx_ev_purpose ON email_verifications(purpose)`);
+      db.run(`CREATE INDEX IF NOT EXISTS idx_ev_expires ON email_verifications(expires_at)`);
+
       // -----------------------------------------------------------------------
       // Profit Margin Settings & Overrides
       // -----------------------------------------------------------------------

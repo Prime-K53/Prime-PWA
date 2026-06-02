@@ -214,7 +214,7 @@ export const getPricingSettings = (companyConfig?: CompanyConfig | null): Pricin
     analytics: {
       ...(DEFAULT_PRICING_SETTINGS.analytics || {}),
       ...(incoming.analytics || {})
-    }
+    } as RoundingAnalytics
   };
 
   return merged;

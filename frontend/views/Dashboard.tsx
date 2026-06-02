@@ -15,6 +15,7 @@ import {
   Sparkles, Database, BarChart2, X, ArrowUp, ArrowDown, Building2,
   CheckCircle2, Trash2, ExternalLink, Star, Sun, Calendar} from 'lucide-react';
 import WhatsAppMarketingModal from '../components/WhatsAppMarketingModal';
+import AIFloatingAssistant from '../components/ai/AIFloatingAssistant';
 import { dbService } from '../services/db';
 import { formatNumber, parseFormattedNumber } from '../utils/helpers';
 import {
@@ -2183,7 +2184,7 @@ const DashboardContent: React.FC = () => {
         </div>
       </div>
 
-
+      <AIFloatingAssistant />
 
       <WhatsAppMarketingModal 
         open={isWhatsAppModalOpen} 

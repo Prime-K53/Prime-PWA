@@ -187,9 +187,9 @@ export const ExaminationProvider: React.FC<ExaminationProviderProps> = ({ childr
           withTimeout(examinationJobService.listJobs(), DEFAULT_TIMEOUT, 'jobs'),
           withTimeout(examinationJobService.listInvoiceGroups(), DEFAULT_TIMEOUT, 'invoice groups'),
           withTimeout(examinationJobService.listRecurringProfiles(), DEFAULT_TIMEOUT, 'recurring profiles'),
-          withTimeout(dbService.getAll<School>('schools'), DEFAULT_TIMEOUT, 'schools'),
-          withTimeout(dbService.getAll<Customer>('customers'), DEFAULT_TIMEOUT, 'customers'),
-          withTimeout(dbService.getAll<MarketAdjustment>('marketAdjustments'), DEFAULT_TIMEOUT, 'market adjustments'),
+          withTimeout(dbService.getAll<School>('schools'), DEFAULT_TIMEOUT * 2, 'schools'),
+          withTimeout(dbService.getAll<Customer>('customers'), DEFAULT_TIMEOUT * 2, 'customers'),
+          withTimeout(dbService.getAll<MarketAdjustment>('marketAdjustments'), DEFAULT_TIMEOUT * 2, 'market adjustments'),
           withTimeout(examinationBatchService.listBatches(), DEFAULT_TIMEOUT * 2, 'batches')
         ]);
 

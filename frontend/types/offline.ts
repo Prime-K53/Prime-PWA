@@ -65,14 +65,14 @@ export interface BatchRecord {
   [key: string]: unknown;
 }
 
-export interface SyncRequest<TPayload = Record<string, unknown> | null> {
+export interface SyncRequest<TPayload = Record<string, unknown>> {
   url: string;
   method: 'POST' | 'PUT' | 'DELETE';
   headers: Record<string, string>;
   body: TPayload;
 }
 
-export interface SyncQueueItem<TPayload = Record<string, unknown> | null> {
+export interface SyncQueueItem<TPayload = Record<string, unknown>> {
   id: string;
   entityType: 'examination-batch';
   operation: SyncOperation;

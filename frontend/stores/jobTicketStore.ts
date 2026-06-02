@@ -28,7 +28,6 @@ interface JobTicketState {
 
 const defaultSettings: JobTicketSettings = {
   defaultRushFeePercent: 25,
-  defaultRushFeePercent: 25,
   expressFeePercent: 50,
   urgentFeePercent: 100,
   enableNotifications: true,
@@ -71,7 +70,7 @@ export const useJobTicketStore = create<JobTicketState>((set, get) => ({
     };
     
     set(state => ({ jobTickets: [...state.jobTickets, newTicket] }));
-    try { await productionDb.jobTickets.put(newTicket); } catch { await dbService.set('jobTickets', newTicket.id, newTicket); }
+    try { await productionDb.jobTickets.put(newTicket); } catch { await dbService.put('jobTickets', newTicket); }
   },
 
   updateJobTicket: async (ticket) => {
@@ -79,7 +78,7 @@ export const useJobTicketStore = create<JobTicketState>((set, get) => ({
     set(state => ({
       jobTickets: state.jobTickets.map(t => t.id === ticket.id ? updated : t)
     }));
-    try { await productionDb.jobTickets.put(updated); } catch { await dbService.set('jobTickets', ticket.id, updated); }
+    try { await productionDb.jobTickets.put(updated); } catch { await dbService.put('jobTickets', updated); }
   },
 
   deleteJobTicket: async (id) => {
@@ -106,7 +105,7 @@ export const useJobTicketStore = create<JobTicketState>((set, get) => ({
     set(state => ({ 
       jobTickets: state.jobTickets.map(t => t.id === id ? updated : t) 
     }));
-    try { await productionDb.jobTickets.put(updated); } catch { await dbService.set('jobTickets', id, updated); }
+    try { await productionDb.jobTickets.put(updated); } catch { await dbService.put('jobTickets', updated); }
   },
 
   updateJobProgress: async (id, progress) => {
@@ -122,13 +121,13 @@ export const useJobTicketStore = create<JobTicketState>((set, get) => ({
     set(state => ({
       jobTickets: state.jobTickets.map(t => t.id === id ? updated : t)
     }));
-    try { await productionDb.jobTickets.put(updated); } catch { await dbService.set('jobTickets', id, updated); }
+    try { await productionDb.jobTickets.put(updated); } catch { await dbService.put('jobTickets', updated); }
   },
 
   updateSettings: async (newSettings) => {
     const updated = { ...get().settings, ...newSettings };
     set({ settings: updated });
-    try { await productionDb.jobTicketSettings.put({ id: 'default', ...updated }); } catch { await dbService.set('jobTicketSettings', 'default', updated); }
+    try { await productionDb.jobTicketSettings.put({ id: 'default', ...updated }); } catch { await dbService.put('jobTicketSettings', { id: 'default', ...updated }); }
   },
 
   getTicketsByStatus: (status) => {

@@ -1200,11 +1200,11 @@ export const PrimeDocument = ({ type, data, configOverride = null }: DocProps) =
                 ) : null}
               </View>
             </View>
-            
-            {/* PAID Stamp for fully paid receipts moved to right margin of same row */}
-            {isFullyPaid && (
-              <View style={{ marginTop: -5, marginLeft: -3 }}>
-                <Text style={[s.paidStampText, { fontSize: 28.8, color: '#16a34a' }]}>PAID</Text>
+            {(isFullyPaid || isOverpaid) && (
+              <View style={[s.statusBox, { borderLeftColor: isOverpaid ? '#ef4444' : '#10b981' }]}>
+                <Text style={{ fontSize: 16, fontWeight: 'bold', color: isOverpaid ? '#dc2626' : '#059669' }}>
+                  {isOverpaid ? 'OVERPAID' : 'PAID'}
+                </Text>
               </View>
             )}
           </View>
@@ -1389,11 +1389,10 @@ if (type === 'POS_RECEIPT') {
                   <Text style={{ fontSize: baseFontSize }}>{r.customerName}</Text>
                 </View>
               )}
-            </View>
-
-            <View style={s.paidStampSmallContainer}>
-              <View style={s.paidStampSmallBox}>
-                <Text style={[s.paidStampSmallText, { fontWeight: 'bold', fontSize: 18 * scale, letterSpacing: 2 * scale }]}>PAID</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 6 * scale }}>
+                <View style={{ paddingVertical: 3 * scale, paddingHorizontal: 8 * scale, borderRadius: 3 * scale, borderWidth: 1, borderColor: getStatusTone('paid').border, backgroundColor: getStatusTone('paid').border + '15' }}>
+                  <Text style={{ fontSize: baseFontSize, color: getStatusTone('paid').text, fontWeight: 'bold', letterSpacing: 1 * scale }}>PAID</Text>
+                </View>
               </View>
             </View>
 
@@ -1513,7 +1512,7 @@ if (type === 'POS_RECEIPT') {
                 <View style={s.infoText}>
                   {type === 'INVOICE' ? (
                     <>
-                      <Text>Invoice No. # {(('invoiceNumber' in data && (data as any).invoiceNumber) || ('number' in data ? (data as any).number : 'INV'))}</Text>
+                      <Text>Invoice No. {(('invoiceNumber' in data && (data as any).invoiceNumber) || ('number' in data ? (data as any).number : 'INV'))}</Text>
                       <Text>Invoice Date: {'date' in data ? (data as any).date : 'N/A'}</Text>
                       {Boolean(showDueDate) && 'dueDate' in data && !!data.dueDate && <Text>Due Date: {data.dueDate}</Text>}
                       {isFromQuotation && <Text style={{ fontSize: 8, color: '#64748b', marginTop: 2 }}>Order Ref: {conversionDetails?.sourceNumber || 'N/A'}</Text>}
@@ -1521,26 +1520,26 @@ if (type === 'POS_RECEIPT') {
                     </>
                   ) : type === 'ORDER' ? (
                     <>
-                      <Text>Invoice No. # INV-{('orderNumber' in data && (data as any).orderNumber) || ('number' in data ? (data as any).number : 'ORD')}</Text>
+                      <Text>Invoice No. INV-{('orderNumber' in data && (data as any).orderNumber) || ('number' in data ? (data as any).number : 'ORD')}</Text>
                       <Text>Invoice Date: {'date' in data ? (data as any).date : 'N/A'}</Text>
                       <Text style={{ fontSize: 8, color: '#64748b', marginTop: 2 }}>Order Ref: {('orderNumber' in data && (data as any).orderNumber) || 'N/A'}</Text>
                       {Boolean(showDueDate) && 'dueDate' in data && !!data.dueDate && <Text>Due Date: {data.dueDate}</Text>}
                     </>
                   ) : (type as string) === 'SALES_ORDER' ? (
                     <>
-                      <Text>Sales Order No. # {('orderNumber' in data && (data as any).orderNumber) || ('number' in data ? (data as any).number : 'SO')}</Text>
+                      <Text>Sales Order No. {('orderNumber' in data && (data as any).orderNumber) || ('number' in data ? (data as any).number : 'SO')}</Text>
                       <Text>Sales Order Date: {'date' in data ? (data as any).date : 'N/A'}</Text>
                       {Boolean(showDueDate) && 'dueDate' in data && !!data.dueDate && <Text>Due Date: {data.dueDate}</Text>}
                     </>
                   ) : type === 'EXAMINATION_INVOICE' ? (
                     <>
-                      <Text>Service Invoice No. # {'number' in data ? (data as any).number : 'INV'}</Text>
+                      <Text>Service Invoice No. {'number' in data ? (data as any).number : 'INV'}</Text>
                       <Text>Service Invoice Date: {'date' in data ? (data as any).date : 'N/A'}</Text>
                       {Boolean(showDueDate) && 'dueDate' in data && !!data.dueDate && <Text>Due Date: {data.dueDate}</Text>}
                     </>
                   ) : type === 'SUBSCRIPTION' ? (
                     <>
-                      <Text>Recurring Inv. No. # {'number' in data ? (data as any).number : 'SUB'}</Text>
+                      <Text>Recurring Inv. No. {'number' in data ? (data as any).number : 'SUB'}</Text>
                       <Text>Issue Date: {'date' in data ? (data as any).date : 'N/A'}</Text>
                       {'billingPeriodStart' in data && 'billingPeriodEnd' in data && !!(data as any).billingPeriodStart && !!(data as any).billingPeriodEnd && (
                         <Text style={{ marginTop: 2 }}>Period: {(data as any).billingPeriodStart} to {(data as any).billingPeriodEnd}</Text>
@@ -1554,7 +1553,7 @@ if (type === 'POS_RECEIPT') {
                     </>
                   ) : (
                     <>
-                      <Text>{toTitleCase(type)} No. # {'number' in data ? (data as any).number : ('receiptNumber' in data ? (data as any).receiptNumber : 'STATEMENT')}</Text>
+                      <Text>{toTitleCase(type)} No. {'number' in data ? (data as any).number : ('receiptNumber' in data ? (data as any).receiptNumber : 'STATEMENT')}</Text>
                       <Text>{toTitleCase(type)} Date: {'date' in data ? (data as any).date : 'N/A'}</Text>
                       {type === 'QUOTATION' && Boolean(showDueDate) && 'dueDate' in data && !!data.dueDate && <Text>Valid Until: {data.dueDate}</Text>}
                     </>
@@ -1571,7 +1570,7 @@ if (type === 'POS_RECEIPT') {
                 {renderBrandMark('left')}
                 <Text style={[s.title, titleStyle]}>{title}</Text>
                 <View style={s.infoText}>
-                  <Text>{toTitleCase(type)} No. # {'number' in data ? (data as any).number : ('receiptNumber' in data ? (data as any).receiptNumber : 'STATEMENT')}</Text>
+                  <Text>{toTitleCase(type)} No. {'number' in data ? (data as any).number : ('receiptNumber' in data ? (data as any).receiptNumber : 'STATEMENT')}</Text>
                   <Text>{toTitleCase(type)} Date: {'date' in data ? (data as any).date : 'N/A'}</Text>
                 </View>
               </View>
@@ -1617,15 +1616,6 @@ if (type === 'POS_RECEIPT') {
                 ) : null}
               </View>
             )}
-          </View>
-        )}
-
-        {/* PAID Stamp for fully paid invoices */}
-        {('status' in data && data.status === 'Paid') && type !== 'INVOICE' && type !== 'ORDER' && (type as string) !== 'SALES_ORDER' && (
-          <View style={s.paidStampContainer}>
-            <View style={s.paidStampBox}>
-              <Text style={s.paidStampText}>PAID</Text>
-            </View>
           </View>
         )}
 

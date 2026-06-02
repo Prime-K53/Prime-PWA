@@ -133,6 +133,6 @@ export const useProcurementStore = create<ProcurementState>((set, get) => ({
 
   deleteSupplier: async (id) => {
     set(state => ({ suppliers: state.suppliers.filter(s => s.id !== id) }));
-    await api.suppliers.delete(id);
+    await api.suppliers.deleteSupplier(id);
   }
 }));

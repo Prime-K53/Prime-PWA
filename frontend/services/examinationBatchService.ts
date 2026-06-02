@@ -195,7 +195,7 @@ const resolveBatchId = async (id: string): Promise<string> => {
 const normalizeBatchForStorage = (
   batch: Partial<ExaminationBatch> & Record<string, any>,
   overrides: Record<string, any> = {}
-) => {
+): any => {
   const id = String(batch.id || batch.batch_id || generateLocalId());
   const createdAt = String(batch.created_at || batch.createdAt || toIso());
   const updatedAt = String(batch.updated_at || batch.updatedAt || createdAt);
@@ -323,6 +323,8 @@ const enrichPricingSettingsWithInventory = (
     toner_item_name: input.toner_item_name || tonerItem?.name || null,
     toner_unit_cost: Number(input.toner_unit_cost ?? (tonerItem as any)?.cost_per_unit ?? tonerItem?.cost ?? tonerItem?.cost_price ?? 0) || 0,
     conversion_rate: conversionRate,
+    adjustment_rate: input.adjustment_rate,
+    profit_margin: input.profit_margin,
     constants: {
       toner_pages_per_unit: Number(input.constants?.toner_pages_per_unit ?? DEFAULT_TONER_PAGES_PER_UNIT) || DEFAULT_TONER_PAGES_PER_UNIT,
     },
@@ -586,7 +588,7 @@ const buildLocalInvoicePayload = async (
   const items: ExaminationInvoiceLineItem[] = classes.map((cls: any, index: number) => {
     const learners = Math.max(1, Math.floor(Number(cls?.number_of_learners) || 0));
     const unitPrice = Number(cls?.final_fee_per_learner ?? cls?.expected_fee_per_learner ?? cls?.price_per_learner ?? 0) || 0;
-    const total = Number(cls?.live_total_preview ?? (unitPrice * learners) ?? 0);
+    const total = Number(cls?.live_total_preview ?? (unitPrice * learners)) || 0;
     return {
       id: String(cls?.id || `${invoiceId}-${index + 1}`),
       itemId: String(cls?.id || `${invoiceId}-${index + 1}`),
@@ -1205,10 +1207,10 @@ export const examinationBatchService = {
       return { batch, warnings };
     } catch (error) {
       if (!isOfflineError(error)) throw error;
-      const batch = await updateLocalBatch(id, (b) => ({
+      const batch = await updateLocalBatch(id, (b: any) => ({
         ...b,
         status: 'Approved'
-      })) as Promise<ExaminationBatch>;
+      })) as unknown as ExaminationBatch;
       return { batch, warnings: [] };
     }
   },

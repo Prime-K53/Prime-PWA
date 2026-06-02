@@ -18,6 +18,7 @@ import { useProcurement } from '../../../context/ProcurementContext';
 import { useFinance } from '../../../context/FinanceContext';
 import { useAuth } from '../../../context/AuthContext';
 import { format, parseISO, isAfter } from 'date-fns';
+import AISupplierScorecard from '../../../components/ai/AISupplierScorecard';
 
 interface SupplierWorkspaceProps {
   supplier: Supplier;
@@ -243,6 +244,11 @@ export const SupplierWorkspace: React.FC<SupplierWorkspaceProps> = ({ supplier, 
             <Edit2 size={16} />
             Edit Profile
           </button>
+          <AISupplierScorecard
+            supplier={supplier}
+            purchases={supplierPurchases}
+            payments={supplierPayments}
+          />
           <div className="h-6 w-px bg-slate-200 mx-1" />
           <button
             onClick={() => navigate('/procurement/bills', { state: { action: 'create', supplierId: supplier.id } })}

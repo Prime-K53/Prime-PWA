@@ -13,6 +13,7 @@ export interface Addon {
 export interface FinishingOptionWithMaterial extends FinishingOption {
     type: string;
     cost: number;
+    priceAdjustment: number;
     materialConversionRate: number; // e.g., 100 covers per ream
     coversPerCopy: number; // how many covers needed per copy
 }
@@ -94,6 +95,9 @@ const defaultFinishingOptions: FinishingOptionWithMaterial[] = [
         id: 'binding',
         type: 'Binding',
         name: 'Binding',
+        enabled: true,
+        price: 0,
+        items: [],
         quantity: 0,
         cost: 0,
         priceAdjustment: 0,
@@ -104,6 +108,9 @@ const defaultFinishingOptions: FinishingOptionWithMaterial[] = [
         id: 'pinning',
         type: 'Stapling',
         name: 'Pinning/Stapling',
+        enabled: true,
+        price: 0,
+        items: [],
         quantity: 0,
         cost: 0,
         priceAdjustment: 0,
@@ -114,6 +121,9 @@ const defaultFinishingOptions: FinishingOptionWithMaterial[] = [
         id: 'covers',
         type: 'Covers',
         name: 'Covers',
+        enabled: true,
+        price: 0,
+        items: [],
         quantity: 0,
         cost: 0,
         priceAdjustment: 0,

@@ -20,6 +20,7 @@ import {
     BankAlert,
     BankCategory
 } from '../types/banking';
+import { cloudDb } from './cloudDb';
 
 interface NexusDB extends DBSchema {
     inventory: { key: string; value: Item; };
@@ -129,9 +130,59 @@ const DB_VERSION = 33;
 
 let dbPromise: Promise<IDBPDatabase<NexusDB>> | null = null;
 
+/* ───────── Multi-tenant company isolation ───────── */
+let currentCompanyId = '';
+
+export function setCurrentCompanyId(id: string) {
+  currentCompanyId = id || '';
+}
+
+function stampCompanyId<T>(item: T): T {
+  if (currentCompanyId && typeof item === 'object' && item !== null) {
+    (item as any)._companyId = currentCompanyId;
+  }
+  return item;
+}
+
+async function stampAllRecordsWithCompany(companyId: string): Promise<void> {
+  if (!companyId) return;
+  const companyStores = STORE_NAMES.filter(s => s !== 'settings' && s !== 'syncOutbox' && s !== 'idempotencyKeys');
+  const db = await initDB();
+  const tx = db.transaction(companyStores as any, 'readwrite');
+  for (const store of companyStores) {
+    const objectStore = tx.objectStore(store as any);
+    let cursor = await objectStore.openCursor();
+    while (cursor) {
+      const record = cursor.value as any;
+      if (!record._companyId) {
+        record._companyId = companyId;
+        cursor.update(record);
+      }
+      cursor = await cursor.continue();
+    }
+  }
+  await tx.done;
+}
+
+export async function getCurrentCompanyId(): Promise<string> {
+  if (currentCompanyId) return currentCompanyId;
+  try {
+    const raw = localStorage.getItem('nexus_company_config');
+    if (raw) {
+      const cfg = JSON.parse(raw);
+      if (cfg.companyId) {
+        currentCompanyId = cfg.companyId;
+      }
+    }
+  } catch { /* ignore */ }
+  return currentCompanyId;
+}
+/* ───────── End multi-tenant ───────── */
+
 const isRecoverableDbConnectionError = (error: unknown): boolean => {
     if (!(error instanceof Error)) return false;
     if (error.name === 'VersionError' || error.name === 'InvalidStateError') return true;
+    if (error.name === 'AbortError') return true;
 
     const message = String(error.message || '').toLowerCase();
     return message.includes('database connection is closing')
@@ -321,7 +372,13 @@ const getAllFromLegacyStore = async <T>(storeName: keyof NexusDB): Promise<T[]> 
         console.warn(`Object store "${storeName}" not found in IndexedDB.`);
         return [];
     }
-    return db.getAll(storeName as any) as Promise<T[]>;
+    const all = await db.getAll(storeName as any) as T[];
+    const cid = await getCurrentCompanyId();
+    if (!cid) return [];
+    return all.filter((item: any) => {
+        const recordCompany = item?._companyId;
+        return !recordCompany || recordCompany === cid;
+    });
 });
 
 const getFromLegacyStore = async <T>(storeName: keyof NexusDB, id: string): Promise<T | undefined> => withDbRecovery(async (db) => {
@@ -329,10 +386,17 @@ const getFromLegacyStore = async <T>(storeName: keyof NexusDB, id: string): Prom
         console.warn(`Object store "${storeName}" not found in IndexedDB.`);
         return undefined;
     }
-    return db.get(storeName as any, id) as Promise<T | undefined>;
+    const record = await db.get(storeName as any, id) as T | undefined;
+    if (!record) return undefined;
+    const cid = await getCurrentCompanyId();
+    if (!cid) return undefined;
+    const recordCompany = (record as any)?._companyId;
+    if (recordCompany && recordCompany !== cid) return undefined;
+    return record;
 });
 
 const putToLegacyStore = async <T>(storeName: keyof NexusDB, item: T): Promise<string> => withDbRecovery(async (db) => {
+    stampCompanyId(item);
     const result = await db.put(storeName as any, item as any);
     return result as string;
 });
@@ -344,6 +408,38 @@ const deleteFromLegacyStore = async (storeName: keyof NexusDB, id: string): Prom
         }
         await db.delete(storeName as any, id);
     });
+};
+
+const SUPABASE_CONFIGURED = () => {
+  const url = typeof import.meta !== 'undefined' ? import.meta.env?.VITE_SUPABASE_URL : undefined;
+  const key = typeof import.meta !== 'undefined' ? import.meta.env?.VITE_SUPABASE_ANON_KEY : undefined;
+  return Boolean(url && key && url !== 'https://placeholder.supabase.co');
+};
+
+const LOCAL_ONLY_STORES = new Set([
+  'syncOutbox', 'files', 'idempotencyKeys',
+  'customerNotificationLogs',
+  'whatsappChats', 'whatsappTemplates', 'whatsappCampaigns', 'whatsappAutomations',
+  'alerts', 'reminders'
+]);
+
+const shouldUseCloud = () => {
+  return typeof navigator !== 'undefined' && navigator.onLine && SUPABASE_CONFIGURED();
+};
+
+const writeSyncOutbox = async (entityId: string, type: string, payload: any) => {
+  if (!SUPABASE_CONFIGURED()) return;
+  try {
+    await putToLegacyStore('syncOutbox', {
+      id: `outbox-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+      entityId,
+      type,
+      payload,
+      date: new Date().toISOString()
+    });
+  } catch {
+    // outbox logging is best-effort
+  }
 };
 
 const getSettingFromLegacyStore = async <T>(key: string): Promise<T | undefined> => withDbRecovery(async (db) => {
@@ -646,6 +742,10 @@ export const dbService = {
     // Added initDB to the dbService object to fix property access error in AuthContext
     initDB,
 
+    setCurrentCompanyId,
+    stampAllRecordsWithCompany,
+    getCurrentCompanyId,
+
     setSyncListener(cb: (status: SyncStatus) => void) {
         onSyncStateChange = cb;
         cb(fileHandle ? 'connected' : 'idle');
@@ -736,6 +836,21 @@ export const dbService = {
     },
 
     async getAll<T>(storeName: keyof NexusDB): Promise<T[]> {
+        // Cloud-primary: read from Supabase first when online
+        if (shouldUseCloud() && !LOCAL_ONLY_STORES.has(String(storeName))) {
+            try {
+                const cloudValues = await cloudDb.getAll<T>(String(storeName));
+                if (cloudValues !== null && cloudValues.length > 0) {
+                    for (const item of cloudValues) {
+                        try { await putToLegacyStore(storeName, item as any); } catch { }
+                    }
+                    return cloudValues;
+                }
+            } catch (err) {
+                console.warn(`[DB] Cloud getAll failed for ${String(storeName)}, falling back to local:`, err);
+            }
+        }
+
         const route = getRouteDecision(storeName);
         if (!route || !isBackedStore(String(storeName))) {
             return getAllFromLegacyStore<T>(storeName);
@@ -766,6 +881,19 @@ export const dbService = {
     },
 
     async get<T>(storeName: keyof NexusDB, id: string): Promise<T | undefined> {
+        // Cloud-primary: read from Supabase first when online
+        if (shouldUseCloud() && !LOCAL_ONLY_STORES.has(String(storeName))) {
+            try {
+                const cloudValue = await cloudDb.get<T>(String(storeName), id);
+                if (cloudValue !== null) {
+                    await putToLegacyStore(storeName, cloudValue as any);
+                    return cloudValue;
+                }
+            } catch (err) {
+                console.warn(`[DB] Cloud read failed for ${String(storeName)}/${id}, falling back to local:`, err);
+            }
+        }
+
         const route = getRouteDecision(storeName);
         if (!route || !isBackedStore(String(storeName))) {
             return getFromLegacyStore<T>(storeName, id);
@@ -800,9 +928,28 @@ export const dbService = {
             (item as any)._updatedAt = new Date().toISOString();
         }
 
+        const isFromCloud = (item as any)?._cloudSource === true;
+
+        // Cloud-primary: write to Supabase first when online (skip if data is already from cloud)
+        if (shouldUseCloud() && !isFromCloud && !LOCAL_ONLY_STORES.has(String(storeName))) {
+            try {
+                const cloudId = await cloudDb.put(String(storeName), item);
+                if (cloudId) {
+                    await putToLegacyStore(storeName, { ...(item as any), _cloudSource: undefined });
+                    emitDataChange([String(storeName)]);
+                    return cloudId;
+                }
+            } catch (err) {
+                console.warn(`[DB] Cloud write failed for ${String(storeName)}, falling back to local:`, err);
+            }
+        }
+
         const route = getRouteDecision(storeName);
         if (!route || !isBackedStore(String(storeName))) {
             const result = await putToLegacyStore(storeName, item);
+            if (!shouldUseCloud()) {
+                writeSyncOutbox(String((item as any)?.id || result), `${String(storeName)}:upsert`, item);
+            }
             this.triggerSync();
             emitDataChange([String(storeName)]);
             return result;
@@ -831,12 +978,29 @@ export const dbService = {
             persisted = true;
         }
 
+        if (!shouldUseCloud()) {
+            writeSyncOutbox(resultId, `${String(storeName)}:upsert`, item);
+        }
         this.triggerSync();
         emitDataChange([String(storeName)]);
         return resultId;
     },
 
     async getSetting<T>(key: string): Promise<T | undefined> {
+        // Cloud-primary: read settings from Supabase first when online
+        if (shouldUseCloud()) {
+            try {
+                const cloudValue = await cloudDb.getSetting<T>(key);
+                if (cloudValue !== null) {
+                    try { await settingsBackplane.setJson(key, cloudValue, { exactKey: true }); } catch { }
+                    try { await saveSettingToLegacyStore(key, cloudValue); } catch { }
+                    return cloudValue;
+                }
+            } catch (err) {
+                console.warn(`[DB] Cloud getSetting failed for ${key}, falling back to local:`, err);
+            }
+        }
+
         try {
             const value = await settingsBackplane.getJson<T>(key, { exactKey: true });
             if (value !== undefined) return value;
@@ -848,6 +1012,15 @@ export const dbService = {
     },
 
     async saveSetting<T>(key: string, value: T): Promise<void> {
+        // Cloud-primary: write settings to Supabase first when online
+        if (shouldUseCloud()) {
+            try {
+                await cloudDb.saveSetting<T>(key, value);
+            } catch (err) {
+                console.warn(`[DB] Cloud saveSetting failed for ${key}, falling back to local:`, err);
+            }
+        }
+
         try {
             await settingsBackplane.setJson(key, value, { exactKey: true });
         } catch (error) {
@@ -897,9 +1070,26 @@ export const dbService = {
     },
 
     async delete(storeName: keyof NexusDB, id: string): Promise<void> {
+        // Cloud-primary: delete from Supabase first when online
+        if (shouldUseCloud() && !LOCAL_ONLY_STORES.has(String(storeName))) {
+            try {
+                const cloudResult = await cloudDb.delete(String(storeName), id);
+                if (cloudResult) {
+                    await deleteFromLegacyStore(storeName, id);
+                    emitDataChange([String(storeName)]);
+                    return;
+                }
+            } catch (err) {
+                console.warn(`[DB] Cloud delete failed for ${String(storeName)}/${id}, falling back to local:`, err);
+            }
+        }
+
         const route = getRouteDecision(storeName);
         if (!route || !isBackedStore(String(storeName))) {
             await deleteFromLegacyStore(storeName, id);
+            if (!shouldUseCloud()) {
+                writeSyncOutbox(id, `${String(storeName)}:delete`, { id });
+            }
             this.triggerSync();
             emitDataChange([String(storeName)]);
             return;
@@ -926,6 +1116,9 @@ export const dbService = {
             await deleteFromLegacyStore(storeName, id);
         }
 
+        if (!shouldUseCloud()) {
+            writeSyncOutbox(id, `${String(storeName)}:delete`, { id });
+        }
         this.triggerSync();
         emitDataChange([String(storeName)]);
     },

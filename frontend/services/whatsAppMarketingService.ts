@@ -1,5 +1,6 @@
 import { dbService } from './db';
-import { v4 as uuidv4 } from '../utils/helpers';
+
+const uuidv4 = () => `uuid-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
 export interface WhatsAppChat {
   id: string;

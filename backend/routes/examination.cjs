@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const examinationService = require('../services/examinationService.cjs');
 const batchWorkflow = require('../services/examinationBatchWorkflow.cjs');
+const { validateBody, examinationSchemas, classSchemas, subjectSchemas, notificationSchemas } = require('../middleware/validation.cjs');
 
 const canOverrideSuggestedCost = (req) => {
   const explicit = String(req.headers['x-can-override-exam-cost'] || '').toLowerCase();
@@ -75,8 +76,8 @@ router.post('/sync/inventory-items', async (req, res) => {
     res.json(result);
   } catch (err) {
     if (res.headersSent) return;
-    console.error('[ERROR] sync/inventory-items failed:', err.message, err.stack);
-    res.status(500).json({ error: err.message, details: err.stack });
+    console.error('[ERROR] sync/inventory-items failed:', err.message);
+    res.status(500).json({ error: 'Failed to sync inventory items' });
   }
 });
 
@@ -229,14 +230,14 @@ router.get('/settings/pricing', async (req, res) => {
   }
 });
 
-router.put('/settings/pricing', async (req, res) => {
+router.put('/settings/pricing', validateBody(examinationSchemas.pricingSettings), async (req, res) => {
   try {
     const userId = req.headers['x-user-id'] || 'System';
     const result = await examinationService.updateExamPricingSettings(req.body || {}, { userId });
     res.json(result);
   } catch (err) {
-    console.error('[ERROR] settings/pricing failed:', err.message, err.stack);
-    res.status(500).json({ error: err.message, details: err.stack });
+    console.error('[ERROR] settings/pricing failed:', err.message);
+    res.status(500).json({ error: 'Failed to update pricing settings' });
   }
 });
 
@@ -292,7 +293,7 @@ router.get('/notifications', async (req, res) => {
   }
 });
 
-router.post('/notifications', async (req, res) => {
+router.post('/notifications', validateBody(notificationSchemas.create), async (req, res) => {
   try {
     const notification = await examinationService.createNotification(req.body || {});
     res.status(201).json(notification);
@@ -330,7 +331,7 @@ router.post('/audit/notifications', async (req, res) => {
   }
 });
 
-router.post('/batches', async (req, res) => {
+router.post('/batches', validateBody(examinationSchemas.batch), async (req, res) => {
   try {
     const userId = req.headers['x-user-id'];
     const batch = await examinationService.createBatch(req.body, userId);
@@ -356,7 +357,7 @@ router.post('/batches', async (req, res) => {
   }
 });
 
-router.put('/batches/:id', async (req, res) => {
+router.put('/batches/:id', validateBody(examinationSchemas.batchUpdate), async (req, res) => {
   try {
     const userId = req.headers['x-user-id'];
     const batch = await examinationService.updateBatch(req.params.id, req.body, userId);
@@ -377,7 +378,7 @@ router.delete('/batches/:id', async (req, res) => {
 });
 
 // --- Classes ---
-router.post('/classes', async (req, res) => {
+router.post('/classes', validateBody(classSchemas.create), async (req, res) => {
   try {
     const body = req.body || {};
     // Accept batch_id or batchId
@@ -493,7 +494,7 @@ router.delete('/classes/:id', async (req, res) => {
 });
 
 // --- Subjects ---
-router.post('/subjects', async (req, res) => {
+router.post('/subjects', validateBody(subjectSchemas.create), async (req, res) => {
   try {
     const { class_id, ...data } = req.body;
     const newSubject = await examinationService.createSubject(class_id, data);
@@ -618,8 +619,8 @@ router.post('/batches/:id/invoice', async (req, res) => {
     const result = await examinationService.generateInvoice(req.params.id, userId, { idempotencyKey, invoiceNumber });
     res.json(result);
   } catch (err) {
-    console.error('[ERROR] batches/:id/invoice failed:', err.message, err.stack);
-    res.status(resolveWorkflowErrorStatus(err)).json({ error: err.message, details: err.stack });
+    console.error('[ERROR] batches/:id/invoice failed:', err.message);
+    res.status(resolveWorkflowErrorStatus(err)).json({ error: 'Failed to generate invoice' });
   }
 });
 

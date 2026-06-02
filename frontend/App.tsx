@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, Suspense, lazy } from 'react';
 
-import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import Breadcrumbs from './components/Breadcrumbs';
 import Toast from './components/Toast';
@@ -29,6 +29,9 @@ import { dbService } from './services/db';
 import { PrimeDatabaseBootstrap } from './services/dexie/PrimeDatabaseBootstrap';
 import Login from './views/auth/Login';
 import SetupWizard from './views/auth/SetupWizard';
+import ForgotPassword from './views/auth/ForgotPassword';
+import ResetPassword from './views/auth/ResetPassword';
+
 import { resolveAppAssetUrl } from './utils/runtime';
 import { isResponsiveDebugEnabled } from './utils/debugFlags';
 
@@ -125,6 +128,7 @@ const Settings = lazyWithRetry('./views/Settings', () => import('./views/Setting
 const ChatApp = lazyWithRetry('./views/apps/ChatApp', () => import('./views/apps/ChatApp'));
 const UserManagement = lazyWithRetry('./views/admin/UserManagement', () => import('./views/admin/UserManagement'));
 const ProfileActivity = lazyWithRetry('./views/admin/ProfileActivity', () => import('./views/admin/ProfileActivity'));
+const MigrationHealth = lazyWithRetry('./views/admin/MigrationHealth', () => import('./views/admin/MigrationHealth'));
 const BOMRecipes = lazyWithRetry('./views/production/BOMRecipes', () => import('./views/production/BOMRecipes'));
 const DataImport = lazyWithRetry('./views/admin/DataImport', () => import('./views/admin/DataImport'));
 const GlobalSearch = lazyWithRetry('./views/GlobalSearch', () => import('./views/GlobalSearch'));
@@ -414,12 +418,12 @@ const AppLayout: React.FC = () => {
 
           <div className="h-full w-full min-w-0 min-h-full">
             <Suspense fallback={<PageLoader />}>
-                <Routes>
-                <Route path="/" element={<Dashboard />} />
+              <Routes>
+                <Route path="/" element={<ErrorBoundary name="Dashboard"><Dashboard /></ErrorBoundary>} />
                 <Route path="/install" element={<PwaInstallPage />} />
-                <Route path="/search" element={<GlobalSearch />} />
+                <Route path="/search" element={<ErrorBoundary name="Search"><GlobalSearch /></ErrorBoundary>} />
 
-                {/* Hierarchical Redirects */}
+                {/* Hierarchical Redirects - no error boundary needed */}
                 <Route path="/inventory" element={<Navigate to="/supply-chain/inventory" replace />} />
                 <Route path="/purchases" element={<Navigate to="/procurement/bills" replace />} />
                 <Route path="/purchases/grn" element={<Navigate to="/supply-chain/grn" replace />} />
@@ -435,22 +439,12 @@ const AppLayout: React.FC = () => {
                 <Route path="/sales-flow/sms" element={<Navigate to="/internal-tools/chat" replace />} />
                 <Route path="/reports/statements" element={<Navigate to="/revenue/contacts" replace />} />
                 <Route path="/accounts/chart" element={<Navigate to="/accounts/chart-of-accounts" replace />} />
-                <Route path="/revenue/dashboard" element={<ProtectedRoute permission="reports.view"><RevenueDashboard /></ProtectedRoute>} />
-                <Route path="/revenue/sales-audit" element={<ProtectedRoute permission="reports.view"><Reports /></ProtectedRoute>} />
-                <Route path="/revenue/margin-performance" element={<ProtectedRoute permission="reports.view"><Reports /></ProtectedRoute>} />
-                <Route path="/revenue/rounding-analytics" element={<ProtectedRoute permission="reports.view"><Reports /></ProtectedRoute>} />
-                <Route path="/revenue/contacts" element={<ProtectedRoute permission="reports.view"><Reports /></ProtectedRoute>} />
-                <Route path="/revenue/auditor" element={<ProtectedRoute permission="reports.view"><Reports /></ProtectedRoute>} />
-                <Route path="/revenue/intel" element={<ProtectedRoute permission="reports.view"><Reports /></ProtectedRoute>} />
-
-                <Route path="/revenue/health" element={<ProtectedRoute permission="reports.view"><BusinessHealthReport /></ProtectedRoute>} />
                 <Route path="/production/work-orders" element={<Navigate to="/industrial/work-orders" replace />} />
                 <Route path="/production/scheduler" element={<Navigate to="/industrial/scheduler" replace />} />
                 <Route path="/production/shop-floor" element={<Navigate to="/industrial/shop-floor" replace />} />
                 <Route path="/production/kiosk" element={<Navigate to="/industrial/kiosk" replace />} />
                 <Route path="/production/mrp" element={<Navigate to="/industrial/mrp" replace />} />
                 <Route path="/production/examination-printing" element={<Navigate to="/examination/batches" replace />} />
-                
                 <Route path="/accounts/expenses" element={<Navigate to="/procurement/expenses" replace />} />
                 <Route path="/accounts/reconciliation" element={<Navigate to="/fiscal-reports/reconciliation" replace />} />
                 <Route path="/accounts/budgets" element={<Navigate to="/fiscal-reports/budgets" replace />} />
@@ -459,83 +453,137 @@ const AppLayout: React.FC = () => {
                 <Route path="/tools/barcodes" element={<Navigate to="/internal-tools/barcodes" replace />} />
                 <Route path="/admin/import" element={<Navigate to="/internal-tools/import" replace />} />
                 <Route path="/apps/chat" element={<Navigate to="/internal-tools/chat" replace />} />
-
-                <Route path="/supply-chain" element={<SupplyChainHub />} />
-                <Route path="/supply-chain/inventory" element={<Inventory />} />
-                <Route path="/industrial" element={<IndustrialHub />} />
-                <Route path="/revenue" element={<RevenueHub />} />
-                <Route path="/customers" element={<CustomersHub />} />
-                <Route path="/sales-flow" element={<SalesFlowHub />} />
-                <Route path="/procurement" element={<ProcurementHub />} />
-                <Route path="/fiscal-reports" element={<FiscalReportsHub />} />
-                <Route path="/vat" element={<ProtectedRoute permission="accounts.view"><VatView /></ProtectedRoute>} />
-                <Route path="/internal-tools" element={<InternalToolsHub />} />
-                <Route path="/supply-chain/grn" element={<GoodsReceived />} />
-                <Route path="/supply-chain/shipping" element={<ProtectedRoute permission="sales.view"><ShippingManager /></ProtectedRoute>} />
-                <Route path="/supply-chain/forecasting" element={<Forecasting />} />
-                <Route path="/industrial/work-orders" element={<ProtectedRoute permission="production.view"><WorkOrders /></ProtectedRoute>} />
-                <Route path="/industrial/scheduler" element={<ProtectedRoute permission="production.view"><Scheduler /></ProtectedRoute>} />
-                <Route path="/industrial/shop-floor" element={<ProtectedRoute permission="production.view"><ShopFloor /></ProtectedRoute>} />
-                <Route path="/industrial/kiosk" element={<ProtectedRoute permission="production.view"><ShopFloorKiosk /></ProtectedRoute>} />
-                <Route path="/industrial/mrp" element={<ProtectedRoute permission="production.view"><MRP /></ProtectedRoute>} />
-                <Route path="/industrial/bom-recipes" element={<ProtectedRoute permission="production.view"><BOMRecipes /></ProtectedRoute>} />
-                <Route path="/sales-flow/pos" element={<ProtectedRoute permission="sales.pos"><POS /></ProtectedRoute>} />
-                <Route path="/sales-flow/quotations" element={<ProtectedRoute permission="sales.view"><Orders /></ProtectedRoute>} />
-                <Route path="/sales-flow/orders" element={<ProtectedRoute permission="sales.view"><Orders /></ProtectedRoute>} />
-                <Route path="/sales-flow/invoices" element={<ProtectedRoute permission="sales.view"><Orders /></ProtectedRoute>} />
-                <Route path="/sales-flow/subscriptions" element={<ProtectedRoute permission="sales.view"><Orders /></ProtectedRoute>} />
-                <Route path="/sales-flow/exchanges" element={<ProtectedRoute permission="sales.view"><SalesExchanges /></ProtectedRoute>} />
-                <Route path="/sales-flow/leads" element={<ProtectedRoute permission="sales.view"><LeadBoard /></ProtectedRoute>} />
-                <Route path="/sales-flow/sales-orders" element={<ProtectedRoute permission="sales.view"><SalesOrdersView /></ProtectedRoute>} />
-                <Route path="/sales-flow/job-tickets" element={<ProtectedRoute permission="sales.view"><JobTickets /></ProtectedRoute>} />
-                <Route path="/sales-flow/tasks" element={<Tasks />} />
-                <Route path="/sales-flow/customers" element={<Navigate to="/sales-flow/clients" replace />} />
-                <Route path="/sales-flow/clients" element={<ProtectedRoute permission="sales.view"><Clients /></ProtectedRoute>} />
-                <Route path="/procurement/bills" element={<Purchases />} />
-                <Route path="/procurement/suppliers" element={<ProtectedRoute permission="procurement.view"><Suppliers /></ProtectedRoute>} />
-                <Route path="/procurement/subcontracting" element={<Subcontracting />} />
-                <Route path="/procurement/expenses" element={<ProtectedRoute permission="accounts.view"><Expenses /></ProtectedRoute>} />
-                <Route path="/fiscal-reports/financials" element={<ProtectedRoute permission="accounts.view"><FinancialReports /></ProtectedRoute>} />
-                <Route path="/fiscal-reports/reconciliation" element={<ProtectedRoute permission="accounts.view"><Reconciliation /></ProtectedRoute>} />
-                <Route path="/fiscal-reports/budgets" element={<ProtectedRoute permission="accounts.view"><Budgets /></ProtectedRoute>} />
-                <Route path="/fiscal-reports/vat" element={<Navigate to="/fiscal-reports" replace />} />
-                <Route path="/internal-tools/cheques" element={<ChequeManager />} />
-                <Route path="/internal-tools/barcodes" element={<BarcodePrinter />} />
-                <Route path="/internal-tools/import" element={<DataImport />} />
-                <Route path="/smart-operations" element={<SmartOperationsHub />} />
-                <Route path="/smart-operations/ai" element={<AIAssistant />} />
-                <Route path="/smart-operations/adjustments" element={<MarketAdjustments />} />
-                <Route path="/smart-operations/pricing" element={<SmartPricing />} />
-                <Route path="/smart-operations/messages" element={<MarketingMessages />} />
-
-                <Route path="/reports" element={<ProtectedRoute permission="reports.view"><Reports /></ProtectedRoute>} />
-                <Route path="/audit" element={<AuditLogs />} />
-                <Route path="/admin/users" element={<ProtectedRoute permission="admin.users"><UserManagement /></ProtectedRoute>} />
-                <Route path="/admin/profile" element={<ProfileActivity />} />
-                <Route path="/settings" element={<ProtectedRoute permission="admin.settings"><Settings /></ProtectedRoute>} />
-                <Route path="/accounts/income" element={<ProtectedRoute permission="accounts.view"><IncomeView /></ProtectedRoute>} />
-                <Route path="/accounts/banking" element={<ProtectedRoute permission="accounts.view"><Banking /></ProtectedRoute>} />
-                <Route path="/accounts/transfers" element={<ProtectedRoute permission="accounts.view"><Transfers /></ProtectedRoute>} />
-                <Route path="/accounts/payroll" element={<ProtectedRoute permission="accounts.view"><Payroll /></ProtectedRoute>} />
-                <Route path="/accounts/chart-of-accounts" element={<ProtectedRoute permission="accounts.view"><ChartOfAccounts /></ProtectedRoute>} />
-                <Route path="/industrial/maintenance" element={<ProtectedRoute permission="production.view"><MachineMaintenance /></ProtectedRoute>} />
-                <Route path="/industrial/gang-run" element={<ProtectedRoute permission="production.view"><GangRunEstimator /></ProtectedRoute>} />
-                <Route path="/industrial/exams" element={<Navigate to="/industrial" replace />} />
-                <Route path="/examination" element={<Navigate to="/examination/batches" replace />} />
-                <Route path="/examination/batches" element={<ProtectedRoute permission="production.view"><ExaminationHub /></ProtectedRoute>} />
-                <Route path="/examination/batches/new" element={<ProtectedRoute permission="production.view"><ExaminationBatchForm /></ProtectedRoute>} />
-                <Route path="/examination/batches/:id" element={<ProtectedRoute permission="production.view"><ExaminationBatchDetail /></ProtectedRoute>} />
-                <Route path="/examination/jobs/new" element={<ProtectedRoute permission="production.view"><ExaminationJobForm /></ProtectedRoute>} />
-                <Route path="/examination/jobs/:id" element={<ProtectedRoute permission="production.view"><ExaminationJobForm /></ProtectedRoute>} />
-                <Route path="/examination/groups" element={<ProtectedRoute permission="production.view"><InvoiceGroupManager /></ProtectedRoute>} />
-                <Route path="/examination/recurring" element={<ProtectedRoute permission="production.view"><RecurringProfiles /></ProtectedRoute>} />
-                <Route path="/sales-flow/payments" element={<ProtectedRoute permission="sales.view"><Payments /></ProtectedRoute>} />
-                <Route path="/procurement/payments" element={<ProtectedRoute permission="procurement.view"><Payments /></ProtectedRoute>} />
                 <Route path="/sales" element={<Navigate to="/sales-flow" replace />} />
                 <Route path="/production" element={<Navigate to="/industrial" replace />} />
                 <Route path="/accounts" element={<Navigate to="/fiscal-reports" replace />} />
                 <Route path="/admin" element={<Navigate to="/settings" replace />} />
-                <Route path="/architect" element={<Architect />} />
+
+                {/* Supply Chain */}
+                <Route element={<ErrorBoundary name="Supply Chain"><Outlet /></ErrorBoundary>}>
+                  <Route path="/supply-chain" element={<SupplyChainHub />} />
+                  <Route path="/supply-chain/inventory" element={<Inventory />} />
+                  <Route path="/supply-chain/grn" element={<GoodsReceived />} />
+                  <Route path="/supply-chain/shipping" element={<ProtectedRoute permission="sales.view"><ShippingManager /></ProtectedRoute>} />
+                  <Route path="/supply-chain/forecasting" element={<Forecasting />} />
+                </Route>
+
+                {/* Industrial / Production */}
+                <Route element={<ErrorBoundary name="Industrial"><Outlet /></ErrorBoundary>}>
+                  <Route path="/industrial" element={<IndustrialHub />} />
+                  <Route path="/industrial/work-orders" element={<ProtectedRoute permission="production.view"><WorkOrders /></ProtectedRoute>} />
+                  <Route path="/industrial/scheduler" element={<ProtectedRoute permission="production.view"><Scheduler /></ProtectedRoute>} />
+                  <Route path="/industrial/shop-floor" element={<ProtectedRoute permission="production.view"><ShopFloor /></ProtectedRoute>} />
+                  <Route path="/industrial/kiosk" element={<ProtectedRoute permission="production.view"><ShopFloorKiosk /></ProtectedRoute>} />
+                  <Route path="/industrial/mrp" element={<ProtectedRoute permission="production.view"><MRP /></ProtectedRoute>} />
+                  <Route path="/industrial/bom-recipes" element={<ProtectedRoute permission="production.view"><BOMRecipes /></ProtectedRoute>} />
+                  <Route path="/industrial/maintenance" element={<ProtectedRoute permission="production.view"><MachineMaintenance /></ProtectedRoute>} />
+                  <Route path="/industrial/gang-run" element={<ProtectedRoute permission="production.view"><GangRunEstimator /></ProtectedRoute>} />
+                  <Route path="/industrial/exams" element={<Navigate to="/industrial" replace />} />
+                </Route>
+
+                {/* Revenue */}
+                <Route element={<ErrorBoundary name="Revenue"><Outlet /></ErrorBoundary>}>
+                  <Route path="/revenue" element={<RevenueHub />} />
+                  <Route path="/revenue/dashboard" element={<ProtectedRoute permission="reports.view"><RevenueDashboard /></ProtectedRoute>} />
+                  <Route path="/revenue/sales-audit" element={<ProtectedRoute permission="reports.view"><Reports /></ProtectedRoute>} />
+                  <Route path="/revenue/margin-performance" element={<ProtectedRoute permission="reports.view"><Reports /></ProtectedRoute>} />
+                  <Route path="/revenue/rounding-analytics" element={<ProtectedRoute permission="reports.view"><Reports /></ProtectedRoute>} />
+                  <Route path="/revenue/contacts" element={<ProtectedRoute permission="reports.view"><Reports /></ProtectedRoute>} />
+                  <Route path="/revenue/auditor" element={<ProtectedRoute permission="reports.view"><Reports /></ProtectedRoute>} />
+                  <Route path="/revenue/intel" element={<ProtectedRoute permission="reports.view"><Reports /></ProtectedRoute>} />
+                  <Route path="/revenue/health" element={<ProtectedRoute permission="reports.view"><BusinessHealthReport /></ProtectedRoute>} />
+                </Route>
+
+                {/* Customers */}
+                <Route path="/customers" element={<ErrorBoundary name="Customers"><CustomersHub /></ErrorBoundary>} />
+
+                {/* Sales Flow */}
+                <Route element={<ErrorBoundary name="Sales"><Outlet /></ErrorBoundary>}>
+                  <Route path="/sales-flow" element={<SalesFlowHub />} />
+                  <Route path="/sales-flow/pos" element={<ProtectedRoute permission="sales.pos"><POS /></ProtectedRoute>} />
+                  <Route path="/sales-flow/quotations" element={<ProtectedRoute permission="sales.view"><Orders /></ProtectedRoute>} />
+                  <Route path="/sales-flow/orders" element={<ProtectedRoute permission="sales.view"><Orders /></ProtectedRoute>} />
+                  <Route path="/sales-flow/invoices" element={<ProtectedRoute permission="sales.view"><Orders /></ProtectedRoute>} />
+                  <Route path="/sales-flow/subscriptions" element={<ProtectedRoute permission="sales.view"><Orders /></ProtectedRoute>} />
+                  <Route path="/sales-flow/exchanges" element={<ProtectedRoute permission="sales.view"><SalesExchanges /></ProtectedRoute>} />
+                  <Route path="/sales-flow/leads" element={<ProtectedRoute permission="sales.view"><LeadBoard /></ProtectedRoute>} />
+                  <Route path="/sales-flow/sales-orders" element={<ProtectedRoute permission="sales.view"><SalesOrdersView /></ProtectedRoute>} />
+                  <Route path="/sales-flow/job-tickets" element={<ProtectedRoute permission="sales.view"><JobTickets /></ProtectedRoute>} />
+                  <Route path="/sales-flow/tasks" element={<Tasks />} />
+                  <Route path="/sales-flow/customers" element={<Navigate to="/sales-flow/clients" replace />} />
+                  <Route path="/sales-flow/clients" element={<ProtectedRoute permission="sales.view"><Clients /></ProtectedRoute>} />
+                  <Route path="/sales-flow/payments" element={<ProtectedRoute permission="sales.view"><Payments /></ProtectedRoute>} />
+                </Route>
+
+                {/* Procurement */}
+                <Route element={<ErrorBoundary name="Procurement"><Outlet /></ErrorBoundary>}>
+                  <Route path="/procurement" element={<ProcurementHub />} />
+                  <Route path="/procurement/bills" element={<Purchases />} />
+                  <Route path="/procurement/suppliers" element={<ProtectedRoute permission="procurement.view"><Suppliers /></ProtectedRoute>} />
+                  <Route path="/procurement/subcontracting" element={<Subcontracting />} />
+                  <Route path="/procurement/expenses" element={<ProtectedRoute permission="accounts.view"><Expenses /></ProtectedRoute>} />
+                  <Route path="/procurement/payments" element={<ProtectedRoute permission="procurement.view"><Payments /></ProtectedRoute>} />
+                </Route>
+
+                {/* Fiscal Reports */}
+                <Route element={<ErrorBoundary name="Fiscal Reports"><Outlet /></ErrorBoundary>}>
+                  <Route path="/fiscal-reports" element={<FiscalReportsHub />} />
+                  <Route path="/fiscal-reports/financials" element={<ProtectedRoute permission="accounts.view"><FinancialReports /></ProtectedRoute>} />
+                  <Route path="/fiscal-reports/reconciliation" element={<ProtectedRoute permission="accounts.view"><Reconciliation /></ProtectedRoute>} />
+                  <Route path="/fiscal-reports/budgets" element={<ProtectedRoute permission="accounts.view"><Budgets /></ProtectedRoute>} />
+                  <Route path="/fiscal-reports/vat" element={<Navigate to="/fiscal-reports" replace />} />
+                </Route>
+
+                {/* Internal Tools */}
+                <Route element={<ErrorBoundary name="Internal Tools"><Outlet /></ErrorBoundary>}>
+                  <Route path="/internal-tools" element={<InternalToolsHub />} />
+                  <Route path="/internal-tools/cheques" element={<ChequeManager />} />
+                  <Route path="/internal-tools/barcodes" element={<BarcodePrinter />} />
+                  <Route path="/internal-tools/import" element={<DataImport />} />
+                  <Route path="/internal-tools/chat" element={<ChatApp />} />
+                </Route>
+
+                {/* Smart Operations */}
+                <Route element={<ErrorBoundary name="Smart Operations"><Outlet /></ErrorBoundary>}>
+                  <Route path="/smart-operations" element={<SmartOperationsHub />} />
+                  <Route path="/smart-operations/ai" element={<AIAssistant />} />
+                  <Route path="/smart-operations/adjustments" element={<MarketAdjustments />} />
+                  <Route path="/smart-operations/pricing" element={<SmartPricing />} />
+                  <Route path="/smart-operations/messages" element={<MarketingMessages />} />
+                </Route>
+
+                {/* Examination */}
+                <Route element={<ErrorBoundary name="Examination"><Outlet /></ErrorBoundary>}>
+                  <Route path="/examination" element={<Navigate to="/examination/batches" replace />} />
+                  <Route path="/examination/batches" element={<ProtectedRoute permission="production.view"><ExaminationHub /></ProtectedRoute>} />
+                  <Route path="/examination/batches/new" element={<ProtectedRoute permission="production.view"><ExaminationBatchForm /></ProtectedRoute>} />
+                  <Route path="/examination/batches/:id" element={<ProtectedRoute permission="production.view"><ExaminationBatchDetail /></ProtectedRoute>} />
+                  <Route path="/examination/jobs/new" element={<ProtectedRoute permission="production.view"><ExaminationJobForm /></ProtectedRoute>} />
+                  <Route path="/examination/jobs/:id" element={<ProtectedRoute permission="production.view"><ExaminationJobForm /></ProtectedRoute>} />
+                  <Route path="/examination/groups" element={<ProtectedRoute permission="production.view"><InvoiceGroupManager /></ProtectedRoute>} />
+                  <Route path="/examination/recurring" element={<ProtectedRoute permission="production.view"><RecurringProfiles /></ProtectedRoute>} />
+                </Route>
+
+                {/* VAT */}
+                <Route path="/vat" element={<ErrorBoundary name="VAT"><ProtectedRoute permission="accounts.view"><VatView /></ProtectedRoute></ErrorBoundary>} />
+
+                {/* Reports, Audit, Admin, Settings, Accounting, Architect */}
+                <Route path="/reports" element={<ErrorBoundary name="Reports"><ProtectedRoute permission="reports.view"><Reports /></ProtectedRoute></ErrorBoundary>} />
+                <Route path="/audit" element={<ErrorBoundary name="Audit"><AuditLogs /></ErrorBoundary>} />
+                <Route path="/admin/users" element={<ErrorBoundary name="Admin"><ProtectedRoute permission="admin.users"><UserManagement /></ProtectedRoute></ErrorBoundary>} />
+                <Route path="/admin/profile" element={<ErrorBoundary name="Admin"><ProfileActivity /></ErrorBoundary>} />
+                <Route path="/admin/migration-health" element={<ErrorBoundary name="Admin"><MigrationHealth /></ErrorBoundary>} />
+                <Route path="/settings" element={<ErrorBoundary name="Settings"><ProtectedRoute permission="admin.settings"><Settings /></ProtectedRoute></ErrorBoundary>} />
+
+                <Route element={<ErrorBoundary name="Accounting"><Outlet /></ErrorBoundary>}>
+                  <Route path="/accounts/income" element={<ProtectedRoute permission="accounts.view"><IncomeView /></ProtectedRoute>} />
+                  <Route path="/accounts/banking" element={<ProtectedRoute permission="accounts.view"><Banking /></ProtectedRoute>} />
+                  <Route path="/accounts/transfers" element={<ProtectedRoute permission="accounts.view"><Transfers /></ProtectedRoute>} />
+                  <Route path="/accounts/payroll" element={<ProtectedRoute permission="accounts.view"><Payroll /></ProtectedRoute>} />
+                  <Route path="/accounts/chart-of-accounts" element={<ProtectedRoute permission="accounts.view"><ChartOfAccounts /></ProtectedRoute>} />
+                </Route>
+
+                <Route path="/architect" element={<ErrorBoundary name="Architect"><Architect /></ErrorBoundary>} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
           </Suspense>
@@ -625,11 +673,24 @@ const RootNavigator: React.FC = () => {
     );
   }
 
-  if (requiresSetup) {
+  const SUPABASE_ENABLED = Boolean(
+    import.meta.env.VITE_SUPABASE_URL &&
+    import.meta.env.VITE_SUPABASE_ANON_KEY &&
+    import.meta.env.VITE_SUPABASE_URL !== 'https://placeholder.supabase.co'
+  );
+
+  // When Supabase is enabled and user is authenticated, skip local setup check
+  // (data will sync from cloud)
+  const showSetup = requiresSetup && !(SUPABASE_ENABLED && user);
+
+  if (showSetup) {
     return (
       <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/setup" element={<SetupWizard />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="*" element={<Navigate to="/setup" replace />} />
         </Routes>
       </Suspense>
@@ -641,8 +702,10 @@ const RootNavigator: React.FC = () => {
       <PwaInstallProvider>
         <Suspense fallback={<PageLoader />}>
           <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/install" element={<PwaInstallPage />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/install" element={<PwaInstallPage />} />
             <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
         </Suspense>

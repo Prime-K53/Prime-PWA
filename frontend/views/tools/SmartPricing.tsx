@@ -7,7 +7,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { dbService } from '../../services/db';
 import { getGlobalDefaultMargin } from '../../services/pricingService';
 import { Item, MarketAdjustment, BOMTemplate, FinishingOption } from '../../types';
-import { resolveVolumeMarginValue } from '../../utils/pricingEngineShared';
+import { resolveVolumeMarginValue, getVolumeDiscountTiers } from '../../utils/pricingEngineShared';
 
 const defaultFinishingOptions: FinishingOption[] = [
     { id: 'binding', name: 'Binding', enabled: false, price: 150, description: 'Book binding - comb or spiral', items: [] },
@@ -87,7 +87,7 @@ const SmartPricing: React.FC = () => {
                 setMarketAdjustments(adjustments.filter(adj => adj.active ?? adj.isActive ?? false));
                 setBOMTemplates(templates);
 
-                if (companyConfig?.productionSettings?.finishingOptions) {
+                if (companyConfig?.productionSettings?.finishingOptions?.length > 0) {
                     setFinishingOptions(companyConfig.productionSettings.finishingOptions);
                 } else {
                     const savedCosts = await dbService.getSetting<Record<string, number>>('finishingOptionCosts');
@@ -221,14 +221,8 @@ const SmartPricing: React.FC = () => {
     const profitMarginAmount = useMemo(() => {
         if (!globalMargin) return 0;
 
-        let marginValue = globalMargin.margin_value;
-        let marginType = globalMargin.margin_type;
-
-        // Volume Discount Logic
-        if (globalMargin.apply_volume_margins) {
-            marginValue = resolveVolumeMarginValue(pages);
-            marginType = 'percentage';
-        }
+        const marginValue = globalMargin.margin_value;
+        const marginType = globalMargin.margin_type;
 
         if (marginValue <= 0) return 0;
 
@@ -237,9 +231,19 @@ const SmartPricing: React.FC = () => {
         } else {
             return marginValue;
         }
-    }, [globalMargin, priceAfterMarketAdjustments, pages]);
+    }, [globalMargin, priceAfterMarketAdjustments]);
 
-    const finalPrice = priceAfterMarketAdjustments + profitMarginAmount;
+    // Apply volume / run-length discount (System B) as a % off the price
+    const volumeDiscountPct = useMemo(() => {
+        if (!globalMargin?.apply_volume_margins) return 0;
+        const discountTiers = getVolumeDiscountTiers(companyConfig);
+        return resolveVolumeMarginValue(pages, discountTiers);
+    }, [globalMargin, pages]);
+
+    const priceBeforeVolumeDiscount = priceAfterMarketAdjustments + profitMarginAmount;
+    const finalPrice = volumeDiscountPct > 0
+        ? priceBeforeVolumeDiscount * (1 - volumeDiscountPct / 100)
+        : priceBeforeVolumeDiscount;
 
     const roundingResult = useMemo(() => {
         try {

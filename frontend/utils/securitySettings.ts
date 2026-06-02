@@ -19,7 +19,7 @@ export const normalizeSecuritySettings = (
   config?: Partial<CompanyConfig> | null
 ): SecuritySettingsWithAccess => {
   const legacySecurity = (config as any)?.security || {};
-  const configuredSettings = config?.securitySettings || {};
+  const configuredSettings: SecuritySettingsConfig = (config?.securitySettings || {}) as SecuritySettingsConfig;
 
   const passwordProtectionEnabled = typeof configuredSettings.passwordProtectionEnabled === 'boolean'
     ? configuredSettings.passwordProtectionEnabled

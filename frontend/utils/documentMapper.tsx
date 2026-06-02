@@ -154,7 +154,7 @@ export const mapErpDataToDocument = (type: DocumentType, data: any, renderOption
       );
     }
 
-    const displayType = type === 'Order' ? 'Sales Order' : type;
+    const displayType = (type as string) === 'Order' ? 'Sales Order' : type;
 
     return (
       <div className="flex justify-between w-full text-[11px]">
@@ -415,7 +415,7 @@ export const mapErpDataToDocument = (type: DocumentType, data: any, renderOption
 
   const getTitle = () => {
     if (type === 'Quotation') return 'QUOTATION';
-    if (type === 'Order') return 'SALES ORDER';
+    if ((type as string) === 'Order') return 'SALES ORDER';
     if (type === 'Receipt') return 'PAYMENT RECEIPT';
     if (type === 'Examination Invoice') return 'SERVICE INVOICE';
     return type.toUpperCase();

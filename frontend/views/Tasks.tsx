@@ -7,11 +7,13 @@ import {
   RefreshCw, ChevronRight, UserPlus, Info, Play, Bell
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useData } from '../context/DataContext';
 import { CRMTask } from '../types';
 import { OfflineImage } from '../components/OfflineImage';
 
 const Tasks: React.FC = () => {
   const { user, allUsers, notify } = useAuth();
+  const { tasks, addTask, updateTask, deleteTask } = useData();
   const location = useLocation();
   const [viewMode, setViewMode] = useState<'Board' | 'List'>('Board');
   const [filter, setFilter] = useState<'All' | 'My Tasks'>('All');

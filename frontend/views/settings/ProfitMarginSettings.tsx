@@ -15,6 +15,7 @@ import {
   listOfflineMarginSettings,
   updateOfflineMarginSetting
 } from '../../services/offlineProfitMargins';
+import { getSavedVolumeDiscountTiers, saveVolumeDiscountTiers, DEFAULT_VOLUME_DISCOUNT_TIERS } from '../../utils/pricingEngineShared';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -112,8 +113,10 @@ async function apiFetchOffline(path: string, opts: RequestInit = {}) {
   throw new Error(`Unsupported offline request: ${method} ${cleanPath}`);
 }
 
+const SUPABASE_IS_BACKEND = Boolean(import.meta.env.VITE_SUPABASE_URL);
+
 async function apiFetch(path: string, opts: RequestInit = {}) {
-  if (!HAS_REMOTE_BACKEND) {
+  if (!HAS_REMOTE_BACKEND || SUPABASE_IS_BACKEND) {
     return apiFetchOffline(path, opts);
   }
 
@@ -264,7 +267,7 @@ function OverrideModal({ state, categories, onClose, onSaved, toast }: OverrideM
     if (isNaN(val)) { setError('Margin value must be a valid number'); return; }
     if (marginType === 'percentage' && (val < 0 || val > 100)) { setError('Percentage must be between 0 and 100'); return; }
     if (marginType === 'fixed_amount' && val < 0) { setError('Fixed amount must be ≥ 0'); return; }
-    if (state.scope !== 'global' && !scopeRefId.trim()) { setError(`Please enter a ${state.scope === 'category' ? 'category' : 'SKU / product ID'}`); return; }
+    if ((state.scope as string) !== 'global' && !scopeRefId.trim()) { setError(`Please enter a ${state.scope === 'category' ? 'category' : 'SKU / product ID'}`); return; }
 
     setSaving(true);
     try {
@@ -443,6 +446,10 @@ const ProfitMarginSettings: React.FC = () => {
   const [globalReason, setGlobalReason] = useState('');
   const [savingGlobal, setSavingGlobal] = useState(false);
 
+  // Volume discount tiers state
+  const [volumeTiers, setVolumeTiers] = useState<Array<{ minPages: number; discountPercent: number }>>([]);
+  const [savingTiers, setSavingTiers] = useState(false);
+
   // Audit filters
   const [auditFilter, setAuditFilter] = useState({ scope: '', user: '', startDate: '', endDate: '' });
   const [auditLoading, setAuditLoading] = useState(false);
@@ -482,6 +489,9 @@ const ProfitMarginSettings: React.FC = () => {
     } finally {
       setLoading(false);
     }
+    // Load volume discount tiers from localStorage
+    const saved = getSavedVolumeDiscountTiers();
+    setVolumeTiers(saved.length > 0 ? saved : [...DEFAULT_VOLUME_DISCOUNT_TIERS]);
   }, [toast]);
 
   const loadAudit = useCallback(async () => {
@@ -861,26 +871,86 @@ const ProfitMarginSettings: React.FC = () => {
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                {[
-                  { range: '0 - 179 pages', discount: '0%', color: 'slate' },
-                  { range: '180 - 249 pages', discount: '10%', color: 'indigo' },
-                  { range: '250 - 499 pages', discount: '15%', color: 'violet' },
-                  { range: '500 - 1000 pages', discount: '25%', color: 'emerald' },
-                ].map((tier, idx) => (
-                  <div key={idx} className={`p-4 rounded-xl border border-${tier.color}-100 bg-${tier.color}-50/50`}>
-                    <p className={`text-[10px] font-black uppercase tracking-widest text-${tier.color}-600 mb-1`}>Tier {idx + 1}</p>
-                    <p className="text-lg font-bold text-slate-800">{tier.discount}</p>
-                    <p className="text-xs text-slate-500">{tier.range}</p>
+              <div className="space-y-3">
+                {volumeTiers.map((tier, idx) => (
+                  <div key={idx} className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50/50">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 w-12 shrink-0">Tier {idx + 1}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-500">≥</span>
+                      <input
+                        type="number"
+                        min={0}
+                        className="w-20 border border-slate-200 rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                        value={tier.minPages}
+                        onChange={e => {
+                          const updated = [...volumeTiers];
+                          updated[idx] = { ...updated[idx], minPages: Math.max(0, parseInt(e.target.value) || 0) };
+                          setVolumeTiers(updated);
+                        }}
+                      />
+                      <span className="text-xs text-slate-500">pages</span>
+                    </div>
+                    <span className="text-slate-300">→</span>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        className="w-20 border border-slate-200 rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                        value={tier.discountPercent}
+                        onChange={e => {
+                          const updated = [...volumeTiers];
+                          updated[idx] = { ...updated[idx], discountPercent: Math.max(0, Math.min(100, parseInt(e.target.value) || 0)) };
+                          setVolumeTiers(updated);
+                        }}
+                      />
+                      <span className="text-xs text-slate-500">% off</span>
+                    </div>
+                    <button
+                      onClick={() => setVolumeTiers(prev => prev.filter((_, i) => i !== idx))}
+                      className="ml-auto p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                      title="Remove tier"
+                    >
+                      <Trash2 size={15} />
+                    </button>
                   </div>
                 ))}
               </div>
-              
-              <div className="mt-6 p-4 bg-amber-50 border border-amber-100 rounded-xl flex gap-3">
+
+              <div className="flex items-center gap-3 mt-4">
+                <button
+                  onClick={() => setVolumeTiers(prev => [...prev, { minPages: 0, discountPercent: 0 }])}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold text-amber-700 border border-amber-200 hover:bg-amber-50 transition-colors"
+                >
+                  <Plus size={14} /> Add Tier
+                </button>
+                <button
+                  onClick={async () => {
+                    const valid = volumeTiers.filter(t => t.minPages >= 0 && t.discountPercent >= 0);
+                    if (valid.length === 0) { toast('At least one valid tier is required', 'error'); return; }
+                    setSavingTiers(true);
+                    try {
+                      saveVolumeDiscountTiers(valid);
+                      toast('Volume discount tiers saved', 'success');
+                    } catch (err: any) {
+                      toast(err.message || 'Failed to save tiers', 'error');
+                    } finally {
+                      setSavingTiers(false);
+                    }
+                  }}
+                  disabled={savingTiers}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 transition-all active:scale-95 disabled:opacity-60"
+                >
+                  {savingTiers ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
+                  {savingTiers ? 'Saving…' : 'Save Tiers'}
+                </button>
+              </div>
+
+              <div className="mt-4 p-4 bg-amber-50 border border-amber-100 rounded-xl flex gap-3">
                 <Info size={18} className="text-amber-600 shrink-0 mt-0.5" />
                 <div className="text-[11px] text-amber-800 leading-relaxed">
                   <p className="font-bold mb-1 uppercase tracking-wider">How it works:</p>
-                  <p>When enabled, the system will apply these specific margin percentages instead of the default global margin if the item's total page count falls within these ranges. This logic is strictly excluded from Examination batches.</p>
+                  <p>When enabled, the profit margin is applied first (cost + markup), then the matching volume discount is subtracted from that price. Both work together — not one instead of the other. Tiers are evaluated from highest page count to lowest — the first match applies. This logic is strictly excluded from Examination batches.</p>
                 </div>
               </div>
             </div>

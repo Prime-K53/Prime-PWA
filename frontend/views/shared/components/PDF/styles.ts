@@ -536,49 +536,4 @@ export const docStyles = StyleSheet.create({
     backgroundColor: '#fff',
   },
 
-  // PAID Stamp Overlay
-  paidStampContainer: {
-    marginBottom: 10,
-    marginTop: -10,
-    alignItems: 'flex-start',
-    marginLeft: -3,
-  },
-  paidStampBox: {
-    paddingVertical: 5,
-    paddingHorizontal: 0,
-    opacity: 0.85,
-    borderWidth: 0,
-    transform: 'rotate(0deg)',
-  },
-  paidStampText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#16a34a',
-    letterSpacing: 4,
-    textTransform: 'uppercase',
-  },
-  paidStampDate: {
-    fontSize: 11,
-    color: '#15803d',
-    textAlign: 'center',
-    marginTop: 2,
-    letterSpacing: 1,
-  },
-  // Smaller stamp for POS receipts
-  paidStampSmallContainer: {
-    alignItems: 'center',
-    marginBottom: 5,
-  },
-  paidStampSmallBox: {
-    paddingVertical: 5,
-    paddingHorizontal: 0,
-    opacity: 0.85,
-  },
-  paidStampSmallText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#16a34a',
-    letterSpacing: 4,
-    textTransform: 'uppercase',
-  },
 });

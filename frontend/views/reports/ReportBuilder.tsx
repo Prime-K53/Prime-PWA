@@ -486,7 +486,7 @@ const ReportBuilder: React.FC<ReportBuilderProps> = ({ definitionId, onSave, onC
           onClick={() => {
             setDefinition(prev => ({
               ...prev,
-              groupBy: [...(prev.groupBy || []), { field: '', showSubtotals: true }],
+              groupBy: [...(prev.groupBy || []), { field: '', label: '', showSubtotals: true }],
             }));
           }}
         >
@@ -666,12 +666,13 @@ const ReportBuilder: React.FC<ReportBuilderProps> = ({ definitionId, onSave, onC
           onClick={() => {
             setDefinition(prev => ({
               ...prev,
-parameters: [...(prev.parameters || []), {
+ parameters: [...(prev.parameters || []), {
                 id: `param-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
                 name: '',
                 label: '',
                 type: 'string',
                 required: false,
+                order: 0,
               }],
             }));
           }}

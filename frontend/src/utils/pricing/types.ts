@@ -30,6 +30,9 @@ export interface PricingInput {
   pages?: number;
   adjustments?: SnapshotEntry[];
   context: PricingContext;
+  /** Quantity-based tiered pricing (System A): per-quantity price breaks */
+  quantityTiers?: Array<{ minQty: number; price: number }>;
+  allowQuantityTiering?: boolean;
 }
 
 export interface PricingBreakdown {

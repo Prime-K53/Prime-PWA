@@ -75,10 +75,10 @@ export const useDocumentPreview = () => {
 
         const securedData = await attachDocumentSecurity(mappedData as any, companyConfig?.companyName);
         await initializePrimePdfFonts();
-        const blob = await pdf(createElement(PrimeDocument, {
+        const blob = await pdf(createElement(PrimeDocument as any, {
           type: effectiveType,
           data: securedData as PrimeDocData
-        })).toBlob();
+        }) as any).toBlob();
 
         const duration = performance.now() - startTime;
         console.log('[useDocumentPreview] Print PDF generated', {

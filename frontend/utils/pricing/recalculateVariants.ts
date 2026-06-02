@@ -76,7 +76,7 @@ export const repairVariantPricing = async (
     // Save updated items back to DB
     for (const item of updatedItems) {
         try {
-            await dbService.update('inventory', item.id, item);
+            await dbService.put('inventory', item);
         } catch (err: any) {
             errors.push(`Failed to save item ${item.sku}: ${err.message}`);
         }

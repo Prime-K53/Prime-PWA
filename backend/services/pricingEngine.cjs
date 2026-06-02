@@ -97,13 +97,29 @@ const resolveGlobalMargin = (resolve) => {
 /**
  * Resolve volume-based margin if enabled
  */
-const resolveVolumeMargin = (pages, margin) => {
-  if (!margin.apply_volume_margins) return margin.margin_value;
-  
+/**
+ * Default volume discount tiers: minPages -> discountPercent
+ * Overridable via companyConfig.pricingSettings.volumeDiscountTiers
+ */
+const DEFAULT_VOLUME_DISCOUNT_TIERS = [
+  { minPages: 500, discountPercent: 25 },
+  { minPages: 250, discountPercent: 15 },
+  { minPages: 180, discountPercent: 10 },
+];
+
+/**
+ * Resolve volume / run-length discount percentage.
+ * Accepts optional custom tiers array; falls back to DEFAULT_VOLUME_DISCOUNT_TIERS.
+ * Returns the % to SUBTRACT from the selling price (not the margin to use).
+ * Returns 0 when no tier matches (no discount applied).
+ */
+const resolveVolumeMargin = (pages, margin, customTiers) => {
   const p = Number(pages) || 0;
-  if (p >= 500) return 25;
-  if (p >= 250) return 15;
-  if (p >= 180) return 10;
+  const tiers = customTiers && customTiers.length > 0 ? customTiers : DEFAULT_VOLUME_DISCOUNT_TIERS;
+  const sorted = [...tiers].sort((a, b) => b.minPages - a.minPages);
+  for (const tier of sorted) {
+    if (p >= tier.minPages) return tier.discountPercent;
+  }
   return 0;
 };
 
@@ -256,23 +272,24 @@ const calculatePriceCore = async (input) => {
   let marginAmount = 0;
   if (shouldApply) {
     const costAfterAdjustments = runningCost + adjustmentTotal;
-    
-    // Volume Discount Logic (Excluded from Examination)
-    let effectiveMarginValue = margin.margin_value;
-    if (context !== 'EXAMINATION' && margin.apply_volume_margins) {
-      const pages = input.pages || (input.serviceDetails?.pages) || 0;
-      effectiveMarginValue = resolveVolumeMargin(pages, margin);
-      // Volume margins are always percentages in this logic
-      margin.margin_type = 'percentage';
-      margin.margin_value = effectiveMarginValue;
-    }
-
     marginAmount = calculateMarginAmount(costAfterAdjustments, margin);
   }
 
-  const baseWithAdjustments = runningCost + adjustmentTotal;
-  const sellingPrice = baseWithAdjustments + marginAmount;
-  
+  // Step 1: Pre-discount price = cost + adjustments + margin
+  let sellingPrice = runningCost + adjustmentTotal + marginAmount;
+
+  // Step 2: Volume / run-length discount (System B) — % off the selling price, not a margin replacement
+  if (context !== 'EXAMINATION' && margin.apply_volume_margins) {
+    const pages = input.pages || (input.serviceDetails?.pages) || 0;
+    const volumeDiscountPct = resolveVolumeMargin(pages, margin);
+    if (volumeDiscountPct > 0) {
+      sellingPrice = roundToCurrency(sellingPrice * (1 - volumeDiscountPct / 100));
+      // Recalculate effective margin
+      marginAmount = roundToCurrency(sellingPrice - (runningCost + adjustmentTotal));
+      if (marginAmount < 0) marginAmount = 0;
+    }
+  }
+
   const pricingSettings = await getPricingSettings();
   const roundedPrice = applyRounding(sellingPrice, pricingSettings);
   

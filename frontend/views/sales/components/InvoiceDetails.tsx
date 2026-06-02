@@ -14,6 +14,7 @@ import { useSales } from '../../../context/SalesContext';
 import { useExamination } from '../../../context/ExaminationContext';
 import { useDocumentPreview } from '../../../hooks/useDocumentPreview';
 import TransactionPricingInsights from './TransactionPricingInsights';
+import AIDocumentSummarizer from '../../../components/ai/AIDocumentSummarizer';
 import { enrichInvoiceWithBatchPricing, findMatchingExaminationBatch } from '../../../utils/examinationInvoicePricing';
 
 interface InvoiceDetailsProps {
@@ -197,6 +198,7 @@ export const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoice: initial
                         <button onClick={() => onEdit(invoice)} className="p-2 hover:bg-white bg-slate-100/50 border border-slate-200/60 rounded-lg text-slate-600 transition-all shadow-sm" title="Edit">
                             <Edit2 size={18} />
                         </button>
+                        <AIDocumentSummarizer docType="Invoice" data={invoice} label="Summary" color="#8b5cf6" />
                         <button onClick={onClose} className="p-2 hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-transparent hover:border-rose-100 rounded-lg transition-all ml-2">
                             <X size={20} />
                         </button>

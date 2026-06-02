@@ -98,6 +98,15 @@ const userSchemas = {
     password: z.string().min(6),
     role: z.enum(['Admin', 'Accountant', 'Clerk', 'Viewer']),
     permissions: z.array(z.string()).optional()
+  }),
+  requestEmailVerification: z.object({
+    email: z.string().email('Invalid email address'),
+    purpose: z.string().min(1, 'Purpose is required')
+  }),
+  verifyEmailCode: z.object({
+    email: z.string().email('Invalid email address'),
+    code: z.string().min(4, 'Code must be at least 4 characters').max(8),
+    purpose: z.string().min(1, 'Purpose is required')
   })
 };
 
@@ -165,6 +174,143 @@ const productionSchemas = {
   })
 };
 
+// Document validation schemas
+const documentSchemas = {
+  register: z.object({
+    type: z.string().min(1),
+    payload: z.record(z.any()),
+    id: z.string().optional()
+  }),
+  create: z.object({
+    type: z.string().min(1),
+    payload: z.record(z.any())
+  }),
+  update: z.object({
+    payload: z.record(z.any())
+  }),
+  finalize: z.object({
+    blueprint: z.record(z.any())
+  }),
+  batchFinalize: z.object({
+    ids: z.array(z.string()).min(1),
+    blueprint: z.record(z.any()).optional()
+  }),
+  batchExport: z.object({
+    ids: z.array(z.string()).min(1),
+    format: z.string().optional()
+  })
+};
+
+// Exchange validation schemas
+const exchangeSchemas = {
+  create: z.object({
+    originalSaleId: z.string(),
+    items: z.array(z.object({
+      itemId: z.string(),
+      quantity: z.number().int().positive()
+    })).min(1),
+    reason: z.string().min(1),
+    adjustment: z.number().optional()
+  })
+};
+
+// Order validation schemas
+const orderSchemas = {
+  create: z.object({
+    customerId: z.string().optional(),
+    items: z.array(z.object({
+      itemId: z.string(),
+      quantity: z.number().positive(),
+      unitPrice: z.number().min(0)
+    })).min(1),
+    notes: z.string().optional(),
+    dueDate: z.string().optional()
+  }),
+  update: z.object({
+    status: z.string().optional(),
+    items: z.array(z.object({
+      itemId: z.string(),
+      quantity: z.number().positive(),
+      unitPrice: z.number().min(0)
+    })).optional(),
+    notes: z.string().optional()
+  })
+};
+
+// Class/Subject validation schemas
+const classSchemas = {
+  create: z.object({
+    name: z.string().min(1),
+    school_id: z.string().optional(),
+    level: z.string().optional()
+  })
+};
+
+const subjectSchemas = {
+  create: z.object({
+    name: z.string().min(1),
+    code: z.string().optional(),
+    class_id: z.string().optional()
+  })
+};
+
+// Notification validation schemas
+const notificationSchemas = {
+  create: z.object({
+    type: z.string().min(1),
+    title: z.string().min(1),
+    message: z.string().min(1),
+    recipientId: z.string().optional()
+  })
+};
+
+// Examination batch validation schemas
+const examinationSchemas = {
+  batch: z.object({
+    exam_name: z.string().min(1),
+    school_id: z.string().min(1),
+    class_name: z.string().min(1),
+    number_of_learners: z.number().int().positive(),
+    subjects: z.array(z.object({
+      name: z.string().min(1),
+      pages: z.number().int().min(1).optional(),
+      copies: z.number().int().min(1).optional()
+    })).min(1).optional()
+  }),
+  batchUpdate: z.object({
+    exam_name: z.string().min(1).optional(),
+    number_of_learners: z.number().int().positive().optional(),
+    status: z.string().optional()
+  }),
+  pricingSettings: z.object({
+    rounding_method: z.string().optional(),
+    rounding_step: z.number().positive().optional(),
+    profit_margin: z.number().min(0).max(100).optional()
+  })
+};
+
+// Profit margin validation schemas
+const profitMarginSchemas = {
+  create: z.object({
+    name: z.string().min(1),
+    percentage: z.number().min(0).max(100),
+    type: z.enum(['product', 'category', 'global']).optional(),
+    appliesTo: z.array(z.string()).optional()
+  }),
+  update: z.object({
+    name: z.string().min(1).optional(),
+    percentage: z.number().min(0).max(100).optional(),
+    type: z.enum(['product', 'category', 'global']).optional(),
+    appliesTo: z.array(z.string()).optional()
+  }),
+  bulkUpload: z.object({
+    margins: z.array(z.object({
+      name: z.string().min(1),
+      percentage: z.number().min(0).max(100)
+    })).min(1)
+  })
+};
+
 /**
  * Sanitize input to prevent XSS attacks
  */
@@ -210,5 +356,13 @@ module.exports = {
   userSchemas,
   inventorySchemas,
   salesSchemas,
-  productionSchemas
+  productionSchemas,
+  documentSchemas,
+  exchangeSchemas,
+  orderSchemas,
+  classSchemas,
+  subjectSchemas,
+  notificationSchemas,
+  examinationSchemas,
+  profitMarginSchemas
 };

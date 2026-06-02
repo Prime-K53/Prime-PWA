@@ -1,3 +1,5 @@
+import type { ProviderName } from './services/ai/types';
+
 export interface AppearanceConfig {
   theme: 'Light' | 'Dark' | 'System';
   density: 'Compact' | 'Comfortable' | 'Spacious';
@@ -141,6 +143,10 @@ export interface ProductionSettingsConfig {
   defaultExamBomId: string;
   allowOverproduction: boolean;
   showKioskSummary: boolean;
+  paperId?: string;
+  tonerId?: string;
+  laborCostPerHour?: number;
+  baseMargin?: number;
 }
 
 export interface InventorySettingsConfig {
@@ -190,6 +196,9 @@ export interface RoundingRulesConfig {
 }
 
 export interface CompanyConfig {
+  // Unique identifier for multi-tenant data isolation
+  companyId: string;
+
   // Basic company info
   companyName: string;
   tagline?: string;
@@ -265,6 +274,19 @@ export interface CompanyConfig {
     backupFrequency: 'Daily' | 'Weekly' | 'Monthly';
     retentionCount: number;
     cloudBackupEnabled: boolean;
+  };
+
+  // AI configuration
+  aiConfig?: {
+    provider: ProviderName;
+    baseUrl: string;
+    apiKey: string;
+    model: string;
+    openrouterApiKey: string;
+    openrouterModel: string;
+    geminiApiKey: string;
+    geminiModel: string;
+    customEndpoint: string;
   };
 
   // Pricing settings (from Phase 0-1)
@@ -434,7 +456,20 @@ export interface JobTicketSettings {
   notifyOnDelivered: boolean;
 }
 
-export type AuditLogEntry = any; // TIER 2: Added as any due to missing definitions
+export interface AuditLogEntry {
+  id: string;
+  date: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  details: string;
+  userId: string;
+  userRole: string;
+  oldValue?: unknown;
+  newValue?: Record<string, unknown>;
+  reason?: string;
+  correlationId?: string;
+}
 export type ExamInvoiceClassSummary = any; // TIER 2: Added as any due to missing definitions
 export type ItemType = 'Raw Material' | 'Service' | 'Product' | 'Stationery' | 'Material';
 
@@ -492,7 +527,25 @@ export interface Item {
   status?: 'Active' | 'Inactive' | 'Pending';
   [key: string]: any;
 }
-export type User = any; // TIER 2: Added as any due to missing definitions
+export interface User {
+  id: string;
+  username: string;
+  role: string;
+  email?: string;
+  password?: string;
+  isSuperAdmin?: boolean;
+  groupIds?: string[];
+  authMode?: string;
+  tokenExpiry?: number;
+  fullName?: string;
+  name?: string;
+  status?: string;
+  active?: boolean;
+  mfaEnabled?: boolean;
+  mfaSecret?: string;
+  securityLevel?: string;
+  avatar?: string;
+}
 export type Account = any; // TIER 2: Added as any due to missing definitions
 export type Warehouse = any; // TIER 2: Added as any due to missing definitions
 export type WorkCenter = any; // TIER 2: Added as any due to missing definitions
@@ -613,7 +666,8 @@ export type ExaminationPricingSettings = any; // TIER 2: Added as any due to mis
 export type AdjustmentSnapshot = any; // TIER 2: Added as any due to missing definitions
 export type ExaminationAdjustmentType = any; // TIER 2: Added as any due to missing definitions
 export type ExaminationRoundingRuleType = any; // TIER 2: Added as any due to missing definitions
-export type PricingRoundingMethod = any; // TIER 2: Added as any due to missing definitions
+export type PricingRoundingMethod = 'ALWAYS_UP_50' | 'ALWAYS_UP_100' | 'ALWAYS_UP_500' | 'ALWAYS_UP_10' | 'ALWAYS_UP_CUSTOM' | 'NEAREST_10' | 'NEAREST_50' | 'NEAREST_100' | 'PSYCHOLOGICAL' | 'Nearest' | 'AlwaysUp' | 'AlwaysDown';
+export type PricingMode = 'VAT' | 'MarketAdjustment';
 export type PricingSyncPayload = any; // TIER 2: Added as any due to missing definitions
 export type PricingSyncResult = any; // TIER 2: Added as any due to missing definitions
 export type OverrideCascadeResult = any; // TIER 2: Added as any due to missing definitions

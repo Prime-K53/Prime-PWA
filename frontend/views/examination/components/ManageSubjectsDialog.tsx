@@ -177,6 +177,8 @@ export const ManageSubjectsDialog: React.FC<ManageSubjectsDialogProps> = ({
     adjustmentTotalCost: number;
     calculatedTotalCost: number;
     marginAmount?: number;
+    marketAdjustmentTotal?: number;
+    roundingAdjustment?: number;
   } | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);

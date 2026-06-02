@@ -1,8 +1,8 @@
 
 import React, { createContext, useContext, useEffect } from 'react';
-import { ProductionBatch, WorkOrder, WorkCenter, ProductionResource, ProductionLog, ResourceAllocation, BillOfMaterial, MaterialReservation, BOMTemplate, QACheck } from '../types';
+import { ProductionBatch, WorkOrder, WorkCenter, ProductionResource, ProductionLog, ResourceAllocation, BillOfMaterial, BOMComponent, MaintenanceLog, MaterialReservation, BOMTemplate, QACheck } from '../types';
 import { useAuth } from './AuthContext';
-import { useInventory } from './InventoryContext';
+import { useInventoryStore } from '../stores/inventoryStore';
 import { useFinance } from './FinanceContext';
 import { useProductionStore } from '../stores/productionStore';
 import { roundFinancial } from '../utils/helpers';
@@ -17,6 +17,7 @@ interface ProductionContextType {
     workCenters: WorkCenter[];
     resources: ProductionResource[];
     allocations: ResourceAllocation[];
+    maintenanceLogs: MaintenanceLog[];
     fetchProductionData: () => Promise<void>;
 
     createWorkOrder: (wo: WorkOrder) => void;
@@ -25,6 +26,9 @@ interface ProductionContextType {
     logProductionStep: (log: ProductionLog & { materialId?: string, wasteDestroyed?: boolean }) => Promise<void>;
     completeWorkOrder: (id: string, actualWaste?: number) => Promise<void>;
     deleteWorkOrder: (id: string, reason?: string) => Promise<void>;
+    produceBatch: (batch: ProductionBatch, components?: BOMComponent[]) => Promise<void>;
+    addMaintenanceLog: (log: MaintenanceLog) => Promise<void>;
+    deleteMaintenanceLog: (id: string) => Promise<void>;
     // Lifecycle Management
     putWorkOrderOnHold: (id: string, reason: string) => Promise<void>;
     resumeWorkOrder: (id: string) => Promise<void>;
@@ -53,16 +57,16 @@ const ProductionContext = createContext<ProductionContextType | undefined>(undef
 
 export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { notify, addAuditLog, user, isInitialized } = useAuth();
-    const { updateStock, updateReservedStock, inventory } = useInventory();
+    const inventory = useInventoryStore(s => s.inventory);
     const { postJournalEntry } = useFinance();
 
     const {
-        batches, workOrders, workCenters, resources, allocations, boms,
+        batches, workOrders, workCenters, resources, allocations, boms, maintenanceLogs,
         fetchProductionData,
         addBatch: storeAddBatch,
         addWorkOrder: storeAddWorkOrder, updateWorkOrder: storeUpdateWorkOrder, deleteWorkOrder: storeDeleteWorkOrder,
         addAllocation: storeAddAllocation, updateAllocation: storeUpdateAllocation, deleteAllocation: storeDeleteAllocation,
-        addBOM, updateBOM, deleteBOM
+        addBOM, updateBOM, deleteBOM, addMaintenanceLog: storeAddMaintenanceLog, deleteMaintenanceLog: storeDeleteMaintenanceLog
     } = useProductionStore();
 
     useEffect(() => {
@@ -1081,16 +1085,31 @@ const handleExaminationBatchToProduction = async (event: CustomEvent) => {
         ];
     };
 
+    const produceBatch = async (batch: ProductionBatch, components?: BOMComponent[]) => {
+        await storeAddBatch(batch);
+        notify(`Batch ${batch.id} completed`, 'success');
+    };
+
+    const addMaintenanceLog = async (log: MaintenanceLog) => {
+        await storeAddMaintenanceLog(log);
+    };
+
+    const deleteMaintenanceLog = async (id: string) => {
+        await storeDeleteMaintenanceLog(id);
+    };
+
     return (
         <ProductionContext.Provider value={{
-            batches, workOrders, workCenters, resources, allocations,
+            batches, workOrders, workCenters, resources, allocations, maintenanceLogs,
             fetchProductionData,
             createWorkOrder, updateWorkOrder, updateWorkOrderStatus, logProductionStep, completeWorkOrder, deleteWorkOrder,
+            produceBatch,
             putWorkOrderOnHold, resumeWorkOrder, startWorkOrder, updateProgress,
             addDependency, removeDependency, checkDependencies, assignWorkOrder,
             startQA, submitQACheck, completeQA, getQATemplate,
             allocateResource, moveAllocation, removeAllocation,
-            boms, addBOM, updateBOM, deleteBOM
+            boms, addBOM, updateBOM, deleteBOM,
+            addMaintenanceLog, deleteMaintenanceLog
         }}>
             {children}
         </ProductionContext.Provider>

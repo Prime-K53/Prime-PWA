@@ -29,6 +29,7 @@ interface OrderFormProps {
     onSave: (data: any, asDraft?: boolean, auditReason?: string, andPay?: boolean) => void;
     onCancel: () => void;
     onPreview?: () => void;
+    saving?: boolean;
 }
 
 type QuotationWorkflowType = 'General' | 'Examination';
@@ -179,7 +180,7 @@ const buildExaminationQuotationItems = (details: ExaminationQuotationDetails): C
         .filter(Boolean) as CartItem[];
 };
 
-export const OrderForm: React.FC<OrderFormProps> = ({ type, initialData, onSave, onCancel, onPreview }) => {
+export const OrderForm: React.FC<OrderFormProps> = ({ type, initialData, onSave, onCancel, onPreview, saving }) => {
     const { companyConfig, notify, user } = useAuth();
     const { invoices, recurringInvoices, accounts } = useFinance();
     const { quotations, customerPayments, customers, addCustomer } = useSales();
@@ -609,7 +610,9 @@ export const OrderForm: React.FC<OrderFormProps> = ({ type, initialData, onSave,
             basePrice: Number(currentItems[idx].price || baseItem.price) || undefined,
             quantity: Number(currentItems[idx].quantity) || 1,
             adjustments: marketAdjustmentsInput,
-            context: 'ORDER'
+            context: 'ORDER',
+            quantityTiers: baseItem?.volumePricing,
+            allowQuantityTiering: baseItem?.allowVolumePricing,
         });
 
         currentItems[idx] = {
@@ -1111,6 +1114,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({ type, initialData, onSave,
     };
 
     const handleSubmission = async (asDraft: boolean, andPay: boolean = false) => {
+        if (saving) return;
         if (!formData.customerName || analysis.processedItems.length === 0) {
             notify("Selection of customer and items is required.", "error");
             return;
@@ -1403,7 +1407,7 @@ const handleAddItem = async (item: Item) => {
             await handleQuantityChange(existingItemIdx, formData.items[existingItemIdx].quantity + 1);
             notify(`Incremented quantity for ${item.name}`, "success");
         } else {
-            if (item.type !== 'Service') {
+            if ((item.type as string) !== 'Service') {
                 updateReservedStock(item.id, 1, `Selection in ${type} Form`);
             }
 
@@ -1438,7 +1442,9 @@ const handleAddItem = async (item: Item) => {
                 baseCost: Number(item.cost),
                 quantity: 1,
                 adjustments: marketAdjustmentsInput,
-                context: 'ORDER'
+                context: 'ORDER',
+                quantityTiers: item?.volumePricing,
+                allowQuantityTiering: item?.allowVolumePricing,
             });
 
             const newItem: CartItem = {
@@ -1551,7 +1557,9 @@ const handleVariantSelect = async (variant: ProductVariant) => {
                     basePrice: Number(variantItem.price) || undefined,
                     quantity: 1,
                     adjustments: marketAdjustmentsInput,
-                    context: 'ORDER'
+                    context: 'ORDER',
+                    quantityTiers: parentItem?.volumePricing,
+                    allowQuantityTiering: parentItem?.allowVolumePricing,
                 });
                 variantItem.price = pricing.unitPrice;
                 variantItem.selling_price = pricing.unitPrice;
@@ -1754,7 +1762,9 @@ const handleVariantSelect = async (variant: ProductVariant) => {
                 basePrice: Number(newItems[idx].price || baseItem.price) || undefined,
                 quantity: safeQty,
                 adjustments: marketAdjustmentsInput,
-                context: 'ORDER'
+                context: 'ORDER',
+                quantityTiers: baseItem?.volumePricing,
+                allowQuantityTiering: baseItem?.allowVolumePricing,
             });
 
             newItems[idx].price = priceData.unitPrice;
@@ -2880,7 +2890,7 @@ const handleVariantSelect = async (variant: ProductVariant) => {
                                 {type === 'Invoice' && (
                                     <button
                                         onClick={() => handleSubmission(false, true)}
-                                        disabled={formData.items.length === 0 || (isEditing && !auditReason.trim())}
+                                        disabled={formData.items.length === 0 || (isEditing && !auditReason.trim()) || saving}
                                         className="w-full py-3 bg-emerald-600 text-white rounded-lg font-normal text-[12px] shadow-xl shadow-emerald-900/20 hover:bg-emerald-700 transition-all disabled:opacity-30 disabled:grayscale flex items-center justify-center gap-2 active:scale-95"
                                     >
                                         <Coins size={16} />
@@ -2889,7 +2899,7 @@ const handleVariantSelect = async (variant: ProductVariant) => {
                                 )}
                                 <button
                                     onClick={() => handleSubmission(false, false)}
-                                    disabled={formData.items.length === 0 || (isEditing && !auditReason.trim())}
+                                    disabled={formData.items.length === 0 || (isEditing && !auditReason.trim()) || saving}
                                     className="w-full py-3 bg-blue-600 text-white rounded-lg font-normal text-[12px] shadow-xl shadow-blue-900/20 hover:bg-blue-700 transition-all disabled:opacity-30 disabled:grayscale flex items-center justify-center gap-2 active:scale-95"
                                 >
                                     <Save size={16} />

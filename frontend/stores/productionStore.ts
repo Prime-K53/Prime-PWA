@@ -1,11 +1,9 @@
 
 import { create } from 'zustand';
 import { ProductionBatch, WorkOrder, WorkCenter, ProductionResource, ResourceAllocation, MaintenanceLog, BillOfMaterial } from '../types';
-import { api } from '../services/api';
 import { dbService } from '../services/db';
+import { api } from '../services/api';
 import { productionDb } from '../services/productionDb';
-import { HAS_REMOTE_BACKEND, getUrl } from '../config/api.js';
-import { getRequestIdentityHeaders } from '../services/requestHeaders';
 import { generateNextId } from '../utils/helpers';
 import { MOCK_WORK_CENTERS, MOCK_RESOURCES } from '../constants';
 
@@ -71,37 +69,25 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
       let resources: ProductionResource[] = localResources;
 
       try {
-        const shouldFetchRemoteLookups = HAS_REMOTE_BACKEND && (workCenters.length === 0 || resources.length === 0);
-        if (!shouldFetchRemoteLookups) {
-          throw new Error('Remote backend disabled in offline mode');
+        if (workCenters.length === 0) {
+          const cloudWorkCenters = await dbService.getAll<WorkCenter>('workCenters');
+          if (cloudWorkCenters && cloudWorkCenters.length > 0) {
+            workCenters = cloudWorkCenters;
+            for (const wc of cloudWorkCenters) {
+              try { await productionDb.workCenters.put(wc); } catch {}
+            }
+          }
         }
-
-        const headers = getRequestIdentityHeaders();
-        const [wcResponse, resResponse] = await Promise.all([
-          fetch(getUrl('production/work-centers'), { headers }),
-          fetch(getUrl('production/resources'), { headers })
-        ]);
-
-        if (wcResponse.ok) {
-          workCenters = await wcResponse.json();
-          await Promise.all(workCenters.map((workCenter) => {
-            try { return productionDb.workCenters.put(workCenter); } catch { return dbService.put('workCenters', workCenter); }
-          }));
+        if (resources.length === 0) {
+          const cloudResources = await dbService.getAll<ProductionResource>('resources');
+          if (cloudResources && cloudResources.length > 0) {
+            resources = cloudResources;
+            for (const r of cloudResources) {
+              try { await productionDb.resources.put(r); } catch {}
+            }
+          }
         }
-        if (resResponse.ok) {
-          resources = await resResponse.json();
-          await Promise.all(resources.map((resource) => {
-            try { return productionDb.resources.put(resource); } catch { return dbService.put('resources', resource); }
-          }));
-        }
-
-        if (wcResponse.ok && resResponse.ok && workCenters.length > 0) {
-          set({ batches, workOrders, workCenters, resources, allocations, maintenanceLogs, boms });
-          return;
-        }
-      } catch {
-        // Local IndexedDB is the primary read model. Remote lookup sync is best-effort only.
-      }
+      } catch {}
 
       // In non-production environments, seed mock data ONLY if still empty
       if (workCenters.length === 0 && !isProd) {

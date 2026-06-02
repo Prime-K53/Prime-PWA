@@ -1,6 +1,7 @@
-
 import { dbService } from './db';
 import { CompanyConfig } from '../types';
+import { aiService } from './ai/aiService';
+import { queueOfflineMutation } from './offlineQueueManager';
 
 export type NotificationActivityType =
   | 'QUOTATION'
@@ -19,8 +20,9 @@ export interface NotificationLog {
   phoneNumber: string;
   message: string;
   timestamp: string;
-  status: 'sent' | 'failed' | 'cancelled';
-  deliveryMode?: 'offline-draft' | 'external';
+  status: 'sent' | 'failed' | 'cancelled' | 'pending';
+  deliveryMode?: 'offline-draft' | 'external' | 'queued' | 'ai';
+  error?: string;
 }
 
 const getCompanyConfig = (): CompanyConfig | null => {
@@ -29,13 +31,13 @@ const getCompanyConfig = (): CompanyConfig | null => {
 };
 
 const DEFAULT_TEMPLATES: Record<NotificationActivityType, string> = {
-  QUOTATION: "Hi {customerName}! 📄 Great news! Your quotation #{id} for {amount} is ready at {companyName}. We can't wait to serve you! Review it today and let us know if you have any questions. We're here to help you succeed! 🌟",
-  SALES_ORDER: "Hi {customerName}! 🛍️ Awesome! Your sales order #{id} for {amount} has been confirmed at {companyName}. Our team is already working on preparing your items with care and precision. We'll notify you as soon as they're ready. Thank you for trusting us with your needs! 🚚✨",
-  INVOICE: "Hi {customerName}! 🧾 Your invoice #{id} for {amount} from {companyName} is now due on {dueDate}. We appreciate your prompt attention to this matter. Paying on time helps us continue delivering the excellent service you deserve. Need assistance? We're just a message away! 💳🙂",
-  EXAMINATION_INVOICE: "Hi {customerName}! 📝 Your service invoice #{id} for {amount} from {companyName} is now due on {dueDate}. Thank you for choosing us for your examination needs. Complete your payment today and let's continue building success together! 🎓💪",
-  EXAM_BATCH: "Hi {customerName}! ✅ Exciting news! Your examination batch #{id} has been approved at {companyName} with {count} candidates. We're committed to making this process smooth and successful for you. Get ready for outstanding results! Let's achieve greatness together! 🎉🏆",
-  PAYMENT: "Hi {customerName}! 💰 Thank you! We've received your payment of {amount} for {id} at {companyName}. Your trust means the world to us! We're already preparing to exceed your expectations on your next visit. See you soon! 🙏❤️",
-  RECEIPT: "Hi {customerName}! 🧾 Your receipt #{id} for {amount} has been issued by {companyName}. Thank you for your continued support! We value you as a cherished customer and look forward to serving you again. Remember - your satisfaction is our greatest reward! ⭐🌈"
+  QUOTATION: "Hi {customerName}! Great news! Your quotation #{id} for {amount} is ready at {companyName}. Review it today and let us know if you have any questions.",
+  SALES_ORDER: "Hi {customerName}! Your sales order #{id} for {amount} has been confirmed at {companyName}. Our team is preparing your items. We'll notify you as soon as they're ready.",
+  INVOICE: "Hi {customerName}! Your invoice #{id} for {amount} from {companyName} is now due on {dueDate}. Pay on time to continue enjoying our services.",
+  EXAMINATION_INVOICE: "Hi {customerName}! Your service invoice #{id} for {amount} from {companyName} is now due on {dueDate}. Complete your payment today.",
+  EXAM_BATCH: "Hi {customerName}! Your examination batch #{id} has been approved at {companyName} with {count} candidates. We're committed to making this process smooth for you.",
+  PAYMENT: "Hi {customerName}! Thank you! We've received your payment of {amount} for {id} at {companyName}. We appreciate your continued trust.",
+  RECEIPT: "Hi {customerName}! Your receipt #{id} for {amount} has been issued by {companyName}. Thank you for your continued support!"
 };
 
 const ACTIVITY_LABELS: Record<NotificationActivityType, string> = {
@@ -48,9 +50,6 @@ const ACTIVITY_LABELS: Record<NotificationActivityType, string> = {
   RECEIPT: 'payment receipt'
 };
 
-/**
- * Template-based message generator (no AI)
- */
 const generateMessageFromTemplate = (
   type: NotificationActivityType,
   data: any,
@@ -75,9 +74,6 @@ const sanitizePhoneNumber = (phoneNumber: string): string => {
   return digitsOnly || String(phoneNumber || '').replace(/\s+/g, '');
 };
 
-/**
- * Rate limiting check (e.g., max 1 notification per entity per 5 minutes)
- */
 const checkRateLimit = async (type: NotificationActivityType, entityId: string): Promise<boolean> => {
   try {
     const logs = await dbService.getAll<NotificationLog>('customerNotificationLogs');
@@ -92,10 +88,52 @@ const checkRateLimit = async (type: NotificationActivityType, entityId: string):
   }
 };
 
+const isOnline = () => typeof navigator !== 'undefined' && navigator.onLine;
+
+const getEnabledWebhooks = (config: CompanyConfig) => {
+  const webhooks = config.integrationSettings?.webhooks || [];
+  return webhooks.filter(w => w.enabled && w.url && w.url !== 'https://');
+};
+
+const sendViaWebhook = async (webhookUrl: string, type: NotificationActivityType, payload: any) => {
+  const response = await fetch(webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      event: `notification.${type.toLowerCase()}`,
+      timestamp: new Date().toISOString(),
+      data: payload
+    })
+  });
+  if (!response.ok) {
+    throw new Error(`Webhook responded with ${response.status}`);
+  }
+};
+
+const generateAIMessage = async (
+  type: NotificationActivityType,
+  data: any,
+  config: CompanyConfig
+): Promise<string | null> => {
+  try {
+    const prompt = `Generate a brief professional SMS notification for a customer. Type: ${ACTIVITY_LABELS[type] || type}. Customer: ${data.customerName}. Details: ${data.id}, ${data.amount || ''}. Company: ${config.companyName}. Keep it under 160 characters. No emojis.`;
+    const result = await aiService.generateAIResponse(prompt, 'You are a customer notification assistant. Generate concise SMS messages.');
+    if (result && result.length > 5) return result;
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+const saveLog = async (entry: Omit<NotificationLog, 'id' | 'timestamp'> & { id?: string; timestamp?: string }) => {
+  await dbService.put('customerNotificationLogs', {
+    id: entry.id || `log-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    timestamp: entry.timestamp || new Date().toISOString(),
+    ...entry
+  });
+};
+
 export const customerNotificationService = {
-  /**
-   * Main trigger for customer notifications
-   */
   async triggerNotification(
     type: NotificationActivityType,
     data: {
@@ -125,41 +163,131 @@ export const customerNotificationService = {
       return;
     }
 
-    const message = generateMessageFromTemplate(type, data, config);
+    const online = isOnline();
+    let message = generateMessageFromTemplate(type, data, config);
 
-    const logEntryBase = {
-      id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      type,
-      entityId: data.id,
-      customerName: data.customerName,
-      phoneNumber: data.phoneNumber || '',
-      message,
-      timestamp: new Date().toISOString(),
-    };
+    if (online) {
+      const aiMessage = await generateAIMessage(type, data, config);
+      if (aiMessage) message = aiMessage;
 
-    // Auto-send when notifications are enabled (no manual confirmation needed)
-    const shouldSend = true;
+      const webhooks = getEnabledWebhooks(config);
+      const payload = {
+        type,
+        customerName: data.customerName,
+        phoneNumber: sanitizePhoneNumber(data.phoneNumber || ''),
+        message,
+        id: data.id,
+        amount: data.amount,
+        dueDate: data.dueDate,
+        count: data.count
+      };
 
-    if (!shouldSend) {
-      await dbService.put('customerNotificationLogs', {
-        ...logEntryBase,
-        status: 'cancelled'
-      });
-      console.log(`[Notification] Cancelled ${type} for ${data.customerName}`);
-      return;
+      if (webhooks.length > 0) {
+        let sentAny = false;
+        for (const webhook of webhooks) {
+          try {
+            await sendViaWebhook(webhook.url, type, payload);
+            sentAny = true;
+          } catch (err) {
+            console.warn(`[Notification] Webhook failed for ${webhook.url}:`, err);
+          }
+        }
+        if (sentAny) {
+          await saveLog({ type, entityId: data.id, customerName: data.customerName, phoneNumber: data.phoneNumber || '', message, status: 'sent', deliveryMode: 'external' });
+          console.log(`[Notification] Sent via webhook for ${type} to ${sanitizePhoneNumber(data.phoneNumber)} (${data.customerName})`);
+          return;
+        }
+      }
+
+      try {
+        await saveLog({ type, entityId: data.id, customerName: data.customerName, phoneNumber: data.phoneNumber || '', message, status: 'sent', deliveryMode: 'ai' });
+        console.log(`[Notification] AI-processed for ${type} ${sanitizePhoneNumber(data.phoneNumber)} (${data.customerName})`);
+      } catch (error) {
+        console.error(`[Notification] Failed to process ${type}:`, error);
+        await saveLog({ type, entityId: data.id, customerName: data.customerName, phoneNumber: data.phoneNumber || '', message, status: 'failed', error: String(error) });
+      }
+    } else {
+      try {
+        await queueOfflineMutation({
+          entityId: data.id,
+          operation: 'create',
+          request: { url: '/api/notifications/send', method: 'POST', headers: { 'Content-Type': 'application/json' }, body: { type, data, message, phoneNumber: sanitizePhoneNumber(data.phoneNumber || '') } },
+          payload: { type, data, message },
+          priority: 'normal',
+          processor: 'notification',
+          dedupeKey: `notification:${type}:${data.id}`
+        });
+        await saveLog({ type, entityId: data.id, customerName: data.customerName, phoneNumber: data.phoneNumber || '', message, status: 'pending', deliveryMode: 'queued' });
+        console.log(`[Notification] Queued for offline delivery: ${type} to ${sanitizePhoneNumber(data.phoneNumber)} (${data.customerName})`);
+      } catch (error) {
+        console.error(`[Notification] Failed to queue offline ${type}:`, error);
+        await saveLog({ type, entityId: data.id, customerName: data.customerName, phoneNumber: data.phoneNumber || '', message, status: 'failed', error: String(error), deliveryMode: 'queued' });
+      }
     }
+  },
 
+  async processPendingNotifications() {
+    if (!isOnline()) return { processed: 0, failed: 0 };
+
+    const config = getCompanyConfig();
+    if (!config?.notificationSettings?.customerActivityNotifications) return { processed: 0, failed: 0 };
+
+    let logs: NotificationLog[] = [];
     try {
-      await dbService.put('customerNotificationLogs', {
-        ...logEntryBase,
-        status: 'sent',
-        deliveryMode: 'offline-draft'
-      });
-      console.log(`[Notification] Saved offline draft for ${type} ${sanitizePhoneNumber(data.phoneNumber)} (${data.customerName})`);
-    } catch (error) {
-      console.error(`[Notification] Failed to process ${type}:`, error);
-      await dbService.put('customerNotificationLogs', { ...logEntryBase, status: 'failed' });
+      logs = await dbService.getAll<NotificationLog>('customerNotificationLogs');
+    } catch {
+      return { processed: 0, failed: 0 };
     }
+
+    const pending = logs.filter(l => l.status === 'pending');
+    if (pending.length === 0) return { processed: 0, failed: 0 };
+
+    const webhooks = getEnabledWebhooks(config);
+    let processed = 0;
+    let failed = 0;
+
+    for (const log of pending) {
+      const canProceed = await checkRateLimit(log.type, log.entityId);
+      if (!canProceed) {
+        await saveLog({ ...log, status: 'cancelled', deliveryMode: log.deliveryMode, error: 'Rate limit exceeded on retry' });
+        processed++;
+        continue;
+      }
+
+      const payload = {
+        type: log.type,
+        customerName: log.customerName,
+        phoneNumber: log.phoneNumber,
+        message: log.message,
+        id: log.entityId
+      };
+
+      if (webhooks.length > 0) {
+        let sentAny = false;
+        for (const webhook of webhooks) {
+          try {
+            await sendViaWebhook(webhook.url, log.type, payload);
+            sentAny = true;
+          } catch { }
+        }
+        if (sentAny) {
+          const existing = await dbService.get<NotificationLog>('customerNotificationLogs', log.id);
+          if (existing) {
+            await saveLog({ ...existing, status: 'sent', deliveryMode: 'external' });
+          }
+          processed++;
+          continue;
+        }
+      }
+
+      failed++;
+      const existing = await dbService.get<NotificationLog>('customerNotificationLogs', log.id);
+      if (existing) {
+        await saveLog({ ...existing, status: 'failed', deliveryMode: 'queued', error: 'No webhook available' });
+      }
+    }
+
+    return { processed, failed };
   },
 
   async getLogs(): Promise<NotificationLog[]> {

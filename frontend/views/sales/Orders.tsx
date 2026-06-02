@@ -149,6 +149,7 @@ const Orders: React.FC = () => {
     const [activeView, setActiveTab] = useState<'Quotations' | 'Invoices' | 'Subscriptions' | 'SalesOrders' | 'Exchanges' | 'Orders'>('Quotations');
     const [viewMode, setViewMode] = useState<'List' | 'Card'>('List');
     const [isFormOpen, setIsFormOpen] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
     const [editingItem, setEditingItem] = useState<any>(null);
 
     const formType = useMemo(() => {
@@ -356,6 +357,8 @@ const Orders: React.FC = () => {
     };
 
     const handleSave = async (data: any, asDraft: boolean, reason?: string, andPay?: boolean) => {
+        if (isSaving) return;
+        setIsSaving(true);
         try {
             if (activeView === 'Quotations') {
                 if (editingItem) await updateQuotation(data, reason);
@@ -388,6 +391,8 @@ const Orders: React.FC = () => {
             }
         } catch (err: any) {
             notify(`Failed to save: ${err.message}`, "error");
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -1182,7 +1187,7 @@ const Orders: React.FC = () => {
         <div className="p-4 md:p-6 max-w-[1600px] mx-auto h-[calc(100vh-4rem)] flex flex-col relative w-full text-sm font-normal">
             {isFormOpen && (
                 <div className="absolute inset-0 z-50 bg-slate-50 overflow-y-auto custom-scrollbar p-4 md:p-6">
-                    <OrderForm type={formType} initialData={editingItem} onSave={handleSave} onCancel={() => setIsFormOpen(false)} />
+                    <OrderForm type={formType} initialData={editingItem} onSave={handleSave} onCancel={() => setIsFormOpen(false)} saving={isSaving} />
                 </div>
             )}
             {analysisInvoice && (<ProfitAnalysisModal invoice={analysisInvoice} onClose={() => setAnalysisInvoice(null)} />)}

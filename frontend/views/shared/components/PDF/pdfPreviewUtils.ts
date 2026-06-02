@@ -148,7 +148,7 @@ const sanitizeFileName = (title: string): string => {
 
 export const downloadPdfSource = async (source: PDFPreviewSource, title: string): Promise<void> => {
   const bytes = await preparePdfBytes(source, `${title} download`);
-  const blob = new Blob([bytes], { type: 'application/pdf' });
+  const blob = new Blob([bytes instanceof Uint8Array ? bytes.buffer as ArrayBuffer : bytes], { type: 'application/pdf' });
   const url = URL.createObjectURL(blob);
 
   try {

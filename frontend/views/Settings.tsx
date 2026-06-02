@@ -10,7 +10,7 @@ import {
     Globe, Clock, Key, Lock, Gauge, Binary, Plus, X, Percent,
     Cpu, Layers, Smartphone, Layout, Users, ShoppingBag, ShoppingCart, Palette, Monitor,
     Factory, Box, Cloud, Bell, Mail, MessageSquare, ShieldAlert, Webhook, Sun, Moon, Laptop, Info, Undo2,
-    TrendingUp, Package, PlusCircle, Trash, Printer, Usb
+    TrendingUp, Package, PlusCircle, Trash, Printer, Usb, Sparkles
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useFinance } from '../context/FinanceContext';
@@ -41,6 +41,10 @@ import {
 } from './shared/components/PDF/templateSettings';
 import { TwoFactorSetup } from './settings/components/TwoFactorSetup';
 import ProfitMarginSettings from './settings/ProfitMarginSettings';
+import { NotificationsTab } from './settings/tabs/NotificationsTab';
+import { CloudTab } from './settings/tabs/CloudTab';
+import { IntegrationsTab } from './settings/tabs/IntegrationsTab';
+import { AIProviderTab } from './settings/tabs/AIProviderTab';
 
 // Pricing settings validation using reusable utility
 
@@ -146,10 +150,16 @@ const Settings: React.FC = () => {
                 },
                 photocopyPrice: 0,
                 photocopyCostPerPage: 0.50,
-
+                typePrintingPrice: 0,
+                requireCustomer: false,
+                defaultPaymentMethod: 'Cash',
                 typePrintingCostPerPage: 1.20,
                 staplePrice: 0,
                 receiptFooter: ''
+            },
+            paymentDetails: {
+                bankAccounts: [],
+                mobileMoneyAccounts: []
             },
             numbering: {},
             approvalThresholds: {}
@@ -567,6 +577,7 @@ const Settings: React.FC = () => {
         {
             title: 'System & Advanced',
             items: [
+                { id: 'AIProvider', icon: Sparkles, label: 'AI Provider', desc: 'Configure AI service provider, model, and API key' },
                 { id: 'Integrations', icon: Globe, label: 'Integrations', desc: 'API and external services' },
                 { id: 'Security', icon: ShieldCheck, label: 'Backup & Security', desc: 'Data protection and recovery' },
                 { id: 'System', icon: Cpu, label: 'System Info', desc: 'Hardware and licensing' }
@@ -773,70 +784,10 @@ const Settings: React.FC = () => {
                                                     <option value="YYYY-MM-DD">YYYY-MM-DD</option>
                                                 </select>
                                             </div>
-                                            <div className="col-span-2 pt-4 mt-2">
-                                                <label className="settings-label text-blue-600">Monthly Revenue Target</label>
-                                                <div className="relative max-w-xs">
-                                                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold">{config.currencySymbol}</div>
-                                                    <input
-                                                        type="number"
-                                                        className="settings-input pl-10"
-                                                        placeholder="e.g. 500000"
-                                                        value={config.monthlyRevenueTarget || ''}
-                                                        onChange={e => setConfig({ ...config, monthlyRevenueTarget: Number(e.target.value) })}
-                                                    />
-                                                </div>
-                                                <p className="text-[10px] text-slate-400 mt-1.5 font-medium italic">Your progress percentage against this هدف will be tracked on the dashboard.</p>
-                                            </div>
                                         </div>
                                     </div>
                                 </section>
 
-                                <section className="white-card overflow-hidden">
-                                    <div className="settings-section-header">
-                                        <h3 className="text-sm font-bold text-[#393A3D]">Notifications & Communication</h3>
-                                        <p className="text-[11px] text-[#6B6C6F] mt-0.5">Manage how you interact with your customers.</p>
-                                    </div>
-                                    <div className="p-8 space-y-6">
-                                        <div className="flex justify-between items-center group/item hover:bg-slate-50 transition-all -mx-8 px-8 py-4">
-                                            <div>
-                                                <p className="font-bold text-slate-800 text-sm">Customer Activity Notifications</p>
-                                                <p className="text-[11px] text-slate-500 mt-0.5">Automatically prepare messages for quotations, invoices, approvals, and payments.</p>
-                                            </div>
-                                            <label className="relative inline-flex items-center cursor-pointer">
-                                                <input 
-                                                    type="checkbox" 
-                                                    className="sr-only peer" 
-                                                    checked={config.notificationSettings?.customerActivityNotifications ?? true}
-                                                    onChange={e => {
-                                                        const newValue = e.target.checked;
-                                                        if (!newValue) {
-                                                            if (window.confirm("Are you sure you want to disable customer activity notifications? This will stop automatic messaging app triggers for business activities.")) {
-                                                                setConfig({ 
-                                                                    ...config, 
-                                                                    notificationSettings: { 
-                                                                        ...config.notificationSettings, 
-                                                                        customerActivityNotifications: false 
-                                                                    } 
-                                                                });
-                                                                notify('Notifications disabled', 'info');
-                                                            }
-                                                        } else {
-                                                            setConfig({ 
-                                                                ...config, 
-                                                                notificationSettings: { 
-                                                                    ...config.notificationSettings, 
-                                                                    customerActivityNotifications: true 
-                                                                } 
-                                                                });
-                                                            notify('Notifications enabled', 'success');
-                                                        }
-                                                    }}
-                                                />
-                                                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#2CA01C]"></div>
-                                            </label>
-                                        </div>
-                                    </div>
-                                </section>
                             </div>
                         )
                     }
@@ -1047,9 +998,28 @@ const Settings: React.FC = () => {
                                         </div>
                                     </div>
                                 </section>
+
+                                <section className="white-card p-0 overflow-hidden">
+                                    <div className="px-8 py-5 border-b border-slate-100 bg-slate-50/30">
+                                        <h3 className="text-sm font-bold text-slate-800">Monthly Revenue Target</h3>
+                                        <p className="text-[11px] text-slate-500 mt-0.5">Set your monthly revenue goal for dashboard tracking.</p>
+                                    </div>
+                                    <div className="p-8">
+                                        <div className="relative max-w-xs">
+                                            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold">{config.currencySymbol}</div>
+                                            <input
+                                                type="number"
+                                                className="settings-input pl-10"
+                                                placeholder="e.g. 500000"
+                                                value={config.monthlyRevenueTarget || ''}
+                                                onChange={e => setConfig({ ...config, monthlyRevenueTarget: Number(e.target.value) })}
+                                            />
+                                        </div>
+                                        <p className="text-[10px] text-slate-400 mt-1.5 font-medium italic">Your progress percentage against this target will be tracked on the dashboard.</p>
+                                    </div>
+                                </section>
                             </div>
                         )}
-
 
                         {activeTab === 'SalesModule' && (
                             <div className="space-y-8">
@@ -2564,506 +2534,25 @@ id: `webhook-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
 
                         {
                             activeTab === 'Cloud' && (
-                                <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4">
-                                    <div className="flex items-center gap-3">
-                                        <Cloud size={18} className="text-[#2CA01C]" />
-                                        <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Cloud Sync (Stage 1)</h3>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-10">
-                                        <div className="bg-white rounded-lg border border-[#D4D7DC] p-6 shadow-sm space-y-10 group hover:border-[#2CA01C]/50 transition-all">
-                                            <div className="flex justify-between items-center group/header">
-                                                <div>
-                                                    <p className="font-black text-slate-900 uppercase text-lg group-hover/header:text-[#2CA01C] transition-colors">Sync Connectivity</p>
-                                                    <p className="text-[10px] text-slate-500 mt-1 italic font-medium">Last successful sync: {config.cloudSync?.lastSyncTimestamp || 'Never'}</p>
-                                                </div>
-                                                <label className="relative inline-flex items-center cursor-pointer">
-                                                    <input
-                                                        type="checkbox"
-                                                        className="sr-only peer"
-                                                        checked={config.cloudSync?.enabled}
-                                                        onChange={e => setConfig({ ...config, cloudSync: { ...config.cloudSync, enabled: e.target.checked } as any })}
-                                                    />
-                                                    <div className="w-14 h-7 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-[#2CA01C]"></div>
-                                                </label>
-                                            </div>
-                                            <div className="space-y-8">
-                                                <div className="group/field">
-                                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 px-1 group-hover/field:text-[#2CA01C] transition-colors">Cloud API Endpoint</label>
-                                                    <input
-                                                        type="text"
-                                                        className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-5 py-4 font-bold text-slate-800 outline-none focus:ring-4 focus:ring-[#2CA01C]/5 focus:border-[#2CA01C] transition-all text-sm group-hover/field:border-[#2CA01C]/50"
-                                                        placeholder="https://api.prime-erp.cloud/v1"
-                                                        value={config.cloudSync?.apiUrl || ''}
-                                                        onChange={e => setConfig({ ...config, cloudSync: { ...config.cloudSync, apiUrl: e.target.value } as any })}
-                                                    />
-                                                </div>
-                                                <div className="group/field">
-                                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 px-1 group-hover/field:text-[#2CA01C] transition-colors">Cloud API Key</label>
-                                                    <div className="relative group/input">
-                                                        <input
-                                                            type="password"
-                                                            className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-5 py-4 font-bold text-slate-800 outline-none focus:ring-4 focus:ring-[#2CA01C]/5 focus:border-[#2CA01C] transition-all text-sm pr-12 group-hover/input:border-[#2CA01C]/50"
-                                                            placeholder="e.g. 43c...8f1"
-                                                            value={config.cloudSync?.apiKey || ''}
-                                                            onChange={e => setConfig({ ...config, cloudSync: { ...config.cloudSync, apiKey: e.target.value } as any })}
-                                                        />
-                                                        <Key className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within/input:text-[#2CA01C] transition-colors" size={18} />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
+                                <CloudTab config={config} setConfig={setConfig} notify={notify} isProcessing={isProcessing} setIsProcessing={setIsProcessing} api={api} />
+                            )
+                        }
 
-                                        <div className="bg-[#393A3D] p-6 rounded-lg shadow-lg text-white border border-white/5 space-y-8 relative overflow-hidden group/sync">
-                                            <div className="absolute top-0 right-0 p-8 opacity-5 group-hover/sync:opacity-10 transition-opacity">
-                                                <Cloud size={120} className="text-[#2CA01C]" />
-                                            </div>
-                                            <div className="relative z-10">
-                                                <p className="text-[10px] font-black text-[#2CA01C] uppercase tracking-widest mb-8">Synchronization Logic</p>
-                                                <div className="space-y-8">
-                                                    <div className="flex justify-between items-center group/item">
-                                                        <div>
-                                                            <p className="font-bold text-base group-hover/item:text-[#2CA01C] transition-colors">Automated Background Sync</p>
-                                                            <p className="text-[10px] text-slate-400 mt-1 font-medium italic">Sync changes in real-time when online.</p>
-                                                        </div>
-                                                        <label className="relative inline-flex items-center cursor-pointer">
-                                                            <input
-                                                                type="checkbox"
-                                                                className="sr-only peer"
-                                                                checked={config.cloudSync?.autoSyncEnabled}
-                                                                onChange={e => setConfig({ ...config, cloudSync: { ...config.cloudSync, autoSyncEnabled: e.target.checked } as any })}
-                                                            />
-                                                            <div className="w-12 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#2CA01C]"></div>
-                                                        </label>
-                                                    </div>
-                                                    <div className="h-px bg-white/5"></div>
-                                                    <div>
-                                                        <div className="flex justify-between items-center mb-6">
-                                                            <label className="block text-[10px] font-black text-[#2CA01C] uppercase tracking-widest">Sync Frequency</label>
-                                                            <span className="text-[10px] font-black text-white bg-[#2CA01C]/20 px-3 py-1 rounded-full border border-[#2CA01C]/20">{config.cloudSync?.syncIntervalMinutes || 15} MINUTES</span>
-                                                        </div>
-                                                        <input
-                                                            type="range"
-                                                            min="5"
-                                                            max="60"
-                                                            step="5"
-                                                            className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#2CA01C]"
-                                                            value={config.cloudSync?.syncIntervalMinutes || 15}
-                                                            onChange={e => setConfig({ ...config, cloudSync: { ...config.cloudSync, syncIntervalMinutes: parseInt(e.target.value) } as any })}
-                                                        />
-                                                        <div className="flex justify-between mt-4 text-[9px] font-black text-slate-500 tracking-widest uppercase">
-                                                            <span>Real-time</span>
-                                                            <span>Hourly</span>
-                                                        </div>
-                                                    </div>
-                                                    <button 
-                                                        onClick={async () => {
-                                                            setIsProcessing(true);
-                                                            try {
-                                                                // Trigger cloud sync/reconciliation
-                                                                if (config.cloudSync?.enabled) {
-                                                                    await api.triggerCloudSync();
-                                                                    notify('Cloud reconciliation initiated successfully.', 'success');
-                                                                } else {
-                                                                    notify('Cloud sync is not enabled. Please enable cloud sync first.', 'warning');
-                                                                }
-                                                            } catch (error) {
-                                                                notify('Cloud reconciliation failed: ' + (error instanceof Error ? error.message : String(error)), 'error');
-                                                            } finally {
-                                                                setIsProcessing(false);
-                                                            }
-                                                        }}
-                                                        disabled={isProcessing}
-                                                        className="w-full bg-[#2CA01C] hover:bg-green-700 text-white font-bold text-[10px] uppercase tracking-widest py-4 rounded-md shadow-md transition-all flex items-center justify-center gap-3 active:scale-95 group/btn disabled:opacity-50 disabled:cursor-not-allowed"
-                                                    >
-                                                        <RefreshCw size={18} className={`group-hover/btn:rotate-180 transition-transform duration-500 ${isProcessing ? 'animate-spin' : ''}`} /> Force Cloud Reconciliation
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+                        {
+                            activeTab === 'AIProvider' && (
+                                <AIProviderTab config={config} setConfig={setConfig} notify={notify} />
                             )
                         }
 
                         {
                             activeTab === 'Integrations' && (
-                                <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4">
-                                    <section>
-                                        <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-10 flex items-center gap-3">
-                                            <Shield size={18} className="text-rose-600" /> Authorization & API Policy
-                                        </h3>
-                                        <div className="bg-white rounded-lg border border-[#D4D7DC] p-6 space-y-8 shadow-sm group hover:border-rose-100 transition-all">
-                                            <div className="flex justify-between items-center group/item">
-                                                <div>
-                                                    <p className="font-black text-slate-800 uppercase text-base group-hover/item:text-rose-600 transition-colors">Force Multi-Factor Auth</p>
-                                                    <p className="text-[10px] text-slate-500 mt-1 italic font-medium">Require 6-digit TOTP for all administrative roles.</p>
-                                                </div>
-                                                <label className="relative inline-flex items-center cursor-pointer">
-                                                    <input type="checkbox" className="sr-only peer" />
-                                                    <div className="w-14 h-7 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-rose-600"></div>
-                                                </label>
-                                            </div>
-                                            <div className="h-px bg-slate-100"></div>
-                                            <div className="grid grid-cols-2 gap-10">
-                                                <div className="group/field">
-                                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 px-1 group-hover/field:text-rose-600 transition-colors">Min Password Length</label>
-                                                        <input
-                                                        type="number"
-                                                        className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm outline-none focus:ring-4 focus:ring-rose-500/5 focus:border-rose-500 transition-all group-hover/field:border-rose-100"
-                                                        placeholder="e.g. 8"
-                                                        defaultValue="8"
-                                                    />
-                                                </div>
-                                                <div className="group/field">
-                                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 px-1 group-hover/field:text-rose-600 transition-colors">Complexity Requirement</label>
-                                                    <div className="flex gap-3">
-                                                        <span className="px-6 py-3 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-2xl text-[10px] font-black tracking-widest">NUMERIC</span>
-                                                        <span className="px-6 py-3 bg-[#2CA01C]/50 text-[#2CA01C] border border-[#2CA01C]/50 rounded-2xl text-[10px] font-black tracking-widest">SPECIAL CHAR</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </section>
-
-                                    <section>
-                                        <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-10 flex items-center gap-3">
-                                            <ExternalLink size={18} className="text-[#2CA01C]" /> External API Connections
-                                        </h3>
-                                        <div className="bg-white rounded-lg border border-[#D4D7DC] p-6 space-y-8 shadow-sm">
-                                            {(config.integrationSettings?.externalApis || []).map((api, index) => (
-                                                <div key={api.id} className="p-6 bg-[#F4F5F8] rounded-lg border border-[#D4D7DC] animate-in fade-in slide-in-from-bottom-4 group hover:border-[#2CA01C] transition-all">
-                                                    <div className="flex justify-between items-start mb-6 group/header">
-                                                        <div className="flex items-center gap-6">
-                                                            <div className="p-4 bg-white rounded-md shadow-sm text-[#6B6C6F] border border-[#D4D7DC] group-hover/header:text-[#2CA01C] transition-colors">
-                                                                <Globe size={28} />
-                                                            </div>
-                                                            <div>
-                                                                <input
-                                                                    type="text"
-                                                                    className="bg-transparent font-bold text-[#393A3D] uppercase text-xl outline-none border-b-2 border-transparent focus:border-[#2CA01C] mb-1 transition-all"
-                                                                    value={api.name}
-                                                                    onChange={e => {
-                                                                        const newApis = [...(config.integrationSettings?.externalApis || [])];
-                                                                        newApis[index] = { ...api, name: e.target.value };
-                                                                        setConfig({ ...config, integrationSettings: { ...config.integrationSettings, externalApis: newApis } as any });
-                                                                    }}
-                                                                />
-                                                                <p className="text-[10px] text-slate-400 font-bold italic tracking-tight">Endpoint: {api.baseUrl}</p>
-                                                            </div>
-                                                        </div>
-                                                        <label className="relative inline-flex items-center cursor-pointer">
-                                                            <input
-                                                                type="checkbox"
-                                                                className="sr-only peer"
-                                                                checked={api.enabled}
-                                                                onChange={e => {
-                                                                    const newApis = [...(config.integrationSettings?.externalApis || [])];
-                                                                    newApis[index] = { ...api, enabled: e.target.checked };
-                                                                    setConfig({ ...config, integrationSettings: { ...config.integrationSettings, externalApis: newApis } as any });
-                                                                }}
-                                                            />
-                                                            <div className="w-12 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#2CA01C]"></div>
-                                                        </label>
-                                                    </div>
-                                                    <div className="grid grid-cols-2 gap-10">
-                                                        <div className="group/field">
-                                                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 px-1 group-hover/field:text-[#2CA01C] transition-colors">API Base URL</label>
-                                                            <input
-                                                                type="text"
-                                                                placeholder="https://api.example.com"
-                                                                className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl font-bold text-sm outline-none focus:ring-4 focus:ring-[#2CA01C]/5 focus:border-[#2CA01C] transition-all group-hover/field:border-[#2CA01C]/50"
-                                                                value={api.baseUrl}
-                                                                onChange={e => {
-                                                                    const newApis = [...(config.integrationSettings?.externalApis || [])];
-                                                                    newApis[index] = { ...api, baseUrl: e.target.value };
-                                                                    setConfig({ ...config, integrationSettings: { ...config.integrationSettings, externalApis: newApis } as any });
-                                                                }}
-                                                            />
-                                                        </div>
-                                                        <div className="group/field">
-                                                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 px-1 group-hover/field:text-[#2CA01C] transition-colors">Authorization Token</label>
-                                                            <div className="relative">
-                                                                <input
-                                                                    type="password"
-                                                                    className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl font-bold text-sm outline-none focus:ring-4 focus:ring-[#2CA01C]/5 focus:border-[#2CA01C] pr-12 transition-all group-hover/field:border-[#2CA01C]/50"
-                                                                    placeholder="Enter auth token"
-                                                                    value={api.apiKey || ''}
-                                                                    onChange={e => {
-                                                                        const newApis = [...(config.integrationSettings?.externalApis || [])];
-                                                                        newApis[index] = { ...api, apiKey: e.target.value };
-                                                                        setConfig({ ...config, integrationSettings: { ...config.integrationSettings, externalApis: newApis } as any });
-                                                                    }}
-                                                                />
-                                                                <Key className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 group-hover/field:text-[#2CA01C] transition-colors" size={18} />
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                            <button
-                                                onClick={() => {
-                                                    const newApis = [...(config.integrationSettings?.externalApis || []), { id: `api-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, name: 'New API Connection', enabled: false, baseUrl: 'https://' }];
-                                                    setConfig({ ...config, integrationSettings: { ...config.integrationSettings, externalApis: newApis } as any });
-                                                }}
-                                                className="w-full py-6 border-2 border-dashed border-[#D4D7DC] rounded-lg text-[#6B6C6F] font-bold uppercase text-xs tracking-widest hover:border-[#2CA01C] hover:text-[#2CA01C] hover:bg-green-50 transition-all flex items-center justify-center gap-3 active:scale-[0.98]"
-                                            >
-                                                <Plus size={20} /> Register New API Endpoint
-                                            </button>
-                                        </div>
-                                    </section>
-
-                                    <section>
-                                        <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-10 flex items-center gap-3">
-                                            <Webhook size={18} className="text-emerald-600" /> Webhook Outlets
-                                        </h3>
-                                        <div className="bg-white rounded-lg border border-[#D4D7DC] p-6 space-y-8 shadow-sm">
-                                            {(config.integrationSettings?.webhooks || []).map((hook, index) => (
-                                                <div key={hook.id} className="p-6 bg-slate-50/50 rounded-lg border border-slate-100 animate-in fade-in slide-in-from-bottom-4 group hover:border-emerald-100 transition-all">
-                                                    <div className="flex justify-between items-start mb-10 group/header">
-                                                        <div className="flex-1 group/field">
-                                                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 px-1 group-hover/field:text-emerald-600 transition-colors">Target Payload URL</label>
-                                                            <input
-                                                                    type="text"
-                                                                    placeholder="https://your-webhook-endpoint.com"
-                                                                    className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-4 font-bold text-slate-800 outline-none focus:ring-4 focus:ring-emerald-500/5 focus:border-emerald-500 transition-all text-sm group-hover/field:border-emerald-100"
-                                                                    value={hook.url}
-                                                                    onChange={e => {
-                                                                        const newHooks = [...(config.integrationSettings?.webhooks || [])];
-                                                                        newHooks[index] = { ...hook, url: e.target.value };
-                                                                        setConfig({ ...config, integrationSettings: { ...config.integrationSettings, webhooks: newHooks } as any });
-                                                                    }}
-                                                                />
-                                                        </div>
-                                                        <div className="ml-10 flex items-center gap-6 pt-7">
-                                                            <label className="relative inline-flex items-center cursor-pointer">
-                                                                <input
-                                                                    type="checkbox"
-                                                                    className="sr-only peer"
-                                                                    checked={hook.enabled}
-                                                                    onChange={e => {
-                                                                        const newHooks = [...(config.integrationSettings?.webhooks || [])];
-                                                                        newHooks[index] = { ...hook, enabled: e.target.checked };
-                                                                        setConfig({ ...config, integrationSettings: { ...config.integrationSettings, webhooks: newHooks } as any });
-                                                                    }}
-                                                                />
-                                                                <div className="w-14 h-7 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-emerald-600"></div>
-                                                            </label>
-                                                            <button
-                                                                onClick={() => {
-                                                                    const newHooks = (config.integrationSettings?.webhooks || []).filter(h => h.id !== hook.id);
-                                                                    setConfig({ ...config, integrationSettings: { ...config.integrationSettings, webhooks: newHooks } as any });
-                                                                }}
-                                                                className="p-4 bg-white rounded-2xl border border-slate-200 text-slate-300 hover:text-rose-500 hover:border-rose-100 hover:bg-rose-50 transition-all shadow-sm active:scale-90"
-                                                            >
-                                                                <Trash2 size={20} />
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                    <div className="group/events">
-                                                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-5 px-1 group-hover/events:text-emerald-600 transition-colors">Trigger Events Pipeline</label>
-                                                        <div className="flex flex-wrap gap-4">
-                                                            {['sale.created', 'inventory.low', 'customer.created', 'production.complete'].map(event => (
-                                                                <button
-                                                                    key={event}
-                                                                    onClick={() => {
-                                                                        const newEvents = (hook.events || []).includes(event)
-                                                                            ? (hook.events || []).filter(e => e !== event)
-                                                                            : [...(hook.events || []), event];
-                                                                        const newHooks = [...(config.integrationSettings?.webhooks || [])];
-                                                                        newHooks[index] = { ...hook, events: newEvents };
-                                                                        setConfig({ ...config, integrationSettings: { ...config.integrationSettings, webhooks: newHooks } as any });
-                                                                    }}
-                                                                    className={`px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border ${(hook.events || []).includes(event) ? 'bg-emerald-600 text-white border-emerald-600 shadow-lg shadow-emerald-600/20' : 'bg-white text-slate-500 border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/50 hover:text-emerald-600'}`}
-                                                                >
-                                                                    {event.replace('.', ' ')}
-                                                                </button>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                            <button
-                                                onClick={() => {
-                                                    const newHooks = [...(config.integrationSettings?.webhooks || []), { id: `hook-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, url: 'https://', events: [], enabled: false }];
-                                                    setConfig({ ...config, integrationSettings: { ...config.integrationSettings, webhooks: newHooks } as any });
-                                                }}
-                                                className="w-full py-6 border-2 border-dashed border-[#D4D7DC] rounded-lg text-[#6B6C6F] font-bold uppercase text-xs tracking-widest hover:border-[#2CA01C] hover:text-[#2CA01C] hover:bg-green-50 transition-all flex items-center justify-center gap-3 active:scale-[0.98]"
-                                            >
-                                                <Plus size={20} /> Configure New Webhook Outlet
-                                            </button>
-                                        </div>
-                                    </section>
-                                </div>
+                                <IntegrationsTab config={config} setConfig={setConfig} />
                             )
                         }
 
                         {
                             activeTab === 'Notifications' && (
-                                <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4">
-                                    <section>
-                                        <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-10 flex items-center gap-3">
-                                            <Bell size={18} className="text-blue-600" /> Channel Configuration
-                                        </h3>
-                                        <div className="bg-white rounded-lg border border-[#D4D7DC] p-6 space-y-8 shadow-sm">
-                                            <div className="grid grid-cols-2 gap-10">
-                                                <div className="flex justify-between items-center p-6 bg-[#F4F5F8] rounded-lg border border-[#D4D7DC] group hover:border-[#2CA01C] transition-all">
-                                                    <div className="flex items-center gap-5">
-                                                        <div className="p-4 bg-white rounded-2xl shadow-sm text-blue-600 border border-slate-100 group-hover:scale-110 transition-transform"><Mail size={24} /></div>
-                                                        <div>
-                                                            <p className="font-black text-slate-800 uppercase text-sm tracking-tight group-hover:text-blue-600 transition-colors">Email Notifications</p>
-                                                            <p className="text-[10px] text-slate-500 mt-1 font-medium italic">Invoices, reports, and alerts.</p>
-                                                        </div>
-                                                    </div>
-                                                    <label className="relative inline-flex items-center cursor-pointer">
-                                                        <input
-                                                            type="checkbox"
-                                                            className="sr-only peer"
-                                                            checked={config.notificationSettings?.emailEnabled}
-                                                            onChange={e => setConfig({
-                                                                ...config,
-                                                                notificationSettings: {
-                                                                    ...(config.notificationSettings || { emailEnabled: false, smsEnabled: false, systemAlertsEnabled: true, syncIntervalMinutes: 30, lastSyncTimestamp: '', syncStatus: 'Idle', autoSyncEnabled: false }),
-                                                                    emailEnabled: e.target.checked
-                                                                }
-                                                            })}
-                                                        />
-                                                        <div className="w-12 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#2CA01C]"></div>
-                                                    </label>
-                                                </div>
-                                                <div className="flex justify-between items-center p-6 bg-[#F4F5F8] rounded-lg border border-[#D4D7DC] group hover:border-[#2CA01C] transition-all">
-                                                    <div className="flex items-center gap-5">
-                                                        <div className="p-4 bg-white rounded-2xl shadow-sm text-emerald-600 border border-slate-100 group-hover:scale-110 transition-transform"><MessageSquare size={24} /></div>
-                                                        <div>
-                                                            <p className="font-black text-slate-800 uppercase text-sm tracking-tight group-hover:text-emerald-600 transition-colors">SMS Notifications</p>
-                                                            <p className="text-[10px] text-slate-500 mt-1 font-medium italic">Critical alerts and OTPs.</p>
-                                                        </div>
-                                                    </div>
-                                                    <label className="relative inline-flex items-center cursor-pointer">
-                                                        <input
-                                                            type="checkbox"
-                                                            className="sr-only peer"
-                                                            checked={config.notificationSettings?.smsEnabled}
-                                                            onChange={e => setConfig({
-                                                                ...config,
-                                                                notificationSettings: {
-                                                                    ...(config.notificationSettings || { emailEnabled: false, smsEnabled: false, systemAlertsEnabled: true, syncIntervalMinutes: 30, lastSyncTimestamp: '', syncStatus: 'Idle', autoSyncEnabled: false }),
-                                                                    smsEnabled: e.target.checked
-                                                                }
-                                                            })}
-                                                        />
-                                                        <div className="w-12 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#2CA01C]"></div>
-                                                    </label>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </section>
-
-                                    <section>
-                                        <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-10 flex items-center gap-3">
-                                            <ShieldAlert size={18} className="text-rose-600" /> Alert Policy
-                                        </h3>
-                                        <div className="bg-white rounded-lg border border-[#D4D7DC] p-6 space-y-8 shadow-sm">
-                                            <div className="grid grid-cols-2 gap-10">
-                                                <div className="group/field">
-                                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 px-1 group-hover/field:text-blue-600 transition-colors">Low Stock Threshold</label>
-                                                    <div className="flex items-center gap-4">
-                                                        <input
-                                                            type="number"
-                                                            className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm outline-none focus:ring-4 focus:ring-blue-500/5 focus:border-blue-500 transition-all group-hover/field:border-blue-100"
-                                                            placeholder="e.g. 10"
-                                                            value={config.notificationSettings?.lowStockThreshold || 10}
-                                                            onChange={e => setConfig({
-                                                                ...config,
-                                                                notificationSettings: {
-                                                                    ...(config.notificationSettings || { emailEnabled: false, smsEnabled: false, systemAlertsEnabled: true, syncIntervalMinutes: 30, lastSyncTimestamp: '', syncStatus: 'Idle', autoSyncEnabled: false }),
-                                                                    lowStockThreshold: parseInt(e.target.value) || 0
-                                                                }
-                                                            })}
-                                                        />
-                                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Units</span>
-                                                    </div>
-                                                </div>
-                                                <div className="group/field">
-                                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 px-1 group-hover/field:text-blue-600 transition-colors">Large Transaction Alert</label>
-                                                    <div className="flex items-center gap-4">
-                                                        <span className="text-xs font-black text-slate-400">{config.currencySymbol}</span>
-                                                        <input
-                                                            type="number"
-                                                            className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm outline-none focus:ring-4 focus:ring-blue-500/5 focus:border-blue-500 transition-all group-hover/field:border-blue-100"
-                                                            placeholder="e.g. 5000"
-                                                            value={config.notificationSettings?.largeTransactionThreshold || 5000}
-                                                            onChange={e => setConfig({
-                                                                ...config,
-                                                                notificationSettings: {
-                                                                    ...(config.notificationSettings || { emailEnabled: false, smsEnabled: false, systemAlertsEnabled: true, syncIntervalMinutes: 30, lastSyncTimestamp: '', syncStatus: 'Idle', autoSyncEnabled: false }),
-                                                                    largeTransactionThreshold: parseInt(e.target.value) || 0
-                                                                }
-                                                            })}
-                                                        />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="h-px bg-slate-100"></div>
-                                            <div className="flex justify-between items-center group">
-                                                <div>
-                                                    <p className="font-black text-slate-800 uppercase text-base group-hover:text-blue-600 transition-colors">Daily Performance Summary</p>
-                                                    <p className="text-sm text-slate-500 mt-1 font-medium italic">Receive a consolidated report of sales and stock movements.</p>
-                                                </div>
-                                                <label className="relative inline-flex items-center cursor-pointer">
-                                                    <input
-                                                        type="checkbox"
-                                                        className="sr-only peer"
-                                                        checked={config.notificationSettings?.dailySummaryEnabled || false}
-                                                        onChange={e => setConfig({
-                                                            ...config,
-                                                            notificationSettings: {
-                                                                ...(config.notificationSettings || { customerActivityNotifications: false, smsGatewayEnabled: false, emailGatewayEnabled: false, dailySummaryEnabled: false, dailySummaryTime: '20:00', dailySummaryEmail: '' }),
-                                                                dailySummaryEnabled: e.target.checked
-                                                            }
-                                                        })}
-                                                    />
-                                                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#2CA01C]"></div>
-                                                </label>
-                                            </div>
-                                            
-                                            {config.notificationSettings?.dailySummaryEnabled && (
-                                                <div className="grid grid-cols-2 gap-4 mt-4 p-4 bg-slate-50 rounded-lg">
-                                                    <div>
-                                                        <label className="text-xs font-semibold text-slate-600 mb-1 block">Summary Time</label>
-                                                        <input
-                                                            type="time"
-                                                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
-                                                            value={config.notificationSettings?.dailySummaryTime || "20:00"}
-                                                            onChange={e => setConfig({
-                                                                ...config,
-                                                                notificationSettings: {
-                                                                    ...(config.notificationSettings || { customerActivityNotifications: false, smsGatewayEnabled: false, emailGatewayEnabled: false, dailySummaryEnabled: true, dailySummaryTime: '20:00', dailySummaryEmail: '' }),
-                                                                    dailySummaryTime: e.target.value
-                                                                }
-                                                            })}
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label className="text-xs font-semibold text-slate-600 mb-1 block">Email Address</label>
-                                                        <input
-                                                            type="email"
-                                                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
-                                                            placeholder="e.g. report@company.com"
-                                                            value={config.notificationSettings?.dailySummaryEmail || ''}
-                                                            onChange={e => setConfig({
-                                                                ...config,
-                                                                notificationSettings: {
-                                                                    ...(config.notificationSettings || { customerActivityNotifications: false, smsGatewayEnabled: false, emailGatewayEnabled: false, dailySummaryEnabled: true, dailySummaryTime: '20:00', dailySummaryEmail: '' }),
-                                                                    dailySummaryEmail: e.target.value
-                                                                }
-                                                            })}
-                                                        />
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </section>
-                                </div>
+                                <NotificationsTab config={config} setConfig={setConfig} notify={notify} />
                             )
                         }
 

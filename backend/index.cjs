@@ -280,9 +280,11 @@ app.use((req, res, next) => {
 const { auditContextMiddleware, auditAuthMiddleware, auditCrudMiddleware } = require('./auditMiddleware.cjs');
 const { validateTransactionPrice, calculateSellingPrice } = require('./services/pricingEngine.cjs');
 const { verifyToken, requireRole } = require('./middleware/auth.cjs');
+const { validateBody, sanitizeInput, inventorySchemas, salesSchemas, userSchemas, financialSchemas, productionSchemas, documentSchemas, exchangeSchemas, orderSchemas, classSchemas, subjectSchemas, notificationSchemas } = require('./middleware/validation.cjs');
+const authRoutes = require('./routes/auth.cjs');
 app.use(auditContextMiddleware);
 
-app.use('/api/auth', auditAuthMiddleware);
+app.use('/api/auth', auditAuthMiddleware, authRoutes);
 
 // CORS configuration - accepts all local/LAN origins for browser-based access
 const corsOptions = {
@@ -311,7 +313,7 @@ const corsOptions = {
     return callback(null, false);
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id', 'x-user-role', 'x-user-is-super-admin', 'x-correlation-id', 'x-dev-bypass', 'x-user-email', 'x-can-override-exam-cost', 'x-auth-mode'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id', 'x-user-role', 'x-user-email', 'x-correlation-id'],
   credentials: true
 };
 
@@ -328,8 +330,12 @@ app.use((req, res, next) => {
 app.use((req, res, next) => {
   if (req.method === 'OPTIONS') {
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-user-id, x-user-role, x-user-is-super-admin, x-correlation-id, x-dev-bypass, x-user-email, x-can-override-exam-cost, x-auth-mode');
-    res.header('Access-Control-Allow-Origin', req.headers['origin'] || '*');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-user-id, x-user-role, x-user-email, x-correlation-id');
+    // Only echo back if origin passed CORS validation (safe), otherwise deny
+    const safeOrigin = req.headers['origin']
+      ? corsOptions.origin(req.headers['origin'], (err, allowed) => allowed ? req.headers['origin'] : null)
+      : null;
+    res.header('Access-Control-Allow-Origin', safeOrigin || '');
     return res.sendStatus(204);
   }
   next();
@@ -393,8 +399,11 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json({ limit: '50mb' }));
-app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
+app.use(express.json({ limit: '5mb' }));
+app.use(bodyParser.urlencoded({ limit: '5mb', extended: true }));
+
+// Global input sanitization to prevent XSS
+app.use(sanitizeInput);
 
 const applyDocumentResponseHeaders = (res, { contentType, filename, inline = true }) => {
   const safeFilename = String(filename || 'document').replace(/"/g, '');
@@ -596,7 +605,7 @@ async function startServer() {
     );
   });
 
-  app.post('/api/sales', async (req, res) => {
+  app.post('/api/sales', validateBody(salesSchemas.sale), async (req, res) => {
     const payload = req.body || {};
     
     try {
@@ -836,7 +845,7 @@ async function startServer() {
   /**
    * Create/Edit Documents
    */
-  app.post('/api/documents/register', checkPermission('create_document'), auditCrudMiddleware('document'), async (req, res) => {
+  app.post('/api/documents/register', checkPermission('create_document'), validateBody(documentSchemas.register), auditCrudMiddleware('document'), async (req, res) => {
     try {
       const { type, payload, id } = req.body;
       if (!type || !payload) {
@@ -854,7 +863,7 @@ async function startServer() {
     }
   });
 
-  app.post('/api/documents', checkPermission('create_document'), auditCrudMiddleware('document'), async (req, res) => {
+  app.post('/api/documents', checkPermission('create_document'), validateBody(documentSchemas.create), auditCrudMiddleware('document'), async (req, res) => {
     try {
       const { type, payload } = req.body;
       const result = await documentService.createDocument(type, payload, req.userId);
@@ -865,7 +874,7 @@ async function startServer() {
     }
   });
 
-  app.put('/api/documents/:id', checkPermission('edit_document'), async (req, res) => {
+  app.put('/api/documents/:id', checkPermission('edit_document'), validateBody(documentSchemas.update), async (req, res) => {
     try {
       const { payload } = req.body;
       const result = await documentService.updateDocument(req.params.id, payload, req.userId);
@@ -879,7 +888,7 @@ async function startServer() {
   /**
    * Workflow: Finalize/Void
    */
-  app.post('/api/documents/:id/finalize', checkPermission('finalize_document'), async (req, res) => {
+  app.post('/api/documents/:id/finalize', checkPermission('finalize_document'), validateBody(documentSchemas.finalize), async (req, res) => {
     try {
       const { blueprint } = req.body;
       if (!blueprint) {
@@ -995,7 +1004,7 @@ async function startServer() {
   /**
    * Batch Operations
    */
-  app.post('/api/documents/batch/finalize', checkPermission('batch_finalize'), async (req, res) => {
+  app.post('/api/documents/batch/finalize', checkPermission('batch_finalize'), validateBody(documentSchemas.batchFinalize), async (req, res) => {
     try {
       const { ids, blueprint } = req.body;
       if (!Array.isArray(ids) || !blueprint) {
@@ -1009,7 +1018,7 @@ async function startServer() {
     }
   });
 
-  app.post('/api/documents/batch/export', checkPermission('batch_export'), async (req, res) => {
+  app.post('/api/documents/batch/export', checkPermission('batch_export'), validateBody(documentSchemas.batchExport), async (req, res) => {
     try {
       const { ids } = req.body;
       if (!Array.isArray(ids)) {
@@ -1084,7 +1093,7 @@ async function startServer() {
     }
   });
 
-  app.post('/api/sales-exchanges', checkPermission('create_exchange'), async (req, res) => {
+  app.post('/api/sales-exchanges', checkPermission('create_exchange'), validateBody(exchangeSchemas.create), async (req, res) => {
     try {
       const { 
         invoice_id, customer_id, customer_name, reason, remarks, items 
@@ -1217,7 +1226,7 @@ async function startServer() {
     });
   });
 
-  app.post('/api/sales-orders', checkPermission('create_sales_order'), async (req, res) => {
+  app.post('/api/sales-orders', checkPermission('create_sales_order'), validateBody(orderSchemas.create), async (req, res) => {
     try {
       const o = req.body || {};
       if (!o.id || !o.items || !Array.isArray(o.items) || o.items.length === 0) {
@@ -1250,7 +1259,7 @@ async function startServer() {
     }
   });
 
-  app.put('/api/sales-orders/:id', checkPermission('edit_sales_order'), (req, res) => {
+  app.put('/api/sales-orders/:id', checkPermission('edit_sales_order'), validateBody(orderSchemas.update), (req, res) => {
     const id = req.params.id;
     const o = req.body || {};
     db.run(
@@ -1396,7 +1405,7 @@ async function startServer() {
     });
   });
 
-  app.post('/api/classes', (req, res) => {
+  app.post('/api/classes', validateBody(classSchemas.create), (req, res) => {
     const { name } = req.body;
     db.run("INSERT INTO classes (name) VALUES (?)", [name], function(err) {
       if (err) return res.status(500).json({ error: err.message });
@@ -1419,7 +1428,7 @@ async function startServer() {
     });
   });
 
-  app.post('/api/subjects', (req, res) => {
+  app.post('/api/subjects', validateBody(subjectSchemas.create), (req, res) => {
     const { name, code } = req.body;
     db.run("INSERT INTO subjects (name, code) VALUES (?, ?)", [name, code], function(err) {
       if (err) return res.status(500).json({ error: err.message });
@@ -1560,13 +1569,9 @@ app.get('/api/invoices/:id/details', (req, res) => {
   // === Inventory Transaction API Endpoints ===
   
   // Create inventory transaction (deduction)
-  app.post('/api/inventory/transactions', checkPermission('create_transaction'), async (req, res) => {
+  app.post('/api/inventory/transactions', checkPermission('create_transaction'), validateBody(inventorySchemas.stockAdjustment), async (req, res) => {
     try {
       const { itemId, warehouseId, quantity, batchId, reason, reference, referenceId, performedBy, type } = req.body;
-
-      if (!itemId || !quantity || !reason) {
-        return res.status(400).json({ error: 'Missing required fields: itemId, quantity, reason' });
-      }
 
       // Get current inventory
       const item = await new Promise((resolve, reject) => {
@@ -1830,7 +1835,7 @@ app.use((err, req, res, next) => {
     method: req.method,
     url: req.originalUrl
   });
-  res.status(500).json({ error: 'Internal Server Error', message: err.message });
+  res.status(500).json({ error: 'Internal Server Error', message: 'An unexpected error occurred. Please try again later.' });
 });
 
 

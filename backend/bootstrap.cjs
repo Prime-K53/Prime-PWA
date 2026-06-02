@@ -54,6 +54,12 @@ async function bootstrap() {
     await examinationService.ensureExaminationSyncSchema();
     await examinationService.ensureExaminationPricingSchema();
     console.log('Examination module schemas initialized.');
+
+    // Initialize auth schema (users table)
+    console.log('Initializing auth schema...');
+    const authService = require('./services/authService.cjs');
+    await authService.ensureAuthSchema();
+    console.log('Auth schema initialized.');
     
     console.log('Schema verification passed.');
   } catch (err) {

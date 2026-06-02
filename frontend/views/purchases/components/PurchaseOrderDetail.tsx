@@ -13,6 +13,7 @@ import LandingCostAllocation from './LandingCostAllocation';
 import { useDocumentPreview } from '../../../hooks/useDocumentPreview';
 import { mapToInvoiceData } from '../../../utils/pdfMapper';
 import { attachDocumentSecurity } from '../../../utils/documentSecurity';
+import AIDocumentSummarizer from '../../../components/ai/AIDocumentSummarizer';
 import { useLocation } from 'react-router-dom';
 import DocLink from '../../../components/DocLink';
 
@@ -185,6 +186,7 @@ const PurchaseOrderDetail: React.FC<PurchaseOrderDetailProps> = ({ purchase, sup
                         <button onClick={handleDownloadPDF} className="p-3 hover:bg-slate-50 bg-slate-100/50 border border-slate-200/60 rounded-2xl text-slate-600 transition-all shadow-sm" title="Download PDF">
                             <Download size={20} />
                         </button>
+                        <AIDocumentSummarizer docType="Purchase Order" data={purchase} label="Summary" color="#6366f1" />
                         <button onClick={onClose} className="p-3 hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-transparent hover:border-rose-100 rounded-2xl transition-all">
                             <X size={24} />
                         </button>

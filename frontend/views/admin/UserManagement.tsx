@@ -42,11 +42,15 @@ const UserManagement: React.FC = () => {
     }
 
     setIsSaving(true);
-    await manageUser(editUser as User);
-    setIsSaving(false);
-    
-    setIsUserModalOpen(false);
     setPasswordError([]);
+    try {
+      await manageUser(editUser as User);
+      setIsUserModalOpen(false);
+    } catch (err: any) {
+      setPasswordError([err?.message || 'Failed to save user.']);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

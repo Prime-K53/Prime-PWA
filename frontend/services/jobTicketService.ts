@@ -1,4 +1,4 @@
-import { JobTicket, JobTicketSettings, JobTicketStatus, JobTicketPriority } from '../types';
+import { JobTicket, JobTicketSettings, JobTicketStatus, JobTicketPriority, JobTicketType } from '../types';
 import { generateNextId } from '../utils/helpers';
 import { localFileStorage } from './localFileStorage';
 import { dbService } from './db';

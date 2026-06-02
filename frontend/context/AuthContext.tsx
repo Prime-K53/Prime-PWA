@@ -10,6 +10,7 @@ import { isPasswordProtectionEnabled, normalizeSecuritySettings, withNormalizedS
 import { DEFAULT_SHARED_NUMBERING_RULE, normalizeCompanyNumberingConfig } from '../utils/numbering';
 import { hydrateCompanyPdfAssets } from '../utils/companyAssetUtils';
 import { supabase } from '../services/supabaseClient';
+import type { AuthResult } from '../services/supabaseAuthService';
 
 const SUPABASE_ENABLED = Boolean(
   import.meta.env.VITE_SUPABASE_URL &&
@@ -52,7 +53,7 @@ interface AuthContextType {
   
   notify: (message: string, type: 'success' | 'error' | 'info' | 'warning') => void;
   clearNotification: () => void;
-  login: (username: string, password?: string, mfaCode?: string) => Promise<'SUCCESS' | 'INVALID' | 'MFA_REQUIRED' | 'EXPIRED'>;
+  login: (username: string, password?: string, mfaCode?: string) => Promise<'SUCCESS' | 'INVALID' | 'MFA_REQUIRED' | 'EXPIRED' | 'EMAIL_NOT_VERIFIED'>;
   logout: () => void;
   checkPermission: (permissionId: string) => boolean;
   validatePasswordStrength: (password: string) => { valid: boolean; errors: string[] };
@@ -78,6 +79,17 @@ interface AuthContextType {
   
   connectDbSync: () => Promise<void>;
   manualDownloadBackup: () => Promise<void>;
+
+  signUpSupabase: (email: string, password: string, metadata?: Record<string, any>) => Promise<AuthResult>;
+  verifyEmailOtp: (email: string, token: string) => Promise<AuthResult>;
+  resendOtp: (email: string, type?: 'signup' | 'recovery') => Promise<AuthResult>;
+  sendPasswordResetOtp: (email: string) => Promise<AuthResult>;
+  verifyResetOtp: (email: string, token: string) => Promise<AuthResult>;
+  updatePasswordAfterReset: (password: string) => Promise<AuthResult>;
+  needsEmailVerification: boolean;
+  setNeedsEmailVerification: (v: boolean) => void;
+  verifyingEmail: string;
+  setVerifyingEmail: (v: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -98,6 +110,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [passwordPolicy, setPasswordPolicy] = useState<PasswordPolicy>({ minLength: 8, requireSpecialChar: true, requireNumber: true, expirationDays: 90 });
   
   const defaultCompanyConfig = {
+      companyId: `company_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
       companyName: 'Prime ERP', 
       country: 'Malawi', 
       addressLine1: 'Main Street', 
@@ -261,9 +274,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
   const [dbSyncStatus, setDbSyncStatus] = useState<'idle' | 'connected' | 'syncing' | 'error' | 'restricted'>('idle');
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(localStorage.getItem('nexus_last_sync'));
+  const [needsEmailVerification, setNeedsEmailVerification] = useState(false);
+  const [verifyingEmail, setVerifyingEmail] = useState('');
 
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
+    const handleOnline = async () => {
+      setIsOnline(true);
+      if (SUPABASE_ENABLED && user) {
+        try {
+          const { fullSync } = await import('../services/syncService');
+          await fullSync();
+        } catch {}
+      }
+      try {
+        const { customerNotificationService } = await import('../services/customerNotificationService');
+        await customerNotificationService.processPendingNotifications();
+      } catch {}
+    };
     const handleOffline = () => setIsOnline(false);
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
@@ -272,7 +299,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, []);
+  }, [user]);
 
   const syncSupabaseUserToLocal = useCallback(async (supabaseUser: import('@supabase/supabase-js').User): Promise<User | null> => {
     try {
@@ -339,8 +366,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               }
             }));
             parsedConfig = await hydrateCompanyPdfAssets(parsedConfig);
+            // Ensure companyId exists for multi-tenant isolation
+            if (!parsedConfig.companyId) {
+              parsedConfig.companyId = `company_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+            }
             setCompanyConfig(parsedConfig);
             localStorage.setItem('nexus_company_config', JSON.stringify(parsedConfig));
+            dbService.setCurrentCompanyId(parsedConfig.companyId);
           } catch (err) {
             console.error("[Auth] Failed to parse company config:", err);
           }
@@ -428,8 +460,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (SUPABASE_ENABLED && setupComplete) {
           try {
-            const { startPeriodicSync } = await import('../services/syncService');
-            console.log("[Auth] Sync service available (data syncing to Supabase is ready)");
+            const { startPeriodicSync, fullSync } = await import('../services/syncService');
+            startPeriodicSync();
+            fullSync().then(result => {
+              if (result.pulled > 0 || result.pushed > 0) {
+                console.log(`[Auth] Initial Supabase sync: ${result.pulled} pulled, ${result.pushed} pushed`);
+              }
+            }).catch(err => console.warn('[Auth] Initial sync failed:', err));
           } catch (syncErr) {
             console.warn("[Auth] Sync service init skipped:", syncErr);
           }
@@ -503,71 +540,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await dbService.put('auditLogs', entry);
   }, [user]);
 
-  const login = useCallback(async (username: string, password?: string, mfaCode?: string): Promise<'SUCCESS' | 'INVALID' | 'MFA_REQUIRED' | 'EXPIRED'> => {
+  const login = useCallback(async (username: string, password?: string, mfaCode?: string): Promise<'SUCCESS' | 'INVALID' | 'MFA_REQUIRED' | 'EXPIRED' | 'EMAIL_NOT_VERIFIED'> => {
     try {
         if (requiresSetup) {
             return 'INVALID';
         }
 
         if (SUPABASE_ENABLED) {
-          if (!password) {
-            const dbUsersLocal = await dbService.getAll<User>('users');
-            const localFound = dbUsersLocal.find(u => u.username.toLowerCase() === username.toLowerCase());
-            if (localFound && !localFound.password) {
-              setUser({ ...localFound, authMode: 'local' });
-              return 'SUCCESS';
-            }
-            return 'INVALID';
-          }
+          if (!password) return 'INVALID';
           const email = getEmailForUser(username);
           const { data: signInData, error } = await supabase.auth.signInWithPassword({
             email,
             password,
           });
           if (error) {
-            const dbUsersLocal = await dbService.getAll<User>('users');
-            const localFound = dbUsersLocal.find(u => u.username.toLowerCase() === username.toLowerCase());
-            if (localFound && localFound.password) {
-              const hashPassword = async (text: string): Promise<string> => {
-                if (!text) return '';
-                if (!window.isSecureContext || !crypto.subtle) {
-                  let hash = 0;
-                  const salt = 'PrimeERP2024';
-                  for (let i = 0; i < text.length; i++) {
-                    const code = text.charCodeAt(i);
-                    hash = ((hash << 7) - hash) + code + (salt.charCodeAt(i % salt.length) << 4);
-                    hash = hash & 0x7FFFFFFF;
-                  }
-                  let h2 = 0;
-                  for (let i = 0; i < text.length; i++) {
-                    h2 = ((h2 << 5) - h2) + text.charCodeAt(i);
-                    h2 = h2 & 0x7FFFFFFF;
-                  }
-                  return `INSECURE_${Math.abs(hash).toString(16).padStart(8, '0')}${Math.abs(h2).toString(16).padStart(8, '0')}`;
-                }
-                const msgBuffer = new TextEncoder().encode(text);
-                const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-                const hashArray = Array.from(new Uint8Array(hashBuffer));
-                return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-              };
-              const isStoredHash = (value?: string) => !value ? false : value.startsWith('insecure_') || /^[a-f0-9]{64}$/i.test(value);
-              const hashedInput = await hashPassword(password);
-              const expectedPassword = isStoredHash(localFound.password) ? localFound.password : await hashPassword(localFound.password);
-              if (expectedPassword === hashedInput) {
-                setUser({ ...localFound, authMode: 'local' });
-                return 'SUCCESS';
-              }
+            if (error.message?.toLowerCase().includes('email not confirmed')) {
+              setNeedsEmailVerification(true);
+              setVerifyingEmail(email);
             }
-            return 'INVALID';
+            if (!error.message?.toLowerCase().includes('email not confirmed')) {
+              return 'INVALID';
+            }
           }
-          if (signInData?.user) {
+          if (signInData?.user?.email_confirmed_at) {
             const localUsers = await dbService.getAll<User>('users');
             const match = localUsers.find(u => u.email === signInData.user!.email || u.id === signInData.user!.id);
             if (match) {
               setUser({ ...match, id: signInData.user.id, authMode: 'supabase' });
+            } else {
+              const profile = await syncSupabaseUserToLocal(signInData.user);
+              if (profile) setUser({ ...profile, authMode: 'supabase' });
             }
+            return 'SUCCESS';
           }
-          return 'SUCCESS';
+          setNeedsEmailVerification(false);
+          setVerifyingEmail('');
         }
 
         const dbUsers = await dbService.getAll<User>('users');
@@ -681,7 +688,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const checkPermission = useCallback((permissionId: string) => {
     if (!user) return false;
-    if (user.role === 'Admin' || user.isSuperAdmin || user.username.toLowerCase() === 'admin') return true;
+    if (user.role === 'Admin' || user.isSuperAdmin || user.username?.toLowerCase() === 'admin') return true;
     const groups = userGroups.filter(g => user.groupIds?.includes(g.id));
     return groups.some(g => g.permissions.includes(permissionId));
   }, [user, userGroups]);
@@ -697,6 +704,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const manageUser = async (u: User) => {
     const userData = { ...u, id: u.id || generateNextId('USR', allUsers, companyConfig) };
 
+    // Check username uniqueness (exclude current user's ID on edit)
+    const existingUsername = allUsers.find(
+      existing => existing.username.toLowerCase() === userData.username.toLowerCase() && existing.id !== userData.id
+    );
+    if (existingUsername) {
+      throw new Error(`Username "${userData.username}" is already taken.`);
+    }
+
+    // Check email uniqueness if provided
+    if (userData.email) {
+      const existingEmail = allUsers.find(
+        existing => existing.email?.toLowerCase() === userData.email.toLowerCase() && existing.id !== userData.id
+      );
+      if (existingEmail) {
+        throw new Error(`Email "${userData.email}" is already in use.`);
+      }
+    }
+
     if (SUPABASE_ENABLED && u.password) {
       const email = getEmailForUser(u.email || u.username);
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
@@ -709,26 +734,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             role: u.role,
             is_super_admin: u.isSuperAdmin,
             group_ids: u.groupIds,
+            company_id: companyConfig?.companyId || '',
           }
         }
       });
       if (signUpError) {
-        console.error('[Auth] Failed to create Supabase auth user:', signUpError);
-      } else if (signUpData?.user) {
-        try {
-          await supabase.from('users').insert({
-            id: signUpData.user.id,
-            username: u.username || signUpData.user.email?.split('@')[0] || 'user',
-            full_name: u.fullName || u.name,
-            name: u.fullName || u.name,
-            email: signUpData.user.email || u.email,
-            role: u.role || 'User',
-            is_super_admin: u.isSuperAdmin || false,
-            group_ids: u.groupIds || [],
-          });
-        } catch (profileErr) {
-          console.error('[Auth] Failed to create user profile:', profileErr);
+        if (signUpError.message?.includes('already')) {
+          console.warn('[Auth] Supabase user already exists, skipping cloud profile creation.');
+        } else {
+          console.error('[Auth] Failed to create Supabase auth user:', signUpError);
+          throw new Error(`Failed to create Supabase user: ${signUpError.message}`);
         }
+      } else if (signUpData?.user) {
+        console.log('[Auth] Supabase auth user created, trigger handles profile sync:', signUpData.user.id);
       }
     }
 
@@ -827,14 +845,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const completeSetup = async (config: CompanyConfig, adminUser: User) => {
+    // Multi-tenant: migrate existing data to old companyId before creating new company
+    const oldConfigRaw = localStorage.getItem('nexus_company_config');
+    if (oldConfigRaw) {
+      try {
+        const oldConfig = JSON.parse(oldConfigRaw);
+        const oldCompanyId = oldConfig.companyId || `company_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+        await dbService.stampAllRecordsWithCompany(oldCompanyId);
+      } catch { /* best-effort migration */ }
+    }
+
+    const newCompanyId = `company_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+
     const normalizedConfig: CompanyConfig = withNormalizedSecurityConfig(normalizeCompanyNumberingConfig({
       ...defaultCompanyConfig,
       ...config,
+      companyId: newCompanyId,
       pricingSettings: {
         ...DEFAULT_PRICING_SETTINGS,
         ...(config.pricingSettings || {})
       }
     }));
+
+    // Set companyId on dbService so new records get stamped
+    dbService.setCurrentCompanyId(newCompanyId);
 
     if (userGroups.length === 0) {
       for (const group of INITIAL_USER_GROUPS) {
@@ -908,12 +942,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await dbService.downloadBackupManual();
   };
 
+  const signUpSupabase = async (email: string, password: string, metadata?: Record<string, any>) => {
+    const { signUp } = await import('../services/supabaseAuthService');
+    return signUp(email, password, metadata);
+  };
+
+  const verifyEmailOtp = async (email: string, token: string) => {
+    const { verifyOtp } = await import('../services/supabaseAuthService');
+    return verifyOtp(email, token, 'signup');
+  };
+
+  const resendOtpFn = async (email: string, type: 'signup' | 'recovery' = 'signup') => {
+    const { resendOtp } = await import('../services/supabaseAuthService');
+    return resendOtp(email, type);
+  };
+
+  const sendPasswordResetOtp = async (email: string) => {
+    const { sendPasswordResetOtp: sendFn } = await import('../services/supabaseAuthService');
+    return sendFn(email);
+  };
+
+  const verifyResetOtp = async (email: string, token: string) => {
+    const { verifyOtp } = await import('../services/supabaseAuthService');
+    return verifyOtp(email, token, 'recovery');
+  };
+
+  const updatePasswordAfterReset = async (password: string) => {
+    const { updatePassword } = await import('../services/supabaseAuthService');
+    return updatePassword(password);
+  };
+
   const value = {
     user, allUsers, userGroups, passwordPolicy, companyConfig, requiresSetup, notification, auditLogs, alerts, isInitialized, activeFinancialYear, reminders, isOnline, dbSyncStatus, lastSyncTime,
     notify, clearNotification, login, logout, checkPermission, validatePasswordStrength,
     manageUser, deleteUser, manageUserGroup, deleteUserGroup, updatePasswordPolicy, updateCompanyConfig,
     addAuditLog, addAlert, dismissAlert, clearAlerts, resetSystem, completeSetup, setFinancialYear,
-    addReminder, toggleReminder, deleteReminder, connectDbSync, manualDownloadBackup
+    addReminder, toggleReminder, deleteReminder, connectDbSync, manualDownloadBackup,
+    signUpSupabase, verifyEmailOtp, resendOtp: resendOtpFn, sendPasswordResetOtp, verifyResetOtp, updatePasswordAfterReset,
+    needsEmailVerification, setNeedsEmailVerification, verifyingEmail, setVerifyingEmail,
   };
 
   return (

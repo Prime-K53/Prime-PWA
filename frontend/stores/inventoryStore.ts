@@ -5,6 +5,7 @@ import { api } from '../services/api';
 import { dbService } from '../services/db';
 import { INITIAL_INVENTORY, MOCK_WAREHOUSES } from '../constants';
 import { generateNextId } from '../utils/helpers';
+
 import { transactionService } from '../services/transactionService';
 import { normalizeInventoryItemPricing } from '../utils/pricing';
 import {
@@ -68,17 +69,29 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
 
   addItem: async (item: Item) => {
     const newItem = { ...item, id: item.id || generateNextId('ITM', get().inventory) };
+    const prevInv = get().inventory;
     set(state => ({ inventory: [...state.inventory, newItem] }));
-    await api.inventory.createItem(newItem);
+    try {
+      await api.inventory.createItem(newItem);
+    } catch (error) {
+      set({ inventory: prevInv });
+      throw error;
+    }
     await get().fetchInventory();
   },
 
   updateItem: async (item: Item) => {
     const previous = get().inventory.find(i => i.id === item.id);
+    const prevInv = get().inventory;
     set(state => ({
       inventory: state.inventory.map(i => i.id === item.id ? item : i)
     }));
-    await api.inventory.updateItem(item);
+    try {
+      await api.inventory.updateItem(item);
+    } catch (error) {
+      set({ inventory: prevInv });
+      throw error;
+    }
     await get().fetchInventory();
 
     const previousCost = Number(previous?.cost_price ?? previous?.cost ?? 0);
@@ -107,15 +120,27 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
       set({ error: 'Cannot delete protected item' });
       throw new Error('Cannot delete protected item');
     }
+    const prevInv = get().inventory;
     set(state => ({
       inventory: state.inventory.filter(i => i.id !== id)
     }));
-    await api.inventory.deleteItem(id);
+    try {
+      await api.inventory.deleteItem(id);
+    } catch (error) {
+      set({ inventory: prevInv });
+      throw error;
+    }
   },
 
   addWarehouse: async (warehouse: Warehouse) => {
+    const prevWh = get().warehouses;
     set(state => ({ warehouses: [...state.warehouses, warehouse] }));
-    await api.inventory.saveWarehouse(warehouse);
+    try {
+      await api.inventory.saveWarehouse(warehouse);
+    } catch (error) {
+      set({ warehouses: prevWh });
+      throw error;
+    }
   },
 
   updateStock: async (itemId: string, quantityChange: number, locationId: string = 'WH-MAIN', variantId?: string) => {

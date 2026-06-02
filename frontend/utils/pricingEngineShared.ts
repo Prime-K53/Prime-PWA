@@ -65,9 +65,50 @@ export const calculatePricingAdjustmentTotal = (
   );
 };
 
-export const resolveVolumeMarginValue = (pages: number) => {
-  if (pages >= 500) return 25;
-  if (pages >= 250) return 15;
-  if (pages >= 180) return 10;
+const VOLUME_TIERS_LOCAL_KEY = 'nexus_volume_discount_tiers';
+
+export const DEFAULT_VOLUME_DISCOUNT_TIERS = [
+  { minPages: 500, discountPercent: 25 },
+  { minPages: 250, discountPercent: 15 },
+  { minPages: 180, discountPercent: 10 },
+];
+
+export const getSavedVolumeDiscountTiers = (): Array<{ minPages: number; discountPercent: number }> => {
+  try {
+    const raw = localStorage.getItem(VOLUME_TIERS_LOCAL_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    return [];
+  } catch {
+    return [];
+  }
+};
+
+export const saveVolumeDiscountTiers = (
+  tiers: Array<{ minPages: number; discountPercent: number }>
+): void => {
+  try {
+    localStorage.setItem(VOLUME_TIERS_LOCAL_KEY, JSON.stringify(tiers));
+  } catch { /* non-fatal */ }
+};
+
+export const getVolumeDiscountTiers = (
+  companyConfig?: any
+): Array<{ minPages: number; discountPercent: number }> => {
+  const saved = getSavedVolumeDiscountTiers();
+  if (saved.length > 0) return saved;
+  return companyConfig?.pricingSettings?.volumeDiscountTiers || DEFAULT_VOLUME_DISCOUNT_TIERS;
+};
+
+export const resolveVolumeMarginValue = (
+  pages: number,
+  tiers?: Array<{ minPages: number; discountPercent: number }>
+): number => {
+  const effectiveTiers = tiers || DEFAULT_VOLUME_DISCOUNT_TIERS;
+  const sorted = [...effectiveTiers].sort((a, b) => b.minPages - a.minPages);
+  for (const tier of sorted) {
+    if (pages >= tier.minPages) return tier.discountPercent;
+  }
   return 0;
 };

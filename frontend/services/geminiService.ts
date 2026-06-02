@@ -1,476 +1,300 @@
-import { GoogleGenAI } from "@google/genai";
-import { OFFLINE_MODE } from "../constants";
-
-const getClient = () => {
-  if (OFFLINE_MODE) return null;
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (process.env as any).VITE_GEMINI_API_KEY;
-  if (!apiKey || apiKey === 'PLACEHOLDER_API_KEY') {
-    throw new Error("Gemini API Key is not configured. Please add VITE_GEMINI_API_KEY to your .env.local file.");
-  }
-  return new GoogleGenAI({ apiKey });
-};
-
-const getResponseText = (response: any): string => {
-    const t = response?.text;
-    if (typeof t === 'string') return t;
-    if (typeof t === 'function') return t() || "";
-    const legacy = response?.response?.text;
-    if (typeof legacy === 'function') return legacy() || "";
-    if (typeof legacy === 'string') return legacy;
-    return "";
-};
-
-const makeUserContents = (parts: any[]) => [{ role: 'user', parts }];
-
-// Helper to extract MIME type from Base64 string
-const getMimeType = (base64String: string, defaultType: string = 'image/jpeg'): string => {
-    if (base64String.startsWith('data:')) {
-        const match = base64String.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,/);
-        if (match) return match[1];
-    }
-    if (base64String.startsWith('/9j/')) return 'image/jpeg';
-    if (base64String.startsWith('iVBORw0KGgo')) return 'image/png';
-    return defaultType;
-};
-
-const getCleanBase64 = (base64String: string): string => {
-    return base64String.includes('base64,') ? base64String.split('base64,')[1] : base64String;
-};
-
 /**
- * Generator for streaming responses to handle long-form architectural docs
+ * AI Service — Backward-Compatible Facade
+ *
+ * All exports match the original Gemini-only service so consuming components
+ * work without changes. Under the hood it delegates to the provider-agnostic
+ * AI service layer.
+ *
+ * Providers: openrouter (default), ollama, openai, zai, opencode, gemini, custom
  */
-export async function* streamSystemDoc(prompt: string) {
-  if (OFFLINE_MODE) {
-    yield "System documentation generation is unavailable in offline mode.";
-    return;
-  }
-  try {
-    const genAI = getClient();
-    if (!genAI) throw new Error("AI Client unavailable");
-    const result: any = await genAI.models.generateContentStream({
-        model: 'gemini-1.5-pro',
-        contents: prompt,
-        config: {
-            systemInstruction: "You are a Senior Software Architect and Database Engineer. Your output should be professional, technical, and formatted in Markdown."
-        }
-    });
 
-    const stream: any = result?.stream ?? result;
-    for await (const chunk of stream) {
-        const chunkText = typeof chunk?.text === 'function' ? chunk.text() : (chunk?.text ?? "");
-        yield chunkText || "";
+import { aiService } from './ai/aiService';
+import type { ProviderName } from './ai/types';
+
+export function setAIProvider(name: ProviderName) {
+  aiService.setProvider(name);
+}
+
+export function configureAI(config: { apiKey?: string; model?: string; baseUrl?: string }) {
+  aiService.configure(config);
+}
+
+/* ───────── Provider presets ───────── */
+
+export interface ProviderOption {
+  value: ProviderName;
+  label: string;
+  desc: string;
+  defaultBaseUrl: string;
+  needsApiKey: boolean;
+}
+
+export const AI_PROVIDER_OPTIONS: ProviderOption[] = [
+  { value: 'openrouter', label: 'OpenRouter', desc: 'Routes to 300+ models — paid & free', defaultBaseUrl: 'https://openrouter.ai/api/v1', needsApiKey: true },
+  { value: 'openai', label: 'OpenAI', desc: 'Direct OpenAI API (GPT-4o, o3, etc.)', defaultBaseUrl: 'https://api.openai.com/v1', needsApiKey: true },
+  { value: 'ollama', label: 'Ollama', desc: 'Local LLMs (Llama, Mistral, Qwen, etc.)', defaultBaseUrl: 'http://localhost:11434/v1', needsApiKey: false },
+  { value: 'zai', label: 'Z.AI', desc: 'Z.AI API (includes free GLM models)', defaultBaseUrl: 'https://open.bigmodel.cn/api/paas/v4', needsApiKey: true },
+  { value: 'opencode', label: 'Opencode', desc: 'Opencode AI service', defaultBaseUrl: 'https://api.opencode.ai/v1', needsApiKey: true },
+  { value: 'gemini', label: 'Google Gemini', desc: 'Google Gemini native API', defaultBaseUrl: '', needsApiKey: true },
+  { value: 'custom', label: 'Custom', desc: 'Any OpenAI-compatible API endpoint', defaultBaseUrl: 'https://', needsApiKey: false },
+];
+
+/* ───────── Live model fetching ───────── */
+
+export interface ModelEntry {
+  value: string;
+  label: string;
+  tier: 'paid' | 'free' | 'local';
+}
+
+export async function fetchModels(provider: ProviderName, baseUrl: string, apiKey?: string): Promise<ModelEntry[]> {
+  const staticList = STATIC_MODELS[provider] || [];
+
+  try {
+    if (provider === 'ollama') {
+      const ollamaBase = baseUrl.replace(/\/v1\/?$/, '').replace(/\/+$/, '');
+      const res = await fetch(`${ollamaBase}/api/tags`, { signal: AbortSignal.timeout(5000) });
+      if (res.ok) {
+        const data = await res.json();
+        return (data.models || []).map((m: any) => ({
+          value: m.name,
+          label: m.name + (m.details?.parameter_size ? ` (${m.details.parameter_size})` : ''),
+          tier: 'local' as const,
+        }));
+      }
+      return staticList;
     }
-  } catch (error) {
-    console.error("Gemini Streaming Error:", error);
-    yield "Error generating stream. Check API key.";
+
+    if (provider === 'gemini') {
+      return [
+        { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash', tier: 'paid' },
+        { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro', tier: 'paid' },
+        { value: 'gemini-2.0-flash-exp', label: 'Gemini 2.0 Flash (Exp)', tier: 'free' },
+        { value: 'gemini-2.0-pro-exp-02-05', label: 'Gemini 2.0 Pro (Exp)', tier: 'free' },
+      ];
+    }
+
+    if (provider === 'custom') return staticList;
+
+    // OpenAI-compatible models endpoint
+    const base = baseUrl.replace(/\/+$/, '');
+    const modelsUrl = `${base}/models`;
+    const headers: Record<string, string> = {};
+    if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+
+    const res = await fetch(modelsUrl, { headers, signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return staticList;
+    const data = await res.json();
+    const list: any[] = data?.data || data?.models || [];
+    if (list.length === 0) return staticList;
+
+    const live = list.map((m: any) => {
+      const id = m.id || m.name || '';
+      const pricing = m.pricing || {};
+      const isFree = pricing.prompt === 0 || pricing.prompt === '0';
+      return { value: id, label: m.name || m.id || '', tier: isFree ? 'free' as const : 'paid' as const };
+    }).filter((m: ModelEntry) => m.value);
+
+    // Merge: live models take priority, append any static models not in the live list
+    const liveIds = new Set(live.map(m => m.value));
+    return [...live, ...staticList.filter(m => !liveIds.has(m.value))];
+  } catch {
+    return staticList.length > 0 ? staticList : [];
   }
 }
 
-export const generateSystemDoc = async (prompt: string): Promise<string> => {
-  if (OFFLINE_MODE) return "Documentation generation is disabled in offline mode.";
+/* ───────── Static model lists (fallback) ───────── */
+
+const STATIC_MODELS: Record<string, ModelEntry[]> = {
+  openai: [
+    { value: 'gpt-4o', label: 'GPT-4o', tier: 'paid' },
+    { value: 'gpt-4o-mini', label: 'GPT-4o Mini', tier: 'paid' },
+    { value: 'gpt-4o-audio-preview', label: 'GPT-4o Audio', tier: 'paid' },
+    { value: 'gpt-4o-realtime-preview', label: 'GPT-4o Realtime', tier: 'paid' },
+    { value: 'gpt-4o-mini-realtime-preview', label: 'GPT-4o Mini Realtime', tier: 'paid' },
+    { value: 'gpt-4.1', label: 'GPT-4.1', tier: 'paid' },
+    { value: 'gpt-4.1-mini', label: 'GPT-4.1 Mini', tier: 'paid' },
+    { value: 'gpt-4.1-nano', label: 'GPT-4.1 Nano', tier: 'paid' },
+    { value: 'gpt-4-turbo', label: 'GPT-4 Turbo', tier: 'paid' },
+    { value: 'gpt-4', label: 'GPT-4', tier: 'paid' },
+    { value: 'o3-mini', label: 'o3 Mini', tier: 'paid' },
+    { value: 'o3', label: 'o3', tier: 'paid' },
+    { value: 'o1', label: 'o1', tier: 'paid' },
+    { value: 'o1-mini', label: 'o1 Mini', tier: 'paid' },
+    { value: 'o1-pro', label: 'o1 Pro', tier: 'paid' },
+  ],
+  zai: [
+    { value: 'glm-4-plus', label: 'GLM-4-Plus', tier: 'paid' },
+    { value: 'glm-4-air', label: 'GLM-4-Air', tier: 'free' },
+    { value: 'glm-4-airx', label: 'GLM-4-AirX', tier: 'free' },
+    { value: 'glm-4-flash', label: 'GLM-4-Flash', tier: 'free' },
+    { value: 'glm-4-flashx', label: 'GLM-4-FlashX', tier: 'free' },
+    { value: 'glm-4-long', label: 'GLM-4-Long', tier: 'paid' },
+    { value: 'glm-4', label: 'GLM-4', tier: 'paid' },
+    { value: 'glm-4v-plus', label: 'GLM-4V-Plus (vision)', tier: 'paid' },
+    { value: 'glm-4v', label: 'GLM-4V (vision)', tier: 'paid' },
+    { value: 'cogview-3-plus', label: 'CogView-3-Plus (image gen)', tier: 'paid' },
+  ],
+  opencode: [
+    { value: 'opencode-default', label: 'Opencode Default (Cloud)', tier: 'paid' },
+    { value: 'opencode-fast', label: 'Opencode Fast (Cloud)', tier: 'free' },
+    { value: 'local-opencode', label: 'Local Opencode Server', tier: 'local' },
+  ],
+  ollama: [
+    { value: 'llama3.2', label: 'Llama 3.2', tier: 'local' },
+    { value: 'llama3.1', label: 'Llama 3.1', tier: 'local' },
+    { value: 'llama3', label: 'Llama 3', tier: 'local' },
+    { value: 'mistral', label: 'Mistral', tier: 'local' },
+    { value: 'mixtral', label: 'Mixtral', tier: 'local' },
+    { value: 'qwen2.5', label: 'Qwen 2.5', tier: 'local' },
+    { value: 'qwen2', label: 'Qwen 2', tier: 'local' },
+    { value: 'deepseek-r1', label: 'DeepSeek R1', tier: 'local' },
+    { value: 'codellama', label: 'Code Llama', tier: 'local' },
+    { value: 'gemma2', label: 'Gemma 2', tier: 'local' },
+    { value: 'phi3', label: 'Phi-3', tier: 'local' },
+    { value: 'nemotron-mini', label: 'Nemotron Mini', tier: 'local' },
+  ],
+};
+
+/* ───────── Local Opencode server detection ───────── */
+
+export async function detectLocalOpencodeServer(): Promise<boolean> {
   try {
-    const genAI = getClient();
-    if (!genAI) throw new Error("AI Client unavailable");
-    const response: any = await genAI.models.generateContent({
-        model: 'gemini-1.5-pro',
-        contents: prompt,
-        config: {
-            systemInstruction: "You are a Senior Software Architect. Professional Markdown output required."
-        }
+    const res = await fetch('http://localhost:4096/global/health', {
+      signal: AbortSignal.timeout(3000),
     });
-    return getResponseText(response) || "No response generated.";
-  } catch (error) {
-    console.error("Gemini API Error:", error);
-    return "Error generating documentation.";
+    return res.ok;
+  } catch {
+    return false;
   }
-};
+}
 
-export const generateAIResponse = async (prompt: string, systemInstruction?: string): Promise<string> => {
-  if (OFFLINE_MODE) return "AI services are currently offline. Please check your connection or switch to online mode for AI assistance.";
-  
+export async function fetchLocalOpencodeModels(): Promise<ModelEntry[]> {
   try {
-    const genAI = getClient();
-    if (!genAI) throw new Error("AI Client unavailable");
-    const response: any = await genAI.models.generateContent({
-        model: 'gemini-1.5-flash',
-        contents: prompt,
-        config: {
-            systemInstruction: systemInstruction || "You are a helpful AI assistant for a business ERP system."
-        }
+    const res = await fetch('http://localhost:4096/project/current', {
+      signal: AbortSignal.timeout(3000),
     });
-    return getResponseText(response) || "No response generated.";
-  } catch (error) {
-    console.error("Gemini API Error:", error);
-    return "Unable to connect to AI service.";
+    if (!res.ok) return [];
+    const data = await res.json();
+    const models: string[] = data?.models || data?.config?.models || [];
+    return models.map(m => ({ value: m, label: m, tier: 'local' as const }));
+  } catch {
+    return [];
   }
-};
+}
 
-export const extractInvoiceData = async (imageBase64: string): Promise<any> => {
-  if (OFFLINE_MODE) return null;
-  try {
-    const genAI = getClient();
-    const mimeType = getMimeType(imageBase64, 'image/jpeg');
-    const cleanBase64 = getCleanBase64(imageBase64);
-    
-    const prompt = `Extract invoice/purchase order data in JSON format for an ERP system. 
-    Required fields: { 
-      "number": "string (invoice/PO number)", 
-      "date": "YYYY-MM-DD", 
-      "clientName": "string (the name of the entity the document is addressed to or issued by)", 
-      "supplierName": "string (alias for clientName, useful for POs)",
-      "address": "string", 
-      "items": [{ "desc": "string", "name": "string (alias for desc)", "qty": number, "price": number, "unitPrice": number (alias for price), "total": number }],
-      "subtotal": number,
-      "totalAmount": number,
-      "reference": "string"
-    }`;
-    
-    const response: any = await genAI.models.generateContent({
-        model: 'gemini-1.5-flash',
-        contents: makeUserContents([
-            { text: prompt },
-            { inlineData: { data: cleanBase64, mimeType } }
-        ])
-    });
-    const text = getResponseText(response);
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    return jsonMatch ? JSON.parse(jsonMatch[0]) : null;
-  } catch (error) {
-    console.error("OCR Extraction Error:", error);
-    return null;
-  }
-};
+export const FALLBACK_OPENROUTER_MODELS: ModelEntry[] = [
+  { value: 'openai/gpt-4o', label: 'OpenAI GPT-4o', tier: 'paid' },
+  { value: 'openai/gpt-4o-mini', label: 'OpenAI GPT-4o Mini', tier: 'paid' },
+  { value: 'openai/o3-mini', label: 'OpenAI o3 Mini', tier: 'paid' },
+  { value: 'anthropic/claude-3.5-sonnet', label: 'Claude 3.5 Sonnet', tier: 'paid' },
+  { value: 'anthropic/claude-3.5-haiku', label: 'Claude 3.5 Haiku', tier: 'paid' },
+  { value: 'google/gemini-2.0-flash-001', label: 'Gemini 2.0 Flash', tier: 'paid' },
+  { value: 'deepseek/deepseek-r1:free', label: 'DeepSeek R1 (Free)', tier: 'free' },
+  { value: 'deepseek/deepseek-chat-v3-0324:free', label: 'DeepSeek Chat V3 (Free)', tier: 'free' },
+  { value: 'meta-llama/llama-4-maverick:free', label: 'Llama 4 Maverick 1M ctx (Free)', tier: 'free' },
+  { value: 'meta-llama/llama-4-scout:free', label: 'Llama 4 Scout (Free)', tier: 'free' },
+  { value: 'qwen/qwen3-235b-a22b:free', label: 'Qwen3 235B (Free)', tier: 'free' },
+  { value: 'qwen/qwen3-coder:free', label: 'Qwen3 Coder (Free)', tier: 'free' },
+  { value: 'x-ai/grok-3-mini-beta:free', label: 'Grok 3 Mini (Free)', tier: 'free' },
+  { value: 'google/gemma-3-27b-it:free', label: 'Gemma 3 27B (Free)', tier: 'free' },
+  { value: 'mistralai/mistral-small-3.1-24b-instruct:free', label: 'Mistral Small 3.1 24B (Free)', tier: 'free' },
+];
 
-export const extractPaymentProofData = async (imageBase64: string): Promise<any> => {
-  if (OFFLINE_MODE) return null;
-  try {
-    const genAI = getClient();
-    const mimeType = getMimeType(imageBase64, 'image/jpeg');
-    const cleanBase64 = getCleanBase64(imageBase64);
+export function getCurrentProvider(): ProviderName {
+  return (
+    (import.meta.env.VITE_AI_PROVIDER as ProviderName) ||
+    (process.env as any).VITE_AI_PROVIDER ||
+    'openrouter'
+  );
+}
 
-    const prompt = `Extract payment proof details in JSON: { "amount": number, "date": "YYYY-MM-DD", "description": "string", "category": "string" }`;
+/* ───────── Exported functions (backward-compatible) ───────── */
 
-    const response: any = await genAI.models.generateContent({
-        model: 'gemini-1.5-flash',
-        contents: makeUserContents([
-            { text: prompt },
-            { inlineData: { data: cleanBase64, mimeType } }
-        ])
-    });
-    const text = getResponseText(response);
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    return jsonMatch ? JSON.parse(jsonMatch[0]) : null;
-  } catch (error) {
-    console.error("Payment Proof Extraction Error:", error);
-    return null;
-  }
-};
+export async function* streamSystemDoc(prompt: string) {
+  yield* aiService.streamSystemDoc(prompt);
+}
 
-export const extractDeliveryNoteData = async (fileBase64: string): Promise<any> => {
-  if (OFFLINE_MODE) return null;
-  try {
-    const genAI = getClient();
-    const mimeType = getMimeType(fileBase64, 'image/jpeg');
-    const cleanBase64 = getCleanBase64(fileBase64);
-    
-    const prompt = `Extract delivery note details in JSON format for an ERP system.
-    Required fields: { 
-      "number": "string (delivery note ID)",
-      "invoiceId": "string", 
-      "clientName": "string (customer name)", 
-      "date": "YYYY-MM-DD", 
-      "address": "string", 
-      "driverName": "string", 
-      "vehicleNo": "string", 
-      "trackingCode": "string", 
-      "receivedBy": "string (name of person who received the goods)",
-      "items": [{ "desc": "string", "qty": number }],
-      "notes": "string"
-    }`;
+export async function generateSystemDoc(prompt: string): Promise<string> {
+  return aiService.generateSystemDoc(prompt);
+}
 
-    const response: any = await genAI.models.generateContent({
-        model: 'gemini-1.5-flash',
-        contents: makeUserContents([
-            { text: prompt },
-            { inlineData: { data: cleanBase64, mimeType } }
-        ])
-    });
-    const text = getResponseText(response);
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    return jsonMatch ? JSON.parse(jsonMatch[0]) : null;
-  } catch (error) {
-    console.error("DN Extraction Error:", error);
-    return null;
-  }
-};
+export async function generateAIResponse(prompt: string, systemInstruction?: string): Promise<string> {
+  return aiService.generateAIResponse(prompt, systemInstruction);
+}
 
-export const performOCR = async (images: string[], prompt?: string): Promise<string> => {
-  if (OFFLINE_MODE) return "OCR services are unavailable in offline mode.";
-  try {
-    const genAI = getClient();
-    
-    const parts = images.map(img => ({ inlineData: { data: getCleanBase64(img), mimeType: getMimeType(img) } }));
-    const response: any = await genAI.models.generateContent({
-        model: 'gemini-1.5-flash',
-        contents: makeUserContents([{ text: prompt || "Extract all text from these images as accurately as possible." }, ...parts])
-    });
-    return getResponseText(response);
-  } catch (error) {
-    console.error("OCR Error:", error);
-    return "Failed to perform OCR.";
-  }
-};
+export async function extractInvoiceData(imageBase64: string): Promise<any> {
+  return aiService.extractInvoiceData(imageBase64);
+}
 
-export const suggestRestock = async (inventoryData: any[], salesData: any[]): Promise<any> => {
-    if (OFFLINE_MODE) {
-        // Simple local logic: restock if stock < 10
-        return inventoryData
-            .filter(item => item.stock < 10)
-            .map(item => ({
-                sku: item.sku || item.id,
-                name: item.name,
-                reason: "Low stock (Offline Threshold)",
-                suggestedQty: 50
-            }));
-    }
+export async function extractPaymentProofData(imageBase64: string): Promise<any> {
+  return aiService.extractPaymentProofData(imageBase64);
+}
 
-    try {
-        const genAI = getClient();
-        if (!genAI) throw new Error("AI Client unavailable");
-        
-        const prompt = `Analyze this inventory and sales data. Suggest items that need restocking. 
-        Inventory: ${JSON.stringify(inventoryData.slice(0, 50))}
-        Recent Sales: ${JSON.stringify(salesData.slice(0, 50))}
-        Return JSON format: [{ "sku": "string", "name": "string", "reason": "string", "suggestedQty": number }]`;
+export async function extractDeliveryNoteData(fileBase64: string): Promise<any> {
+  return aiService.extractDeliveryNoteData(fileBase64);
+}
 
-        const response: any = await genAI.models.generateContent({ model: 'gemini-1.5-flash', contents: prompt });
-        const text = getResponseText(response);
-        const jsonMatch = text.match(/\[[\s\S]*\]/);
-        return jsonMatch ? JSON.parse(jsonMatch[0]) : [];
-    } catch (error) {
-        console.error("Restock Suggestion Error:", error);
-        return [];
-    }
-};
+export async function performOCR(images: string[], prompt?: string): Promise<string> {
+  return aiService.performOCR(images, prompt);
+}
 
-export const suggestProductPricing = async (productName: string, totalCost: number, category: string, wastePercentage: number = 0): Promise<{
-    suggestedPrice: number;
-    margin: number;
-    reasoning: string;
-    tiers: { small: number; medium: number; large: number };
-}> => {
-    if (OFFLINE_MODE) {
-        const basePrice = totalCost * 1.5;
-        return {
-            suggestedPrice: basePrice,
-            margin: 33.3,
-            reasoning: "Local calculation: Standard 50% markup applied (Offline Mode).",
-            tiers: { small: basePrice, medium: basePrice * 0.95, large: basePrice * 0.9 }
-        };
-    }
+export async function suggestRestock(inventoryData: any[], salesData: any[]): Promise<any> {
+  return aiService.suggestRestock(inventoryData, salesData);
+}
 
-    try {
-        const genAI = getClient();
-        if (!genAI) throw new Error("AI Client unavailable");
-        const prompt = `Analyze pricing for a product with the following details:
-        - Product Name: ${productName}
-        - Total Production Cost: ${totalCost}
-        - Category: ${category}
-        - Historical Waste: ${wastePercentage}%
-        
-        Provide a suggested selling price, profit margin, reasoning for the suggestion (considering typical retail margins for this category), and bulk pricing tiers.
-        Return ONLY a JSON object: { "suggestedPrice": number, "margin": number, "reasoning": "string", "tiers": { "small": number, "medium": number, "large": number } }`;
+export async function suggestProductPricing(
+  productName: string, totalCost: number, category: string, wastePercentage: number = 0,
+): Promise<{ suggestedPrice: number; margin: number; reasoning: string; tiers: { small: number; medium: number; large: number } }> {
+  return aiService.suggestProductPricing(productName, totalCost, category, wastePercentage);
+}
 
-        const response: any = await genAI.models.generateContent({ model: 'gemini-1.5-flash', contents: prompt });
-        const text = getResponseText(response);
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        return jsonMatch ? JSON.parse(jsonMatch[0]) : { suggestedPrice: totalCost * 1.5, margin: 33.3, reasoning: "Fallback", tiers: { small: totalCost * 1.5, medium: totalCost * 1.4, large: totalCost * 1.3 } };
-    } catch (error) {
-        console.error("AI Pricing Suggestion Error:", error);
-        const basePrice = totalCost * 1.5;
-        return {
-            suggestedPrice: basePrice,
-            margin: 33.3,
-            reasoning: "Fallback suggestion based on standard 50% markup.",
-            tiers: { small: basePrice, medium: basePrice * 0.95, large: basePrice * 0.9 }
-        };
-    }
-};
+export async function generateBusinessHealthReport(
+  financeData: { invoices: any[]; expenses: any[]; income: any[]; accounts: any[] },
+  salesData: { sales: any[]; customers: any[] },
+  inventoryData: { inventory: any[] },
+): Promise<string> {
+  return aiService.generateBusinessHealthReport(financeData, salesData, inventoryData);
+}
 
-/**
- * Generates a comprehensive Business Health Report using AI
- */
-export const generateBusinessHealthReport = async (
-    financeData: { invoices: any[], expenses: any[], income: any[], accounts: any[] },
-    salesData: { sales: any[], customers: any[] },
-    inventoryData: { inventory: any[] }
-): Promise<string> => {
-    if (OFFLINE_MODE) {
-        // Return a deterministic local report based on data
-        const totalSales = salesData.sales.reduce((sum, s) => sum + (s.totalAmount || s.total || 0), 0);
-        const totalExpenses = financeData.expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
-        const netProfit = totalSales - totalExpenses;
-        const margin = totalSales > 0 ? ((netProfit / totalSales) * 100).toFixed(1) : "0";
-        
-        return `# Offline Business Health Diagnostic
+export async function analyzeForecastingData(type: 'Inventory' | 'CashFlow', data: any): Promise<string> {
+  return aiService.analyzeForecastingData(type, data);
+}
 
-## Executive Summary
-This report was generated locally in **OFFLINE MODE**. All analysis is based on your local database records.
+export async function analyzeExpenses(expenses: any[]): Promise<string> {
+  return aiService.analyzeExpenses(expenses);
+}
 
-## Financial Performance
-- **Total Revenue:** ${totalSales.toLocaleString()}
-- **Total Expenses:** ${totalExpenses.toLocaleString()}
-- **Net Profit:** ${netProfit.toLocaleString()}
-- **Profit Margin:** ${margin}%
+export async function askBusinessQuestion(question: string, context: any): Promise<string> {
+  return aiService.askBusinessQuestion(question, context);
+}
 
-## Strategic Insights
-1. **Cash Flow:** Your net profit is ${netProfit > 0 ? 'positive' : 'negative'}. 
-2. **Operations:** You have ${salesData.customers.length} customers and ${inventoryData.inventory.length} active inventory items.
-3. **Recommendation:** ${netProfit > 0 ? 'Maintain current spending while exploring growth in top-selling categories.' : 'Review high-cost expense categories and optimize inventory turnover.'}
+/* ───────── Dashboard AI Features ───────── */
 
-*Note: AI-powered deep analysis is disabled in offline mode to ensure data privacy and zero network overhead.*`;
-    }
+export async function generateDailyBrief(data: Parameters<typeof aiService.generateDailyBrief>[0]) {
+  return aiService.generateDailyBrief(data);
+}
 
-    try {
-        const genAI = getClient();
-        if (!genAI) throw new Error("AI Client unavailable");
+export async function detectSalesOpportunities(customers: any[], invoices: any[]) {
+  return aiService.detectSalesOpportunities(customers, invoices);
+}
 
-        // Prepare data snapshots for AI (limited to avoid token limits)
-        const snapshot = {
-            summary: {
-                totalInvoices: financeData.invoices.length,
-                totalExpenses: financeData.expenses.length,
-                totalCustomers: salesData.customers.length,
-                inventoryItems: inventoryData.inventory.length
-            },
-            recentPerformance: {
-                last10Invoices: financeData.invoices.slice(0, 10).map(i => ({ date: i.date, amount: i.totalAmount, status: i.status })),
-                last10Expenses: financeData.expenses.slice(0, 10).map(e => ({ date: e.date, amount: e.amount, category: e.category }))
-            },
-            inventoryStatus: inventoryData.inventory.filter(i => i.stock <= i.minStockLevel).slice(0, 10).map(i => ({ name: i.name, stock: i.stock }))
-        };
+export async function detectInventoryRisks(items: any[]) {
+  return aiService.detectInventoryRisks(items);
+}
 
-        const prompt = `Analyze the current state of this business based on the following data snapshot:
-        ${JSON.stringify(snapshot, null, 2)}
-        
-        Please provide:
-        1. **Executive Summary**: Overall health status (Excellent/Good/Warning/Critical).
-        2. **Financial Analysis**: Revenue vs Expense trends and cash flow health.
-        3. **Inventory Efficiency**: Stock turnover risks and critical replenishment needs.
-        4. **Strategic Recommendations**: 3-5 actionable steps to improve profitability or efficiency.
-        5. **Risk Assessment**: Potential threats identified from the data.
-        
-        Use professional language, clear headers, and bullet points.`;
+export async function analyzeCashFlow(data: Parameters<typeof aiService.analyzeCashFlow>[0]) {
+  return aiService.analyzeCashFlow(data);
+}
 
-        const response: any = await genAI.models.generateContent({
-            model: 'gemini-1.5-pro',
-            contents: prompt,
-            config: {
-                systemInstruction: "You are a Chief Financial Officer and Strategic Business Consultant. Provide a deep, actionable, and professional business health analysis in Markdown format."
-            }
-        });
-        return getResponseText(response) || "Failed to generate health report.";
-    } catch (error) {
-        console.error("Business Health Report AI Error:", error);
-        return "## Error Generating Report\nUnable to reach AI services for business analysis. Please check your connectivity and API configuration.";
-    }
-};
+export async function generateCustomerInsight(customer: any, invoices: any[], payments: any[]) {
+  return aiService.generateCustomerInsight(customer, invoices, payments);
+}
 
-/**
- * Analyzes forecasting data for inventory and cash flow
- */
-export const analyzeForecastingData = async (
-    type: 'Inventory' | 'CashFlow',
-    data: any
-): Promise<string> => {
-    if (OFFLINE_MODE) return "Forecasting analysis is disabled in offline mode.";
-    try {
-        const genAI = getClient();
+export async function generateSupplierScorecard(supplier: any, purchases: any[], payments: any[]) {
+  return aiService.generateSupplierScorecard(supplier, purchases, payments);
+}
 
-        const prompt = `Analyze this ${type} forecast data:
-        ${JSON.stringify(data, null, 2)}
-        
-        Provide:
-        1. **Key Insights**: What are the most important trends?
-        2. **Critical Warnings**: Any immediate risks (e.g., stockouts, cash deficits)?
-        3. **Recommendations**: Specific actions to take based on this forecast.
-        
-        Format in clean Markdown.`;
-
-        const response: any = await genAI.models.generateContent({
-            model: 'gemini-1.5-flash',
-            contents: prompt,
-            config: {
-                systemInstruction: "You are a Supply Chain Analyst and Financial Controller. Analyze the provided forecast data and provide actionable insights."
-            }
-        });
-        return getResponseText(response) || "No analysis available.";
-    } catch (error) {
-        console.error("Forecasting AI Analysis Error:", error);
-        return "Error analyzing data. Please try again later.";
-    }
-};
-
-/**
- * Analyzes expenses for anomalies and cost-saving opportunities
- */
-export const analyzeExpenses = async (expenses: any[]): Promise<string> => {
-    if (OFFLINE_MODE) return "Expense analysis is disabled in offline mode.";
-    try {
-        const genAI = getClient();
-        const prompt = `Analyze these business expenses:
-        ${JSON.stringify(expenses.slice(0, 100), null, 2)}
-        
-        Provide:
-        1. **Spending Anomalies**: Any unusual patterns or suspicious entries?
-        2. **Cost Optimization**: Where can the business save money?
-        3. **Category Breakdown**: Which categories are growing too fast?
-        4. **Budget Health**: Overall assessment of spending discipline.
-        
-        Format in clean Markdown with headers and bullet points.`;
-
-        const response: any = await genAI.models.generateContent({
-            model: 'gemini-1.5-flash',
-            contents: prompt,
-            config: {
-                systemInstruction: "You are a Forensic Accountant and Cost Optimization Expert. Analyze the provided expense list and provide actionable insights."
-            }
-        });
-        return getResponseText(response) || "No analysis available.";
-    } catch (error) {
-        console.error("Expense AI Analysis Error:", error);
-        return "Error analyzing expenses. Please try again later.";
-    }
-};
-
-/**
- * Answers a business question using the provided context data
- */
-export const askBusinessQuestion = async (
-    question: string,
-    context: any
-): Promise<string> => {
-    if (OFFLINE_MODE) return "AI Q&A is unavailable in offline mode.";
-    try {
-        const genAI = getClient();
-        const prompt = `Context Data:
-        ${JSON.stringify(context, null, 2)}
-        
-        Question: ${question}
-        
-        Provide a concise, helpful answer. Use Markdown for formatting if needed.`;
-
-        const response: any = await genAI.models.generateContent({
-            model: 'gemini-1.5-flash',
-            contents: prompt,
-            config: {
-                systemInstruction: "You are an intelligent ERP Assistant. Answer the user's question accurately using the provided data context. If the data is missing, politely say you don't have enough information."
-            }
-        });
-        return getResponseText(response) || "I'm sorry, I couldn't find an answer to that.";
-    } catch (error) {
-        console.error("AI Question Error:", error);
-        return "Sorry, I'm having trouble accessing my intelligence right now.";
-    }
-};
+export async function summarizeDocument(docType: string, data: any) {
+  return aiService.summarizeDocument(docType, data);
+}

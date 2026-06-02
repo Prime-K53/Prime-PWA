@@ -6,10 +6,20 @@
 [build.environment]
   NODE_VERSION = "20"
 
+# Netlify Functions (replaces Express backend)
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
 # Environment variables (set these in Netlify dashboard):
-#   VITE_SUPABASE_URL - Your Supabase project URL
-#   VITE_SUPABASE_ANON_KEY - Your Supabase anonymous key
-#   VITE_GEMINI_API_KEY - Gemini API key (if used)
+#   VITE_SUPABASE_URL       - Your Supabase project URL (required for multi-device)
+#   VITE_SUPABASE_ANON_KEY  - Your Supabase anonymous key (required for multi-device)
+#   VITE_GEMINI_API_KEY     - Gemini API key (optional, for AI features)
+#
+# Required for Netlify Functions:
+#   SUPABASE_SERVICE_ROLE_KEY - Your Supabase service_role key (for server-side operations)
+#   SUPABASE_URL              - Same as VITE_SUPABASE_URL
+#   SESSION_SECRET            - Random string for session encryption
 
 # SPA fallback - serve index.html for all non-file routes
 [[redirects]]

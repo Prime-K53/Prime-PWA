@@ -6,6 +6,7 @@ import {
   calculatePricingAdjustmentTotal,
   normalizePricingSnapshots,
   resolveVolumeMarginValue,
+  getVolumeDiscountTiers,
 } from '../../../utils/pricingEngineShared';
 import {
   PricingInput,
@@ -70,30 +71,18 @@ const normalizeSnapshots = (
   return normalizePricingSnapshots(rawSnapshots, baseAmount) as SnapshotEntry[];
 };
 
-const injectProfitMarginSnapshot = (
-  existingSnapshots: SnapshotEntry[],
-  margin: EffectiveMargin,
-  marginAmount: number
-): SnapshotEntry[] => {
-  const filtered = existingSnapshots.filter(s => s.name !== 'Profit Margin');
-
-  if (marginAmount <= 0) {
-    return filtered;
-  }
-
-  const snapshot: SnapshotEntry = {
-    name: 'Profit Margin',
-    type: margin.margin_type === 'percentage' ? 'PERCENTAGE' : 'FIXED',
-    value: margin.margin_value,
-    percentage: margin.margin_type === 'percentage' ? margin.margin_value : undefined,
-    calculatedAmount: roundToCurrency(marginAmount)
-  };
-
-  return [...filtered, snapshot];
-};
-
 const calculateAdjustmentTotal = (snapshots: SnapshotEntry[]): number => {
   return calculatePricingAdjustmentTotal(snapshots);
+};
+
+const resolveApplicableQtyTier = (
+  tiers: Array<{ minQty: number; price: number }> | undefined,
+  quantity: number
+): { minQty: number; price: number } | undefined => {
+  if (!tiers || tiers.length === 0) return undefined;
+  return [...tiers]
+    .filter((t) => Number.isFinite(t.minQty) && quantity >= t.minQty)
+    .sort((a, b) => b.minQty - a.minQty)[0];
 };
 
 export async function calculateSellingPrice(
@@ -107,89 +96,120 @@ export async function calculateSellingPrice(
     baseCost,
     basePrice,
     quantity = 1,
+    pages,
     adjustments,
-    context
+    context,
+    quantityTiers,
+    allowQuantityTiering
   } = input;
 
   const safeCost = safeNumber(baseCost, 0);
   const safeQty = Math.max(1, Math.floor(safeNumber(quantity, 1)));
   const initialBase = safeNumber(basePrice, safeCost);
 
-  // If basePrice is provided (item has a configured selling price), use it as the base.
-  // This ensures inventory items with manually set prices use their own selling price
-  // instead of recalculating from cost + margin.
-  if (basePrice != null && !isNaN(basePrice) && basePrice > 0) {
-    // Use the provided basePrice as unit price directly
-    const unitPrice = applyRounding(basePrice);
-    const totalPrice = roundToCurrency(unitPrice * safeQty);
-    
-    // For manual overrides, we still need to report the margin.
-    // Margin = Unit Price - Cost - Other Adjustments
-    const normalizedAdjustments = normalizeSnapshots(adjustments, safeCost);
-    const adjustmentTotal = calculateAdjustmentTotal(normalizedAdjustments);
-    const marginAmount = roundToCurrency(unitPrice - safeCost - adjustmentTotal);
-    
-    return {
-      unitPrice,
-      totalPrice,
-      cost: safeCost,
-      marginAmount,
-      adjustmentSnapshots: normalizedAdjustments,
-      adjustmentTotal,
-      roundingDifference: 0,
-      breakdown: {
-        baseCost: safeCost,
-        adjustments: adjustmentTotal,
-        margin: marginAmount
-      },
-      pricingVersion: PRICING_ENGINE_VERSION
-    };
-  }
-
   const normalizedAdjustments = normalizeSnapshots(adjustments, initialBase);
-  
-  let runningCost = safeCost;
-  let adjustmentTotal = calculateAdjustmentTotal(normalizedAdjustments);
-  let currentBaseAmount = initialBase;
-  let currentSnapshots = [...normalizedAdjustments];
+  const adjustmentTotal = calculateAdjustmentTotal(normalizedAdjustments);
+  const costAfterAdjustments = safeCost + adjustmentTotal;
 
-  const { margin, shouldApply } = await resolveMargin(itemId, categoryId);
-  
+  // -- Step 1: Resolve pre-discount unit price --
+  // Priority: quantity tier > manual basePrice > margin-based calculation
+  let preDiscountPrice: number;
   let marginAmount = 0;
-  if (shouldApply) {
-    const costAfterAdjustments = runningCost + adjustmentTotal;
+  let profitMarginSnapshot: SnapshotEntry | null = null;
 
-    // Volume-discount override (Products & Services only — never EXAMINATION)
-    if (margin.apply_volume_margins && (context as string) !== 'EXAMINATION') {
-      const pageCount = Number(input.pages) || 0;
-      margin.margin_value = resolveVolumeMarginValue(pageCount);
-      margin.margin_type = 'percentage';
+  const applicableTier = allowQuantityTiering
+    ? resolveApplicableQtyTier(quantityTiers, safeQty)
+    : undefined;
+
+  if (applicableTier) {
+    // System A: quantity-based tiered pricing overrides
+    preDiscountPrice = applicableTier.price;
+    marginAmount = roundToCurrency(preDiscountPrice - costAfterAdjustments);
+  } else if (basePrice != null && !isNaN(basePrice) && basePrice > 0) {
+    // Manual selling price
+    preDiscountPrice = basePrice;
+    marginAmount = roundToCurrency(preDiscountPrice - costAfterAdjustments);
+  } else {
+    // Margin-based pricing (cost + adjustments + markup)
+    const { margin, shouldApply } = await resolveMargin(itemId, categoryId);
+
+    if (shouldApply) {
+      marginAmount = calculateMarginAmount(costAfterAdjustments, margin);
+      profitMarginSnapshot = {
+        name: 'Profit Margin',
+        type: margin.margin_type === 'percentage' ? 'PERCENTAGE' : 'FIXED',
+        value: margin.margin_value,
+        percentage: margin.margin_type === 'percentage' ? margin.margin_value : undefined,
+        calculatedAmount: roundToCurrency(marginAmount)
+      };
     }
 
-    marginAmount = calculateMarginAmount(costAfterAdjustments, margin);
+    preDiscountPrice = costAfterAdjustments + marginAmount;
   }
 
-  currentSnapshots = injectProfitMarginSnapshot(currentSnapshots, margin, marginAmount);
-  adjustmentTotal = calculateAdjustmentTotal(currentSnapshots);
+  // Build snapshot array: market adjustments + profit margin
+  let finalSnapshots = [...normalizedAdjustments];
+  if (profitMarginSnapshot) {
+    finalSnapshots = finalSnapshots.filter(s => s.name !== 'Profit Margin');
+    finalSnapshots.push(profitMarginSnapshot);
+  }
 
-  const totalBeforeRounding = currentBaseAmount + adjustmentTotal;
-  const unitPrice = applyRounding(totalBeforeRounding);
+  // -- Step 2: Apply volume / run-length discount to price (System B) --
+  // Volume discount is a % off the current price, not a replacement of the margin.
+  let volumeDiscountPct = 0;
+  if ((context as string) !== 'EXAMINATION') {
+    const pageCount = Number(pages) || 0;
+    const discountTiers = getVolumeDiscountTiers(getCompanyConfig());
+    volumeDiscountPct = resolveVolumeMarginValue(pageCount, discountTiers);
+  }
+
+  let priceBeforeRounding = preDiscountPrice;
+  if (volumeDiscountPct > 0) {
+    const discountAmount = roundToCurrency(preDiscountPrice * (volumeDiscountPct / 100));
+    priceBeforeRounding = roundToCurrency(preDiscountPrice - discountAmount);
+    // Recalculate effective margin from discounted price
+    marginAmount = roundToCurrency(priceBeforeRounding - costAfterAdjustments);
+    if (marginAmount < 0) marginAmount = 0;
+    // Update profit margin snapshot with effective margin
+    if (profitMarginSnapshot) {
+      profitMarginSnapshot.calculatedAmount = roundToCurrency(marginAmount);
+      finalSnapshots = finalSnapshots.map(s =>
+        s.name === 'Profit Margin' ? profitMarginSnapshot! : s
+      );
+    }
+    // Inject Volume Discount as a separate snapshot entry
+    finalSnapshots = finalSnapshots.filter(s => s.name !== 'Volume Discount');
+    finalSnapshots.push({
+      name: 'Volume Discount',
+      type: 'PERCENTAGE',
+      value: volumeDiscountPct,
+      percentage: volumeDiscountPct,
+      calculatedAmount: roundToCurrency(-discountAmount),
+    });
+  }
+
+  const finalAdjustmentTotal = calculateAdjustmentTotal(finalSnapshots);
+
+  // -- Step 3: Round --
+  const unitPrice = applyRounding(priceBeforeRounding);
   const totalPrice = roundToCurrency(unitPrice * safeQty);
+  const roundingDiff = roundToCurrency(unitPrice - priceBeforeRounding);
 
+  // Build breakdown
   const breakdown: PricingBreakdown = {
-    baseCost: runningCost,
-    adjustments: adjustmentTotal - marginAmount,
+    baseCost: safeCost,
+    adjustments: adjustmentTotal,
     margin: marginAmount
   };
 
   return {
     unitPrice,
     totalPrice,
-    cost: runningCost,
+    cost: safeCost,
     marginAmount,
-    adjustmentSnapshots: currentSnapshots,
-    adjustmentTotal,
-    roundingDifference: roundToCurrency(unitPrice - totalBeforeRounding),
+    adjustmentSnapshots: finalSnapshots,
+    adjustmentTotal: finalAdjustmentTotal,
+    roundingDifference: roundingDiff,
     breakdown,
     pricingVersion: PRICING_ENGINE_VERSION
   };

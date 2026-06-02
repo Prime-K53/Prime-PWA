@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const profitMarginService = require('../services/profitMarginService.cjs');
 const { auditCrudMiddleware } = require('../auditMiddleware.cjs');
+const { validateBody, profitMarginSchemas } = require('../middleware/validation.cjs');
 
 /**
  * Middleware to check for ADMIN or FINANCE_MANAGER roles.
@@ -71,7 +72,7 @@ router.get('/profit-margins/:id', async (req, res) => {
 });
 
 // POST /api/settings/profit-margins - Create override
-router.post('/profit-margins', authorizePricing, auditCrudMiddleware('profit_margin_setting'), async (req, res) => {
+router.post('/profit-margins', authorizePricing, validateBody(profitMarginSchemas.create), auditCrudMiddleware('profit_margin_setting'), async (req, res) => {
   try {
     const userId = req.headers['x-user-id'] || 'system';
     const result = await profitMarginService.createSetting(req.body, userId);
@@ -85,7 +86,7 @@ router.post('/profit-margins', authorizePricing, auditCrudMiddleware('profit_mar
 });
 
 // PATCH /api/settings/profit-margins/:id - Update override
-router.patch('/profit-margins/:id', authorizePricing, auditCrudMiddleware('profit_margin_setting'), async (req, res) => {
+router.patch('/profit-margins/:id', authorizePricing, validateBody(profitMarginSchemas.update), auditCrudMiddleware('profit_margin_setting'), async (req, res) => {
   try {
     const userId = req.headers['x-user-id'] || 'system';
     const result = await profitMarginService.updateSetting(req.params.id, req.body, userId);
@@ -108,7 +109,7 @@ router.delete('/profit-margins/:id', authorizePricing, auditCrudMiddleware('prof
 });
 
 // POST /api/settings/profit-margins/bulk-upload - CSV import
-router.post('/profit-margins/bulk-upload', authorizePricing, async (req, res) => {
+router.post('/profit-margins/bulk-upload', authorizePricing, validateBody(profitMarginSchemas.bulkUpload), async (req, res) => {
   try {
     const userId = req.headers['x-user-id'] || 'system';
     const { rows } = req.body;

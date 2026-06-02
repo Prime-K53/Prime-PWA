@@ -671,7 +671,7 @@ dbService.getAll<BOMTemplate>('bomTemplates')
         if (item && mode === 'edit') {
             const normalizedItem = normalizeInventoryItemPricing(item);
             const shouldBeManual =
-                normalizedItem.pricingConfig?.manualOverride ??
+                normalizedItem.pricingConfig?.manualOverride ||
                 (normalizedItem.type === 'Service' || normalizedItem.type === 'Raw Material' || normalizedItem.type === 'Material');
 
             setFormData({
@@ -1386,7 +1386,7 @@ dbService.getAll<BOMTemplate>('bomTemplates')
                         : Number(formData.pricingConfig.totalCost) || formData.pricingConfig.totalCost,
                     finishingOptions: formData.pricingConfig.finishingOptions || [],
                     manualOverride:
-                        formData.pricingConfig.manualOverride ??
+                        formData.pricingConfig.manualOverride ||
                         (formData.type === 'Service' || formData.type === 'Raw Material' || formData.type === 'Material')
                 }
                 : undefined;
@@ -1933,6 +1933,20 @@ dbService.getAll<BOMTemplate>('bomTemplates')
                 {/* Content Area */}
                 <div className="flex-1 overflow-y-auto">
                         <form onSubmit={handleSubmit} className="p-6">
+                            {/* Validation Error Summary */}
+                            {Object.keys(errors).length > 0 && (
+                                <div className="mb-6 p-4 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-3">
+                                    <AlertCircle size={16} className="text-rose-500 mt-0.5 shrink-0" />
+                                    <div>
+                                        <p className="text-[11px] font-bold text-rose-700 uppercase tracking-wider">Please fix the following errors</p>
+                                        <ul className="mt-1.5 space-y-0.5">
+                                            {Object.values(errors).filter(Boolean).map((msg, i) => (
+                                                <li key={i} className="text-xs text-rose-600 font-medium">• {msg}</li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                </div>
+                            )}
                              {/* Basic Info Tab */}
                              {activeTab === 'basic' && (
                                  <div className="space-y-6">
@@ -2486,21 +2500,35 @@ dbService.getAll<BOMTemplate>('bomTemplates')
                                                           <label className={styles.label}>Cost Price ({currency})</label>
                                                           <div className="relative">
                                                               <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium">{currency}</div>
-                                                              <input
-                                                                  type="number"
-                                                                  step="0.01"
-                                                                  value={formData.cost || 0}
-                                                                  onChange={(e) => setFormData({ ...formData, cost: Number(e.target.value), cost_price: Number(e.target.value) })}
-                                                                  className={styles.input + " pl-10"}
-                                                                  placeholder="0.00"
-                                                              />
-                                                          </div>
-                                                          <p className="mt-2 text-[10px] text-slate-500 italic">Enter the base purchase cost for this material.</p>
-                                                      </div>
-                                                  </div>
-                                              </div>
+                                                               <input
+                                                                   type="number"
+                                                                   step="0.01"
+                                                                   min="0"
+                                                                   value={formData.cost || 0}
+                                                                   onChange={(e) => {
+                                                                       const val = Math.max(0, Number(e.target.value) || 0);
+                                                                       setFormData({ ...formData, cost: val, cost_price: val, price: val, selling_price: val });
+                                                                   }}
+                                                                   className={styles.input + " pl-10"}
+                                                                   placeholder="0.00"
+                                                                />
+                                                           </div>
+                                                           {errors.cost && (
+                                                               <p className="mt-1.5 text-xs text-red-500 flex items-center gap-1">
+                                                                   <AlertCircle className="w-3 h-3" /> {errors.cost}
+                                                               </p>
+                                                           )}
+                                                           {errors.price && (
+                                                               <p className="mt-1.5 text-xs text-red-500 flex items-center gap-1">
+                                                                   <AlertCircle className="w-3 h-3" /> {errors.price}
+                                                               </p>
+                                                           )}
+                                                           <p className="mt-2 text-[10px] text-slate-500 italic">Enter the base purchase cost for this material.</p>
+                                                       </div>
+                                                   </div>
+                                               </div>
 
-                                              <div className={styles.premiumCard}>
+                                               <div className={styles.premiumCard}>
                                                   <div className="flex items-center gap-2 mb-6">
                                                       <div className="w-1.5 h-4 bg-emerald-500 rounded-full"></div>
                                                       <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Unit Conversion</h3>

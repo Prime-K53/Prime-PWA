@@ -3,7 +3,7 @@ import { pagesToReams, pagesToTonerKg } from '../utils/printConversions';
 import { roundToCurrency } from '../utils/helpers';
 import { calculateItemFinancials } from '../utils/pricing';
 import { generateOpaqueId } from '../utils/idGeneration';
-import { resolveVolumeMarginValue } from '../utils/pricingEngineShared';
+import { resolveVolumeMarginValue, getVolumeDiscountTiers } from '../utils/pricingEngineShared';
 import { SafeFormulaEngine } from './formulaEngine';
 import { applyProductPriceRounding } from './pricingRoundingService';
 import { dbService } from './db';
@@ -895,15 +895,8 @@ export const calculateAutoPrice = async ({
 
     // Apply markup
     let markedUpPrice = cost;
-    let marginValue = globalMargin.margin_value;
-    let marginType = globalMargin.margin_type;
-
-    // Volume Discount Logic
-    if (globalMargin.apply_volume_margins) {
-        const pages = (companyConfig as any)?.pages || 0;
-        marginValue = resolveVolumeMarginValue(pages);
-        marginType = 'percentage';
-    }
+    const marginValue = globalMargin.margin_value;
+    const marginType = globalMargin.margin_type;
 
     if (marginType === 'percentage') {
         markedUpPrice = cost * (1 + marginValue / 100);
@@ -911,6 +904,18 @@ export const calculateAutoPrice = async ({
     } else {
         markedUpPrice = cost + marginValue;
         result.markupApplied = marginValue;
+    }
+
+    // Volume / run-length discount (System B) — % off the marked-up price, not a margin replacement
+    if (globalMargin.apply_volume_margins) {
+        const pages = (companyConfig as any)?.pages || 0;
+        const discountTiers = getVolumeDiscountTiers(companyConfig);
+        const volumeDiscountPct = resolveVolumeMarginValue(pages, discountTiers);
+        if (volumeDiscountPct > 0) {
+            const discountAmount = roundToCurrency(markedUpPrice * (volumeDiscountPct / 100));
+            markedUpPrice = roundToCurrency(markedUpPrice - discountAmount);
+            result.markupApplied = roundToCurrency(result.markupApplied - discountAmount);
+        }
     }
 
     let priceBeforeVat = markedUpPrice;

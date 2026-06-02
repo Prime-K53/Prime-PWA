@@ -1,22 +1,26 @@
-import React, { useMemo, useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Building2, CheckCircle2, ShieldCheck, UserPlus, Loader2, Sparkles, Receipt, CalendarDays, Mail, Phone, MapPin, Globe, User, Key, Lock, Plus, Upload, AlertCircle, CheckCircle } from 'lucide-react';
-import { Input } from '../../components/Input';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { ArrowLeft, ArrowRight, CheckCircle2, Loader2, AlertCircle, Eye, EyeOff, Upload, Receipt } from 'lucide-react';
 import AuthLayout from './AuthLayout';
 import { useAuth } from '../../context/AuthContext';
-import { dbService } from '../../services/db';
-import { isPasswordComplexityEnabled, isPasswordProtectionEnabled, withNormalizedSecurityConfig } from '../../utils/securitySettings';
+import { withNormalizedSecurityConfig } from '../../utils/securitySettings';
+
+const SUPABASE_ENABLED = Boolean(
+  import.meta.env.VITE_SUPABASE_URL &&
+  import.meta.env.VITE_SUPABASE_ANON_KEY &&
+  import.meta.env.VITE_SUPABASE_URL !== 'https://placeholder.supabase.co'
+);
 
 const SetupWizard: React.FC = () => {
   const navigate = useNavigate();
-  const { companyConfig, completeSetup, validatePasswordStrength } = useAuth();
+  const { companyConfig, completeSetup, validatePasswordStrength, signUpSupabase } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
-  const [setupMode, setSetupMode] = useState<'create' | 'restore' | null>(null);
   const [isRestoringBackup, setIsRestoringBackup] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [restoredCompanyData, setRestoredCompanyData] = useState<any>(null);
 
   const [company, setCompany] = useState({
@@ -31,8 +35,8 @@ const SetupWizard: React.FC = () => {
     financialYearStart: (companyConfig as any)?.financialYearStart || 'January',
     fiscalYearEndMonth: (companyConfig as any)?.fiscalYearEndMonth || 'December',
     vatPricingMode: (companyConfig as any)?.vat?.pricingMode || 'VAT',
-    passwordRequired: isPasswordProtectionEnabled(companyConfig),
-    enforceComplexity: isPasswordComplexityEnabled(companyConfig),
+    passwordRequired: false,
+    enforceComplexity: false,
   });
 
   const [admin, setAdmin] = useState({
@@ -54,14 +58,18 @@ const SetupWizard: React.FC = () => {
     company.addressLine1,
   ].every(value => value.trim().length > 0);
 
+  const canContinueFinancial = true;
+
   const canContinueUser = [
     admin.fullName,
-    admin.email,
+    admin.username,
+    ...(SUPABASE_ENABLED ? [admin.email] : []),
   ].every(value => value.trim().length > 0);
 
   const canSubmitAdmin = [
     admin.fullName,
-    admin.email,
+    admin.username,
+    ...(SUPABASE_ENABLED ? [admin.email] : []),
   ].every(value => value.trim().length > 0)
     && (
       !(company as any).passwordRequired
@@ -108,7 +116,7 @@ const SetupWizard: React.FC = () => {
 
       const restoredConfig = JSON.parse(companyConfigJson);
 
-      await dbService.importDatabase(fileContent);
+      await (await import('../../services/db')).dbService.importDatabase(fileContent);
       localStorage.setItem('nexus_company_config', companyConfigJson);
       localStorage.setItem('nexus_initialized', backupData.settings?.['nexus_initialized'] || 'true');
       localStorage.setItem('prime_erp_backup_restored', JSON.stringify({
@@ -118,7 +126,7 @@ const SetupWizard: React.FC = () => {
       }));
 
       setRestoredCompanyData(restoredConfig);
-      
+
       setCompany({
         companyName: restoredConfig.companyName || '',
         email: restoredConfig.email || '',
@@ -131,13 +139,13 @@ const SetupWizard: React.FC = () => {
         financialYearStart: restoredConfig.financialYearStart || 'January',
         fiscalYearEndMonth: restoredConfig.fiscalYearEndMonth || 'December',
         vatPricingMode: restoredConfig.vat?.pricingMode || 'VAT',
-        passwordRequired: isPasswordProtectionEnabled(restoredConfig),
-        enforceComplexity: isPasswordComplexityEnabled(restoredConfig),
+        passwordRequired: false,
+        enforceComplexity: false,
       });
 
-      setStep(3);
+      setStep(1);
       event.target.value = '';
-      
+
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to restore backup file.');
       console.error('Restore error:', err);
@@ -190,12 +198,26 @@ const SetupWizard: React.FC = () => {
         },
       });
 
-      const autoUsername = admin.username.trim() || admin.email.trim().split('@')[0] || 'admin';
+      if (SUPABASE_ENABLED && admin.email) {
+        const supabasePassword = admin.password || `${admin.username}_${Date.now()}`;
+        const signUpResult = await signUpSupabase(admin.email.trim(), supabasePassword, {
+          username: admin.username.trim(),
+          full_name: admin.fullName.trim(),
+          role: 'Admin',
+          is_super_admin: true,
+          group_ids: ['GRP-ADMIN'],
+        });
+
+        if (!signUpResult.success) {
+          console.warn('[Setup] Supabase signup failed, proceeding with local setup:', signUpResult.error);
+        }
+      }
+
       await completeSetup(
         finalConfig,
         {
           id: '',
-          username: autoUsername,
+          username: admin.username.trim(),
           fullName: admin.fullName.trim(),
           name: admin.fullName.trim(),
           email: admin.email.trim(),
@@ -218,7 +240,7 @@ const SetupWizard: React.FC = () => {
   };
 
   const goToStep = (newStep: number) => {
-    if (newStep === step || isTransitioning || newStep < 0 || newStep >= steps.length) return;
+    if (newStep === step || isTransitioning || newStep < 0 || newStep > 4) return;
     setIsTransitioning(true);
     setTimeout(() => {
       setStep(newStep);
@@ -227,145 +249,139 @@ const SetupWizard: React.FC = () => {
   };
 
   const steps = [
-    { label: 'Setup Mode', icon: Building2 },
-    { label: 'Company', icon: Building2 },
-    { label: 'Financial', icon: CalendarDays },
-    { label: 'User Account', icon: UserPlus },
-    { label: 'Password Setup', icon: Key },
+    { label: 'Company Details', description: 'Organization info' },
+    { label: 'Financial Settings', description: 'Currency & fiscal year' },
+    { label: 'Admin Account', description: 'Primary user' },
+    { label: 'Security', description: 'Password & access' },
   ];
 
-  const progress = ((step + 1) / steps.length) * 100;
+  const progress = ((step) / steps.length) * 100;
+
+  const inputClass = "w-full px-3.5 py-2.5 bg-[#0D1520] border border-[#1F2A3F] rounded-xl text-sm text-slate-100 placeholder:text-slate-500 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20";
+  const labelClass = "block text-[13px] font-semibold text-slate-300 mb-1.5";
+  const cardBg = "bg-[#111927] border border-[#1F2A3F]";
 
   return (
-    <AuthLayout title="Get Started" subtitle="Choose how to set up Prime ERP" showBrand>
-      <div className="relative z-10 flex flex-col flex-1 w-full px-3">
-        <div className="pt-4 pb-1 flex items-center justify-between">
-          {step > 0 ? (
+    <AuthLayout title="Set up your workspace" subtitle="Configure your Prime ERP instance in a few simple steps." showBrand>
+      {step === 0 ? (
+        <div className={`${cardBg} rounded-2xl p-8 transition-all duration-200 ${isTransitioning ? 'opacity-0 translate-y-2' : 'opacity-100 translate-y-0'}`}>
+          {error && (
+            <div className="mb-5 p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-xl flex items-start gap-3">
+              <AlertCircle size={16} className="text-rose-400 shrink-0 mt-0.5" />
+              <p className="text-xs text-rose-300">{error}</p>
+            </div>
+          )}
+
+          <div className="text-center">
+            <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+              <Receipt size={32} className="text-white" />
+            </div>
+
+            <h1 className="text-2xl font-bold text-slate-100 tracking-tight">Intelligent Financial Management</h1>
+            <p className="text-sm text-slate-400 mt-3 mb-8 leading-relaxed">
+              Set up your company workspace to manage invoices, track expenses, and gain real-time financial insights — all in one place.
+            </p>
+
             <button
               type="button"
-              onClick={() => goToStep(step - 1)}
-              disabled={submitting}
-              className="flex items-center gap-1.5 text-sm font-medium text-slate-400 hover:text-white transition-colors disabled:opacity-0 disabled:pointer-events-none"
+              onClick={() => goToStep(1)}
+              className="w-full py-3 bg-indigo-500 hover:bg-indigo-400 text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 transition-all hover:shadow-indigo-500/30 active:scale-[0.99]"
             >
-              <ArrowLeft size={16} />
-              Back
+              Create New Company
+              <ArrowRight size={16} />
             </button>
-          ) : (
-            <div />
-          )}
-          <span className="text-xs font-medium text-slate-500">{step + 1} / {steps.length}</span>
+
+            <div className="mt-3">
+              <input ref={fileInputRef} type="file" accept=".db,.json,application/octet-stream,application/json" onChange={handleRestoreBackupFile} className="hidden" />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isRestoringBackup}
+                className="w-full py-3 border border-[#1F2A3F] hover:border-slate-500 text-slate-300 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-40 active:scale-[0.99]"
+              >
+                {isRestoringBackup ? (
+                  <><Loader2 size={16} className="animate-spin" /> Restoring...</>
+                ) : (
+                  <><Upload size={16} /> Restore from Backup</>
+                )}
+              </button>
+            </div>
+
+            <div className="mt-8 pt-6 border-t border-[#1F2A3F]">
+              <p className="text-xs text-slate-500">
+                Have an account?{' '}
+                <Link to="/login" className="text-indigo-400 hover:text-indigo-300 font-semibold transition-colors">Sign in</Link>
+              </p>
+            </div>
+          </div>
         </div>
+      ) : (
+        <div>
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.15em]">Step {step} of {steps.length}</span>
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.15em]">{Math.round(progress)}%</span>
+            </div>
+            <div className="h-1.5 bg-[#1F2A3F] rounded-full overflow-hidden">
+              <div
+                className="h-full bg-indigo-500 rounded-full transition-all duration-500 ease-out"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </div>
 
-        <div className="h-1 bg-white/10 rounded-full overflow-hidden mb-6">
-          <div
-            className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-500 ease-out"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-
-        <div className="flex-1 flex flex-col">
-          <div className={`flex-1 transition-all duration-200 ${isTransitioning ? 'opacity-0 translate-y-3' : 'opacity-100 translate-y-0'}`}>
-            {step === 0 && (
-              <div className="pt-4 animate-fade-in">
-                <h1 className="text-xl lg:text-2xl font-semibold text-slate-100 mb-1">Get Started</h1>
-                <p className="text-sm text-slate-400 mb-6">Choose how to set up Prime ERP</p>
-
-                <div className="space-y-3">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".db,.json,application/octet-stream,application/json"
-                    onChange={handleRestoreBackupFile}
-                    className="hidden"
-                  />
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSetupMode('create');
-                      setError(null);
-                      goToStep(1);
-                    }}
-                    className={`w-full flex items-center gap-4 p-4 rounded-2xl border-2 transition-all duration-200 text-left ${
-                      setupMode === 'create'
-                        ? 'border-blue-500/50 bg-blue-500/10'
-                        : 'border-white/10 bg-white/5 hover:border-blue-500/30 hover:bg-blue-500/5'
-                    }`}
-                  >
-                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 transition-all duration-200 ${
-                      setupMode === 'create'
-                        ? 'bg-blue-500/20'
-                        : 'bg-white/10'
-                    }`}>
-                      <Plus size={22} className={setupMode === 'create' ? 'text-blue-400' : 'text-slate-400'} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                    <div className="text-slate-100 font-semibold">Create New Company</div>
-                    <div className="text-xs text-slate-400 mt-0.5">Set up a fresh Prime ERP instance</div>
-                    </div>
-                    <div className={`w-5 h-5 rounded-full border-2 transition-all duration-200 shrink-0 ${
-                      setupMode === 'create' ? 'border-blue-400 bg-blue-500' : 'border-white/20'
-                    }`}>
-                      {setupMode === 'create' && <CheckCircle size={14} className="text-white w-full h-full" />}
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSetupMode('restore');
-                      setError(null);
-                      fileInputRef.current?.click();
-                    }}
-                    disabled={isRestoringBackup}
-                    className={`w-full flex items-center gap-4 p-4 rounded-2xl border-2 transition-all duration-200 text-left disabled:opacity-50 disabled:cursor-not-allowed ${
-                      setupMode === 'restore'
-                        ? 'border-purple-500/50 bg-purple-500/10'
-                        : 'border-white/10 bg-white/5 hover:border-purple-500/30 hover:bg-purple-500/5'
-                    }`}
-                  >
-                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 transition-all duration-200 ${
-                      setupMode === 'restore' ? 'bg-purple-500/20' : 'bg-white/10'
-                    }`}>
-                      {isRestoringBackup ? (
-                        <Loader2 size={22} className="text-purple-400 animate-spin" />
-                      ) : (
-                        <Upload size={22} className={setupMode === 'restore' ? 'text-purple-400' : 'text-slate-400'} />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                    <div className="text-slate-100 font-semibold">Restore Existing Company</div>
-                    <div className="text-xs text-slate-400 mt-0.5">Upload a backup file to restore</div>
-                    </div>
-                    <div className={`w-5 h-5 rounded-full border-2 transition-all duration-200 shrink-0 ${
-                      setupMode === 'restore' ? 'border-purple-400 bg-purple-500' : 'border-white/20'
-                    }`}>
-                      {setupMode === 'restore' && <CheckCircle size={14} className="text-white w-full h-full" />}
-                    </div>
-                  </button>
-                </div>
-              </div>
+          <div className="flex items-center justify-between mb-8">
+            {step > 0 ? (
+              <button
+                type="button"
+                onClick={() => goToStep(step - 1)}
+                disabled={submitting}
+                className="flex items-center gap-1.5 text-sm font-semibold text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-40"
+              >
+                <ArrowLeft size={16} />
+                Back
+              </button>
+            ) : (
+              <div />
             )}
+            <div className="flex items-center gap-4">
+              {steps.map((s, i) => {
+                const idx = i + 1;
+                return (
+                  <div key={s.label} className="hidden sm:flex items-center gap-2">
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all ${
+                      idx < step ? 'bg-indigo-500 text-white' : idx === step ? 'bg-indigo-500 text-white' : 'bg-[#1F2A3F] text-slate-500'
+                    }`}>
+                      {idx < step ? <CheckCircle2 size={14} /> : idx}
+                    </div>
+                    <span className={`text-[11px] font-semibold ${idx === step ? 'text-slate-200' : 'text-slate-500'}`}>{s.label}</span>
+                    {i < steps.length - 1 && <div className="w-4 h-px bg-[#1F2A3F] ml-2" />}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
 
+          <div className={`${cardBg} rounded-2xl p-7 transition-all duration-200 ${isTransitioning ? 'opacity-0 translate-y-2' : 'opacity-100 translate-y-0'}`}>
             {step === 1 && (
-              <div className="pt-4 animate-fade-in">
-                <h1 className="text-xl lg:text-2xl font-semibold text-slate-100 mb-1">Company Profile</h1>
-                <p className="text-sm text-slate-400 mb-6">Tell us about your organization</p>
+              <div className="animate-fade-in">
+                <h1 className="text-xl font-bold text-slate-100 tracking-tight">Company Details</h1>
+                <p className="text-sm text-slate-400 mt-1 mb-6">Tell us about your organization</p>
 
                 {error && (
-                  <div className="mb-5 p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-start gap-2">
-                    <AlertCircle size={14} className="text-rose-400 shrink-0 mt-0.5" />
+                  <div className="mb-5 p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-xl flex items-start gap-3">
+                    <AlertCircle size={16} className="text-rose-400 shrink-0 mt-0.5" />
                     <p className="text-xs text-rose-300">{error}</p>
                   </div>
                 )}
 
                 <div className="space-y-4">
                   <div>
-                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Company Name *</label>
-                    <Input
+                    <label className={labelClass}>Company Name *</label>
+                    <input
                       value={company.companyName}
                       onChange={e => setCompany(prev => ({ ...prev, companyName: e.target.value }))}
-                      className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all placeholder:text-slate-500"
+                      className={inputClass}
                       placeholder="Acme Corporation"
                       required
                     />
@@ -373,33 +389,33 @@ const SetupWizard: React.FC = () => {
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Phone *</label>
-                      <Input
+                      <label className={labelClass}>Phone *</label>
+                      <input
                         value={company.phone}
                         onChange={e => setCompany(prev => ({ ...prev, phone: e.target.value }))}
-                        className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all placeholder:text-slate-500"
+                        className={inputClass}
                         placeholder="+1 (555) 000-0000"
                         required
                       />
                     </div>
                     <div>
-                      <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Email</label>
-                      <Input
+                      <label className={labelClass}>Email</label>
+                      <input
                         type="email"
                         value={company.email}
                         onChange={e => setCompany(prev => ({ ...prev, email: e.target.value }))}
-                        className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all placeholder:text-slate-500"
+                        className={inputClass}
                         placeholder="contact@co.com"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Address *</label>
-                    <Input
+                    <label className={labelClass}>Address *</label>
+                    <input
                       value={company.addressLine1}
                       onChange={e => setCompany(prev => ({ ...prev, addressLine1: e.target.value }))}
-                      className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all placeholder:text-slate-500"
+                      className={inputClass}
                       placeholder="123 Business Way, Suite 100"
                       required
                     />
@@ -407,130 +423,190 @@ const SetupWizard: React.FC = () => {
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs font-semibold text-slate-300 mb-1.5 block">City</label>
-                      <Input
+                      <label className={labelClass}>City</label>
+                      <input
                         value={company.city}
                         onChange={e => setCompany(prev => ({ ...prev, city: e.target.value }))}
-                        className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all placeholder:text-slate-500"
+                        className={inputClass}
                         placeholder="New York"
                       />
                     </div>
                     <div>
-                      <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Currency</label>
-                      <select
-                        value={company.currencySymbol}
-                        onChange={e => setCompany(prev => ({ ...prev, currencySymbol: e.target.value }))}
-                        className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all outline-none appearance-none cursor-pointer"
-                      >
-                        <option value="K" className="bg-slate-900">K - Kwacha</option>
-                        <option value="MWK" className="bg-slate-900">MWK - Malawi</option>
-                        <option value="$" className="bg-slate-900">$ - US Dollar</option>
-                        <option value="£" className="bg-slate-900">£ - Pound</option>
-                        <option value="€" className="bg-slate-900">€ - Euro</option>
-                      </select>
+                      <label className={labelClass}>Country</label>
+                      <input
+                        value={company.country}
+                        onChange={e => setCompany(prev => ({ ...prev, country: e.target.value }))}
+                        className={inputClass}
+                        placeholder="United States"
+                      />
                     </div>
                   </div>
 
-                  <div>
-                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Date Format</label>
-                    <select
-                      value={company.dateFormat}
-                      onChange={e => setCompany(prev => ({ ...prev, dateFormat: e.target.value }))}
-                      className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all outline-none appearance-none cursor-pointer"
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={() => goToStep(2)}
+                      disabled={!canContinueCompany}
+                      className="w-full py-2.5 bg-indigo-500 hover:bg-indigo-400 disabled:bg-indigo-500/30 disabled:cursor-not-allowed text-white rounded-xl font-semibold text-[13px] flex items-center justify-center gap-2 shadow-sm hover:shadow-md transition-all duration-200 active:scale-[0.99]"
                     >
-                      <option value="DD/MM/YYYY" className="bg-slate-900">DD/MM/YYYY</option>
-                      <option value="MM/DD/YYYY" className="bg-slate-900">MM/DD/YYYY</option>
-                      <option value="YYYY-MM-DD" className="bg-slate-900">YYYY-MM-DD</option>
-                    </select>
+                      Continue
+                      <ArrowRight size={16} />
+                    </button>
                   </div>
                 </div>
               </div>
             )}
 
             {step === 2 && (
-              <div className="pt-4 animate-fade-in">
-                <h1 className="text-xl lg:text-2xl font-semibold text-slate-100 mb-1">Financial Setup</h1>
-                <p className="text-sm text-slate-400 mb-6">Configure financial year and pricing</p>
+              <div className="animate-fade-in">
+                <h1 className="text-xl font-bold text-slate-100 tracking-tight">Financial Settings</h1>
+                <p className="text-sm text-slate-400 mt-1 mb-6">Configure currency, fiscal year, and pricing</p>
 
-                <div className="space-y-5">
+                {error && (
+                  <div className="mb-5 p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-xl flex items-start gap-3">
+                    <AlertCircle size={16} className="text-rose-400 shrink-0 mt-0.5" />
+                    <p className="text-xs text-rose-300">{error}</p>
+                  </div>
+                )}
+
+                <div className="space-y-4">
+                  <div>
+                    <label className={labelClass}>Currency</label>
+                    <select
+                      value={company.currencySymbol}
+                      onChange={e => setCompany(prev => ({ ...prev, currencySymbol: e.target.value }))}
+                      className={inputClass}
+                    >
+                      <option value="K">K - Kwacha</option>
+                      <option value="MWK">MWK - Malawi</option>
+                      <option value="$">$ - US Dollar</option>
+                      <option value="£">£ - Pound</option>
+                      <option value="€">€ - Euro</option>
+                    </select>
+                  </div>
+
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Year Start</label>
+                      <label className={labelClass}>Financial Year Start</label>
                       <select
                         value={company.financialYearStart}
                         onChange={e => setCompany(prev => ({ ...prev, financialYearStart: e.target.value }))}
-                        className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all outline-none appearance-none cursor-pointer"
+                        className={inputClass}
                       >
                         {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map(month => (
-                          <option key={month} value={month} className="bg-slate-900">{month}</option>
+                          <option key={month} value={month}>{month}</option>
                         ))}
                       </select>
                     </div>
                     <div>
-                      <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Year End</label>
+                      <label className={labelClass}>Financial Year End</label>
                       <select
                         value={company.fiscalYearEndMonth}
                         onChange={e => setCompany(prev => ({ ...prev, fiscalYearEndMonth: e.target.value }))}
-                        className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all outline-none appearance-none cursor-pointer"
+                        className={inputClass}
                       >
                         {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map(month => (
-                          <option key={month} value={month} className="bg-slate-900">{month}</option>
+                          <option key={month} value={month}>{month}</option>
                         ))}
                       </select>
                     </div>
                   </div>
 
                   <div>
-                    <label className="text-xs font-semibold text-slate-300 mb-3 block">Pricing Mode</label>
-                    <div className="grid grid-cols-2 gap-3">
+                    <label className={labelClass}>Date Format</label>
+                    <select
+                      value={company.dateFormat}
+                      onChange={e => setCompany(prev => ({ ...prev, dateFormat: e.target.value }))}
+                      className={inputClass}
+                    >
+                      <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+                      <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+                      <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[13px] font-semibold text-slate-300 mb-3">Pricing Mode</label>
+                    <div className="flex flex-col gap-3">
                       <button
                         type="button"
                         onClick={() => setCompany(prev => ({ ...prev, vatPricingMode: 'VAT' }))}
-                        className={`p-4 rounded-2xl border-2 text-left transition-all duration-200 ${
+                        className={`flex items-center gap-4 p-4 rounded-2xl border-2 text-left transition-all duration-200 ${
                           company.vatPricingMode === 'VAT'
-                            ? 'bg-blue-500/10 border-blue-500/50'
-                            : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20'
+                            ? 'border-indigo-500 bg-indigo-500/10'
+                            : 'border-[#1F2A3F] bg-[#0D1520] hover:border-slate-500'
                         }`}
                       >
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 transition-all ${
-                          company.vatPricingMode === 'VAT' ? 'bg-blue-500/20' : 'bg-white/10'
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all ${
+                          company.vatPricingMode === 'VAT' ? 'bg-indigo-500' : 'bg-[#1F2A3F]'
                         }`}>
-                          <Receipt size={20} className={company.vatPricingMode === 'VAT' ? 'text-blue-400' : 'text-slate-400'} />
+                          <svg className={company.vatPricingMode === 'VAT' ? 'text-white' : 'text-slate-400'} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                            <polyline points="10 9 9 9 8 9"></polyline>
+                          </svg>
                         </div>
-                        <div className="text-slate-100 font-semibold text-sm">Tax (VAT)</div>
-                        <div className="text-xs text-slate-400 mt-0.5">Standard pricing</div>
+                        <div>
+                          <div className="text-slate-100 font-semibold text-sm">Tax (VAT)</div>
+                          <div className="text-xs text-slate-400 mt-0.5">Standard pricing with VAT</div>
+                        </div>
+                        {company.vatPricingMode === 'VAT' && (
+                          <CheckCircle2 size={18} className="ml-auto text-indigo-400 shrink-0" />
+                        )}
                       </button>
                       <button
                         type="button"
                         onClick={() => setCompany(prev => ({ ...prev, vatPricingMode: 'MarketAdjustment' }))}
-                        className={`p-4 rounded-2xl border-2 text-left transition-all duration-200 ${
+                        className={`flex items-center gap-4 p-4 rounded-2xl border-2 text-left transition-all duration-200 ${
                           company.vatPricingMode === 'MarketAdjustment'
-                            ? 'bg-purple-500/10 border-purple-500/50'
-                            : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20'
+                            ? 'border-indigo-500 bg-indigo-500/10'
+                            : 'border-[#1F2A3F] bg-[#0D1520] hover:border-slate-500'
                         }`}
                       >
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 transition-all ${
-                          company.vatPricingMode === 'MarketAdjustment' ? 'bg-purple-500/20' : 'bg-white/10'
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all ${
+                          company.vatPricingMode === 'MarketAdjustment' ? 'bg-indigo-500' : 'bg-[#1F2A3F]'
                         }`}>
-                          <Sparkles size={20} className={company.vatPricingMode === 'MarketAdjustment' ? 'text-purple-400' : 'text-slate-400'} />
+                          <svg className={company.vatPricingMode === 'MarketAdjustment' ? 'text-white' : 'text-slate-400'} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+                            <polyline points="17 6 23 6 23 12"></polyline>
+                          </svg>
                         </div>
-                        <div className="text-slate-100 font-semibold text-sm">Market Adj.</div>
-                        <div className="text-xs text-slate-400 mt-0.5">Dynamic pricing</div>
+                        <div>
+                          <div className="text-slate-100 font-semibold text-sm">Market Adjustment</div>
+                          <div className="text-xs text-slate-400 mt-0.5">Dynamic market adjustment pricing</div>
+                        </div>
+                        {company.vatPricingMode === 'MarketAdjustment' && (
+                          <CheckCircle2 size={18} className="ml-auto text-indigo-400 shrink-0" />
+                        )}
                       </button>
                     </div>
+                  </div>
+
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={() => goToStep(3)}
+                      disabled={!canContinueFinancial}
+                      className="w-full py-2.5 bg-indigo-500 hover:bg-indigo-400 disabled:bg-indigo-500/30 disabled:cursor-not-allowed text-white rounded-xl font-semibold text-[13px] flex items-center justify-center gap-2 shadow-sm hover:shadow-md transition-all duration-200 active:scale-[0.99]"
+                    >
+                      Continue
+                      <ArrowRight size={16} />
+                    </button>
                   </div>
                 </div>
               </div>
             )}
 
             {step === 3 && (
-              <div className="pt-4 animate-fade-in">
-                <h1 className="text-xl lg:text-2xl font-semibold text-slate-100 mb-1">Admin Account</h1>
-                <p className="text-sm text-slate-400 mb-6">Create your primary user account</p>
+              <div className="animate-fade-in">
+                <h1 className="text-xl font-bold text-slate-100 tracking-tight">Admin Account</h1>
+                <p className="text-sm text-slate-400 mt-1 mb-6">Create your primary user account</p>
 
                 {error && (
-                  <div className="mb-5 p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-start gap-2">
-                    <AlertCircle size={14} className="text-rose-400 shrink-0 mt-0.5" />
+                  <div className="mb-5 p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-xl flex items-start gap-3">
+                    <AlertCircle size={16} className="text-rose-400 shrink-0 mt-0.5" />
                     <p className="text-xs text-rose-300">{error}</p>
                   </div>
                 )}
@@ -538,192 +614,158 @@ const SetupWizard: React.FC = () => {
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Full Name *</label>
-                      <Input
+                      <label className={labelClass}>Full Name *</label>
+                      <input
                         value={admin.fullName}
                         onChange={e => setAdmin(prev => ({ ...prev, fullName: e.target.value }))}
-                        className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all placeholder:text-slate-500"
+                        className={inputClass}
                         placeholder="John Doe"
                         required
                       />
                     </div>
                     <div>
-                      <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Email <span className="text-rose-400">*</span></label>
-                      <Input
+                      <label className={labelClass}>Email {SUPABASE_ENABLED && <span className="text-rose-400">*</span>}</label>
+                      <input
                         type="email"
                         value={admin.email}
                         onChange={e => setAdmin(prev => ({ ...prev, email: e.target.value }))}
-                        className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all placeholder:text-slate-500"
-                        placeholder="admin@company.com"
-                        required
+                        className={inputClass}
+                        placeholder="admin@co.com"
+                        required={SUPABASE_ENABLED}
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Username <span className="text-slate-500">(optional)</span></label>
-                    <Input
+                    <label className={labelClass}>Username *</label>
+                    <input
                       value={admin.username}
                       onChange={e => setAdmin(prev => ({ ...prev, username: e.target.value }))}
-                      className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all placeholder:text-slate-500"
-                      placeholder="Auto-generated from email"
+                      className={inputClass}
+                      placeholder="admin_prime"
+                      required
                     />
                   </div>
+                </div>
+
+                <div className="pt-4">
+                  <button
+                    type="button"
+                    onClick={() => goToStep(4)}
+                    disabled={!canContinueUser}
+                    className="w-full py-2.5 bg-indigo-500 hover:bg-indigo-400 disabled:bg-indigo-500/30 disabled:cursor-not-allowed text-white rounded-xl font-semibold text-[13px] flex items-center justify-center gap-2 shadow-sm hover:shadow-md transition-all duration-200 active:scale-[0.99]"
+                  >
+                    Continue
+                    <ArrowRight size={16} />
+                  </button>
                 </div>
               </div>
             )}
 
             {step === 4 && (
-              <div className="pt-4 animate-fade-in">
+              <div className="animate-fade-in">
                 <div className="flex items-center gap-3 mb-1">
-                  <h1 className="text-xl lg:text-2xl font-semibold text-slate-100">Security</h1>
-                  <span className="px-2 py-0.5 bg-white/10 border border-white/10 rounded-md text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Optional</span>
+                  <h1 className="text-xl font-bold text-slate-100 tracking-tight">Security</h1>
+                  <span className="px-2 py-0.5 bg-[#1F2A3F] border border-[#2A3A5A] rounded-md text-[10px] font-bold text-slate-400 uppercase tracking-wider">Optional</span>
                 </div>
-                <p className="text-sm text-slate-400 mb-6 leading-[1.45]">Configure account access settings</p>
+                <p className="text-sm text-slate-400 mt-1 mb-6">Configure account access settings</p>
 
-                <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-start gap-2 mb-6">
-                  <AlertCircle size={14} className="text-blue-400 shrink-0 mt-0.5" />
-                  <p className="text-xs text-blue-300">Password is optional. Enable it later in settings if you skip now.</p>
+                {error && (
+                  <div className="mb-5 p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-xl flex items-start gap-3">
+                    <AlertCircle size={16} className="text-rose-400 shrink-0 mt-0.5" />
+                    <p className="text-xs text-rose-300">{error}</p>
+                  </div>
+                )}
+
+                <div className="p-3.5 bg-indigo-500/10 border border-indigo-500/30 rounded-xl flex items-start gap-3 mb-6">
+                  <AlertCircle size={16} className="text-indigo-400 shrink-0 mt-0.5" />
+                  <p className="text-xs text-indigo-300">Password is optional. Enable it later in settings if you skip now.</p>
                 </div>
 
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Password</label>
-                      <Input
-                        type="password"
-                        value={admin.password}
-                        onChange={e => setAdmin(prev => ({ ...prev, password: e.target.value }))}
-                        className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all placeholder:text-slate-500"
-                        placeholder="Leave blank to skip"
-                      />
+                      <label className={labelClass}>Password</label>
+                      <div className="relative">
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          value={admin.password}
+                          onChange={e => setAdmin(prev => ({ ...prev, password: e.target.value }))}
+                          className={`${inputClass} pr-10`}
+                          placeholder="Leave blank to skip"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
+                        >
+                          {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
                     </div>
                     <div>
-                      <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Confirm</label>
-                      <Input
+                      <label className={labelClass}>Confirm</label>
+                      <input
                         type="password"
                         value={admin.confirmPassword}
                         onChange={e => setAdmin(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                        className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white text-sm transition-all placeholder:text-slate-500"
+                        className={inputClass}
                         placeholder="Repeat password"
                       />
                     </div>
                   </div>
 
                   {admin.password && (
-                    <div className="p-4 bg-white/5 rounded-xl border border-white/10 space-y-2">
+                    <div className="p-4 bg-[#0D1520] rounded-xl border border-[#1F2A3F] space-y-3">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-slate-300">Strength</span>
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                          passwordValidation.valid ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-500/20 text-slate-300'
+                        <span className="text-xs font-semibold text-slate-300">Password Strength</span>
+                        <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${
+                          passwordValidation.valid ? 'bg-emerald-500/10 text-emerald-300' : 'bg-[#1F2A3F] text-slate-400'
                         }`}>
                           {passwordValidation.valid ? 'Strong' : 'Basic'}
                         </span>
                       </div>
-                      <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                      <div className="h-1.5 bg-[#1F2A3F] rounded-full overflow-hidden">
                         <div className={`h-full transition-all duration-500 rounded-full ${
                           passwordValidation.valid
-                            ? 'w-full bg-gradient-to-r from-emerald-500 to-teal-500'
-                            : 'w-1/3 bg-gradient-to-r from-slate-500 to-slate-600'
+                            ? 'w-full bg-emerald-400'
+                            : 'w-1/3 bg-slate-400'
                         }`} />
                       </div>
                       {!passwordValidation.valid && (
-                        <p className="text-xs text-slate-400">{passwordValidation.errors.length > 0 ? 'Tip: ' + passwordValidation.errors[0] : 'Basic password strength'}</p>
+                        <p className="text-xs text-slate-400">{passwordValidation.errors.length > 0 ? passwordValidation.errors[0] : 'Basic password strength'}</p>
                       )}
                       {admin.confirmPassword && admin.password !== admin.confirmPassword && (
-                        <p className="text-xs text-rose-300">Passwords don't match</p>
+                        <p className="text-xs text-rose-400 font-medium">Passwords don't match</p>
                       )}
                     </div>
                   )}
+                </div>
 
-                  <div className="pt-3 border-t border-white/10 space-y-3">
-                    <h3 className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Security Settings</h3>
-                    
-                    <div className="flex items-center justify-between p-3.5 bg-white/5 rounded-xl border border-white/10">
-                      <div>
-                        <div className="text-sm font-medium text-slate-100">Password Protection</div>
-                        <div className="text-xs text-slate-400 mt-0.5">Require password for logins</div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setCompany(prev => ({ ...prev, passwordRequired: !(prev as any).passwordRequired }))}
-                        className={`relative w-11 h-6 rounded-full transition-all duration-200 ${
-                          (company as any).passwordRequired ? 'bg-blue-600' : 'bg-slate-700'
-                        }`}
-                      >
-                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-200 shadow-sm ${
-                          (company as any).passwordRequired ? 'left-6' : 'left-1'
-                        }`} />
-                      </button>
-                    </div>
-
-                    <div className="flex items-center justify-between p-3.5 bg-white/5 rounded-xl border border-white/10">
-                      <div>
-                        <div className="text-sm font-medium text-slate-100">Complex Passwords</div>
-                        <div className="text-xs text-slate-400 mt-0.5">Enforce minimum complexity</div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setCompany(prev => ({ ...prev, enforceComplexity: !(prev as any).enforceComplexity }))}
-                        className={`relative w-11 h-6 rounded-full transition-all duration-200 ${
-                          (company as any).enforceComplexity ? 'bg-blue-600' : 'bg-slate-700'
-                        }`}
-                      >
-                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-200 shadow-sm ${
-                          (company as any).enforceComplexity ? 'left-6' : 'left-1'
-                        }`} />
-                      </button>
-                    </div>
-                  </div>
+                <div className="pt-4">
+                  <button
+                    type="button"
+                    onClick={handleSetup}
+                    disabled={!canSubmitAdmin || submitting}
+                    className="w-full py-2.5 bg-indigo-500 hover:bg-indigo-400 disabled:bg-indigo-500/30 disabled:cursor-not-allowed text-white rounded-xl font-semibold text-[13px] flex items-center justify-center gap-2 shadow-sm hover:shadow-md transition-all duration-200 active:scale-[0.99]"
+                  >
+                    {submitting ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin" />
+                        <span>Creating account...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>{SUPABASE_ENABLED && admin.email ? 'Create Account & Continue' : 'Complete Setup'}</span>
+                        <CheckCircle2 size={16} />
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
             )}
           </div>
-
-          <div className="py-4">
-            {step < steps.length - 1 ? (
-              <button
-                type="button"
-                onClick={() => {
-                  if (step === 1 && !canContinueCompany) {
-                    setError('Please complete all required fields.');
-                    return;
-                  }
-                  if (step === 3 && !canContinueUser) {
-                    setError('Please complete all required user information.');
-                    return;
-                  }
-                  setError(null);
-                  goToStep(step + 1);
-                }}
-                disabled={step === 0 && !setupMode}
-                className="w-full py-2 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 disabled:from-slate-700 disabled:to-slate-700 disabled:text-slate-500 text-white font-semibold rounded-xl shadow-lg shadow-blue-500/25 transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2 text-sm"
-              >
-                Continue
-                <ArrowRight size={16} />
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={handleSetup}
-                disabled={!canSubmitAdmin || submitting}
-                className="w-full py-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:from-slate-700 disabled:to-slate-700 disabled:text-slate-500 text-white font-semibold rounded-xl shadow-lg shadow-emerald-500/25 transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2 text-sm"
-              >
-                {submitting ? (
-                  <>
-                    <Loader2 size={16} className="animate-spin" />
-                    Setting up...
-                  </>
-                ) : (
-                  <>
-                    Complete Setup
-                    <CheckCircle2 size={16} />
-                  </>
-                )}
-              </button>
-            )}
-          </div>
         </div>
-      </div>
+      )}
     </AuthLayout>
   );
 };

@@ -22,7 +22,7 @@ const getLocalNotificationsForUser = async (
 ): Promise<ExaminationBatchNotification[]> => {
   let localNotifications: ExaminationBatchNotification[];
   try {
-    localNotifications = await examinationDb.examinationBatchNotifications.toArray();
+    localNotifications = await examinationDb.examinationBatchNotifications.toArray() as ExaminationBatchNotification[];
   } catch {
     localNotifications = await dbService.getAll<ExaminationBatchNotification>('examinationBatchNotifications');
   }
@@ -145,7 +145,8 @@ export const examinationNotificationService = {
   ): Promise<ExaminationBatchNotification> {
     const user = userId || this.getCurrentUserId();
     if (!user) {
-      throw new Error('No user ID available for notification');
+      console.warn('[ExaminationNotification] No user ID available — skipping notification');
+      return this.createAnonymousNotification(batchId, notificationType, batchDetails);
     }
 
     // Generate notification content based on type
@@ -321,7 +322,7 @@ export const examinationNotificationService = {
     if (shouldUseLocalNotificationsOnly(user)) {
       let notifications: ExaminationBatchNotification[];
       try {
-        notifications = await examinationDb.examinationBatchNotifications.toArray();
+        notifications = await examinationDb.examinationBatchNotifications.toArray() as ExaminationBatchNotification[];
       } catch {
         notifications = await dbService.getAll<ExaminationBatchNotification>('examinationBatchNotifications');
       }
@@ -359,7 +360,7 @@ export const examinationNotificationService = {
       try {
         let notifications: ExaminationBatchNotification[];
         try {
-          notifications = await examinationDb.examinationBatchNotifications.toArray();
+          notifications = await examinationDb.examinationBatchNotifications.toArray() as ExaminationBatchNotification[];
         } catch {
           notifications = await dbService.getAll<ExaminationBatchNotification>('examinationBatchNotifications');
         }
@@ -650,6 +651,49 @@ export const examinationNotificationService = {
   getClientIp(): string {
     // This is a simplified version - in production you'd get this from server
     return '127.0.0.1';
+  },
+
+  /**
+   * Create notification with system user fallback when no user ID available
+   */
+  async createAnonymousNotification(
+    batchId: string,
+    notificationType: NotificationType,
+    batchDetails: any
+  ): Promise<ExaminationBatchNotification> {
+    const { title, message, priority } = this.generateNotificationContent(notificationType, batchDetails);
+    const notification: Partial<ExaminationBatchNotification> = {
+      id: this.generateId(),
+      batch_id: batchId,
+      user_id: 'system',
+      notification_type: notificationType,
+      title,
+      message,
+      priority,
+      batch_details: {
+        batchId: batchDetails.id || batchId,
+        batchName: batchDetails.name || 'Examination Batch',
+        examinationDate: batchDetails.exam_date || batchDetails.created_at || new Date().toISOString(),
+        numberOfStudents: batchDetails.expected_candidature || batchDetails.total_students || 0,
+        schoolName: batchDetails.school_name,
+        academicYear: batchDetails.academic_year,
+        term: batchDetails.term,
+        examType: batchDetails.exam_type,
+        totalAmount: batchDetails.total_amount,
+        status: batchDetails.status
+      },
+      is_read: false,
+      read_at: null,
+      delivered_at: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+      expires_at: this.calculateExpiry(notificationType)
+    };
+    try {
+      await examinationDb.examinationBatchNotifications.put(notification as any);
+    } catch {
+      await dbService.put('examinationBatchNotifications', notification as any);
+    }
+    return notification as ExaminationBatchNotification;
   }
 };
 

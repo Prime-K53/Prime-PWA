@@ -361,8 +361,8 @@ const ExaminationHub: React.FC = () => {
     try {
       const { warnings } = await approveBatch(batchId);
       if (warnings && warnings.length > 0) {
-        warnings.forEach(w => toast.warning(w.message));
-        toast.warning('Batch approved with inventory warnings.');
+        warnings.forEach(w => (toast as any).warning(w.message));
+        (toast as any).warning('Batch approved with inventory warnings.');
       } else {
         toast.success('Batch approved successfully');
       }

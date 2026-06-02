@@ -366,18 +366,20 @@ export const ServiceCalculatorModal: React.FC<{
                         marginAmount: result.marginAmount,
                         rounding_difference: result.roundingDifference,
                         components: [],
-                        serviceDetails: {
-                            pages,
-                            copies,
-                            totalPages,
-                            unitCostPerPage,
-                            unitPricePerPage,
-                            unitCostPerCopy,
-                            unitPricePerCopy: result.unitPrice,
-                            totalCost: baseCost,
-                            totalPrice: result.totalPrice,
-                            calculatedTotalPrice: result.totalPrice
-                        }
+                            serviceDetails: {
+                                pages,
+                                copies,
+                                totalPages,
+                                unitCostPerPage,
+                                unitPricePerPage,
+                                unitCostPerCopy,
+                                unitPricePerCopy: result.unitPrice,
+                                totalCost: baseCost,
+                                totalPrice: result.totalPrice,
+                                calculatedTotalPrice: result.totalPrice,
+                                materials: [],
+                                adjustments: []
+                            }
                     };
                     setEnginePricing(transformed);
                 }
@@ -572,19 +574,24 @@ export const CustomerModal: React.FC<{
     const [showQuickAdd, setShowQuickAdd] = useState(false);
     const [newCustomerName, setNewCustomerName] = useState('');
     const [newCustomerContact, setNewCustomerContact] = useState('');
+    const [searchTerm, setSearchTerm] = useState('');
 
     const customerNames = useMemo(() => {
         const names = new Set<string>();
-        // Add ALL customers from CRM (not just those with balances)
         customers?.forEach(c => {
             if (c.name) names.add(c.name);
         });
-        // Also include legacy invoice customers 
         invoices?.forEach(inv => {
             if (inv.customerName) names.add(inv.customerName);
         });
         return Array.from(names).sort();
     }, [invoices, customers]);
+
+    const filteredCustomerNames = useMemo(() => {
+        if (!searchTerm.trim()) return customerNames;
+        const term = searchTerm.trim().toLowerCase();
+        return customerNames.filter(name => name.toLowerCase().includes(term));
+    }, [customerNames, searchTerm]);
 
     const handleQuickAdd = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -597,17 +604,31 @@ export const CustomerModal: React.FC<{
 
     return (
         <div className="absolute inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-[2px]">
-            <div className="bg-white rounded shadow-2xl w-full max-w-4xl max-h-[80vh] flex flex-col overflow-hidden border border-[#d4d7dc]">
-                <div className="px-6 py-4 border-b border-[#d4d7dc] flex justify-between items-center bg-[#f4f5f8]">
-                    <h2 className="text-sm font-bold text-[#393a3d] uppercase tracking-wider">Select Customer</h2>
-                    <button onClick={onClose} className="text-[#8d9096] hover:text-[#d52b1e]"><X size={20} /></button>
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[80vh] flex flex-col overflow-hidden border border-slate-200 font-sans leading-relaxed">
+                <div className="px-4 py-2.5 border-b border-slate-200 flex justify-between items-center bg-slate-50 shrink-0">
+                    <h2 className="text-[20px] font-semibold text-slate-800">Select Customer</h2>
+                    <button onClick={onClose} className="text-slate-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"><X size={18} /></button>
                 </div>
 
-                <div className="px-6 py-4 bg-white border-b border-[#d4d7dc] flex justify-between items-center shrink-0">
-                    <p className="text-[11px] font-bold text-[#6b6c7f] uppercase tracking-wider">Accounts</p>
+                <div className="px-4 py-2 bg-white border-b border-slate-200 shrink-0">
+                    <div className="relative">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                        <input
+                            type="text"
+                            placeholder="Search customers..."
+                            value={searchTerm}
+                            onChange={e => setSearchTerm(e.target.value)}
+                            className="w-full pl-8 pr-3 py-1.5 border border-slate-300 rounded-lg text-[13px] text-slate-700 placeholder-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none bg-white leading-relaxed"
+                            autoFocus
+                        />
+                    </div>
+                </div>
+
+                <div className="px-4 py-2.5 bg-white border-b border-slate-200 flex justify-between items-center shrink-0">
+                    <p className="text-[12px] font-medium text-slate-500 uppercase tracking-wider">Accounts</p>
                     <button
                         onClick={() => setShowQuickAdd(!showQuickAdd)}
-                        className={`flex items-center gap-2 px-6 py-2 rounded-full text-xs font-bold transition-all ${showQuickAdd ? 'bg-[#f4f5f8] text-[#393a3d] border border-[#babec5]' : 'bg-[#0077c5] text-white'}`}
+                        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] font-medium transition-all ${showQuickAdd ? 'bg-slate-100 text-slate-700 border border-slate-200' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
                     >
                         {showQuickAdd ? <X size={14} /> : <UserPlus size={14} />}
                         {showQuickAdd ? 'Cancel' : 'New Customer'}
@@ -615,12 +636,12 @@ export const CustomerModal: React.FC<{
                 </div>
 
                 {showQuickAdd && (
-                    <form onSubmit={handleQuickAdd} className="p-6 bg-[#f4f5f8] border-b border-[#d4d7dc] animate-in slide-in-from-top-2">
-                        <div className="grid grid-cols-2 gap-4 mb-4">
+                    <form onSubmit={handleQuickAdd} className="p-4 bg-slate-50 border-b border-slate-200 animate-in slide-in-from-top-2 shrink-0">
+                        <div className="grid grid-cols-2 gap-3 mb-3">
                             <div className="space-y-1">
-                                <label className="text-[11px] font-bold text-[#6b6c7f] uppercase">Full Name *</label>
+                                <label className="block text-[12px] font-medium text-slate-500">Full Name *</label>
                                 <input
-                                    className="w-full p-2.5 border border-[#babec5] rounded text-sm focus:border-[#0077c5] outline-none bg-white"
+                                    className="w-full p-2 border border-slate-300 rounded-lg text-[13px] text-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none bg-white leading-relaxed"
                                     placeholder="e.g. Acme Printing"
                                     value={newCustomerName}
                                     onChange={e => setNewCustomerName(e.target.value)}
@@ -628,9 +649,9 @@ export const CustomerModal: React.FC<{
                                 />
                             </div>
                             <div className="space-y-1">
-                                <label className="text-[11px] font-bold text-[#6b6c7f] uppercase">Contact info</label>
+                                <label className="block text-[12px] font-medium text-slate-500">Contact info</label>
                                 <input
-                                    className="w-full p-2.5 border border-[#babec5] rounded text-sm focus:border-[#0077c5] outline-none bg-white"
+                                    className="w-full p-2 border border-slate-300 rounded-lg text-[13px] text-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none bg-white leading-relaxed"
                                     placeholder="Phone or Email"
                                     value={newCustomerContact}
                                     onChange={e => setNewCustomerContact(e.target.value)}
@@ -640,34 +661,38 @@ export const CustomerModal: React.FC<{
                         <button
                             type="submit"
                             disabled={!newCustomerName}
-                            className="px-8 py-2.5 bg-[#2ca01c] text-white rounded-full text-sm font-bold hover:bg-[#248217] disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm"
+                            className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-[12px] font-medium hover:bg-green-700 disabled:opacity-50 flex items-center justify-center gap-1.5 transition-colors"
                         >
-                            <Save size={16} /> Save and Select
+                            <Save size={14} /> Save and Select
                         </button>
                     </form>
                 )}
 
-                <div className="p-2 overflow-y-auto flex-1 divide-y divide-[#f4f5f8] custom-scrollbar">
-                    {customerNames.map(name => {
+                <div className="overflow-y-auto flex-1 divide-y divide-slate-100 custom-scrollbar">
+                    {filteredCustomerNames.length === 0 ? (
+                        <div className="px-6 py-10 text-center text-[13px] text-slate-400 leading-relaxed">
+                            {searchTerm ? `No customers matching "${searchTerm}"` : 'No customers found'}
+                        </div>
+                    ) : filteredCustomerNames.map(name => {
                         const custInvoices = invoices.filter(i => i.customerName === name && i.status !== 'Paid' && i.status !== 'Draft');
                         const custDebt = custInvoices.reduce((sum, i) => sum + (i.totalAmount - (i.paidAmount || 0)), 0);
 
                         return (
-                            <button key={name} onClick={() => onSelect(name)} className="w-full text-left px-6 py-4 hover:bg-[#f4f5f8] flex justify-between items-center transition-all group">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 rounded-full bg-[#eceef1] flex items-center justify-center text-[#393a3d] font-bold group-hover:bg-[#0077c5] group-hover:text-white transition-all">
+                            <button key={name} onClick={() => onSelect(name)} className="w-full text-left px-4 py-2.5 hover:bg-slate-50 flex justify-between items-center transition-colors group">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-700 font-semibold text-[13px] group-hover:bg-blue-600 group-hover:text-white transition-colors shrink-0">
                                         {name.charAt(0)}
                                     </div>
-                                    <div>
-                                        <div className="font-bold text-[#393a3d] text-sm">{name}</div>
+                                    <div className="min-w-0">
+                                        <div className="font-medium text-slate-800 text-[13.5px] leading-snug truncate">{name}</div>
                                     </div>
                                 </div>
-                                <div className="text-right">
-                                    <div className={`text-xs font-bold ${custDebt > 0 ? 'text-[#d52b1e]' : 'text-[#2ca01c]'}`}>
+                                <div className="text-right shrink-0 ml-4">
+                                    <div className={`font-medium text-[13px] tabular-nums leading-snug ${custDebt > 0 ? 'text-red-600' : 'text-green-600'}`}>
                                         {companyConfig.currencySymbol}{custDebt.toLocaleString()}
                                     </div>
-                                    <div className="text-[10px] text-[#6b6c7f] font-medium uppercase">
-                                        {custDebt > 0 ? 'Outstanding' : 'Clear'}
+                                    <div className="text-[11px] text-slate-400 font-medium uppercase tracking-wide">
+                                        {custDebt > 0 ? 'Due' : 'Clear'}
                                     </div>
                                 </div>
                             </button>

@@ -45,7 +45,8 @@ import { api } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { PreviewModal } from '../shared/components/PDF/PreviewModal';
 import { FinancialDoc } from '../shared/components/PDF/schemas';
-import { MarketAdjustment, BOMTemplate, ExamPricingResult, SubjectJob, ExamSchoolLocal as School, ExamClassLocal as Class, ExamSubjectLocal as Subject, ExamPaper as Examination } from '../../types';
+import { MarketAdjustment, BOMTemplate, ExamPricingResult, SubjectJob, ProductionSettingsConfig,
+  ExamSchoolLocal as School, ExamClassLocal as Class, ExamSubjectLocal as Subject, ExamPaper as Examination } from '../../types';
 import { dbService } from '../../services/db';
 import { SafeFormulaEngine } from '../../services/formulaEngine';
 import { inventoryTransactionService } from '../../services/inventoryTransactionService';
@@ -106,7 +107,7 @@ export const NewExamJobModal: React.FC<NewExamJobModalProps> = ({
   const [previewData, setPreviewData] = useState<FinancialDoc | null>(null);
   const [batchLaborCost, setBatchLaborCost] = useState<string>('0');
 
-  const productionSettings = companyConfig?.productionSettings || {};
+  const productionSettings = (companyConfig?.productionSettings || {}) as ProductionSettingsConfig;
 
   useEffect(() => {
     let cancelled = false;
@@ -426,11 +427,12 @@ export const NewExamJobModal: React.FC<NewExamJobModalProps> = ({
         category,
         amount: Math.round(amount * 100) / 100
       }));
+      const allSnapshots = subjectResults.reduce((acc: any[], r) => [...acc, ...((r as any).adjustmentSnapshots || [])], []);
       const total_cost = base_cost + adjustmentTotal;
       const selling_price = total_learners * price_per_learner;
 
       // Profit extracted from adjustmentSnapshots (NOT recalculated)
-      const profitMarginSnapshot = adjustmentSnapshots.find(s => s.name === 'Profit Margin');
+      const profitMarginSnapshot = allSnapshots.find((s: any) => s.name === 'Profit Margin');
       const profit = profitMarginSnapshot 
         ? profitMarginSnapshot.calculatedAmount * total_learners 
         : selling_price - total_cost;
@@ -551,7 +553,7 @@ export const NewExamJobModal: React.FC<NewExamJobModalProps> = ({
         sub_account_name: subAccountName
       });
 
-      const returnedBatchId = confirmData?.batch_id || confirmData?.batchId;
+      const returnedBatchId = confirmData?.batch_id;
       if (!returnedBatchId) {
         throw new Error('Batch creation did not return a batch reference.');
       }

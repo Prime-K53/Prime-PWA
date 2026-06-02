@@ -187,7 +187,9 @@ const MarketingMessages: React.FC = () => {
       recipients: finalRecipients,
       status: 'sent',
       sentAt: new Date().toISOString()
-    });
+    }) as unknown as WhatsAppCampaign;
+
+    setCampaigns(prev => [campaign, ...prev]);
 
     setCampaigns(prev => [campaign, ...prev]);
     setShowNewCampaign(false);

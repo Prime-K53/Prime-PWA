@@ -9,6 +9,8 @@ import {
 } from 'lucide-react';
 import { Item, ProductionOperation, BOMComponent, WorkCenter, WorkOrder, JobOrder, VDPConfig, BillOfMaterial } from '../../../types';
 import { useAuth } from '../../../context/AuthContext';
+import { useFinance } from '../../../context/FinanceContext';
+import { useProduction } from '../../../context/ProductionContext';
 import { Loader2 } from 'lucide-react';
 import { OfflineImage } from '../../../components/OfflineImage';
 import { generateNextId } from '../../../utils/helpers';

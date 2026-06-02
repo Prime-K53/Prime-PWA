@@ -6,6 +6,7 @@ import { useSales } from './SalesContext';
 import { useProcurement } from './ProcurementContext';
 import { useOrders } from './OrdersContext';
 import { useExamination } from './ExaminationContext';
+import { useBankingStore } from './BankingContext';
 import { useAuth } from './AuthContext';
 import { dbService } from '../services/db';
 import { generateNextId } from '../utils/helpers';
@@ -40,7 +41,9 @@ type DataContextValue = {
   deleteReminder: (id: string) => void;
   clearAlerts: () => void;
   dismissAlert: (id: string) => void;
+  addTask: (task: any) => void;
   updateTask: (task: any) => void;
+  deleteTask: (id: string) => void;
 };
 
 const DataContext = createContext<DataContextValue | undefined>(undefined);
@@ -91,7 +94,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             procurement,
             production,
             orders,
-            examination
+            examination,
+            banking: { fetchBankingData: useBankingStore.getState().fetchBankingData }
         });
         lastRefreshAtRef.current = Date.now();
         refreshInFlightRef.current = false;
@@ -106,7 +110,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             window.clearTimeout(refreshTimerRef.current);
         }
         refreshTimerRef.current = window.setTimeout(() => {
-            refreshAllData().catch(() => undefined);
+            refreshAllData().catch((err) => console.error('[DataContext] refresh failed:', err));
         }, delayMs);
     }, [refreshAllData]);
 
@@ -118,7 +122,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         pollTimerRef.current = window.setInterval(() => {
             const isFresh = Date.now() - lastRefreshAtRef.current < 2000;
             if (!isFresh) {
-                refreshAllData().catch(() => undefined);
+                refreshAllData().catch((err) => console.error('[DataContext] poll refresh failed:', err));
             }
         }, intervalMs);
     }, [refreshAllData]);
@@ -173,10 +177,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, [queueRefresh, refreshAllData, startPolling, stopPolling]);
 
     const addTask = useCallback(async (task: any) => {
-        const newTask = { ...task, id: task.id || generateNextId('TASK', tasks, { companyName: '' }) };
+        const newTask = { ...task, id: task.id || generateNextId('TASK', tasks, auth.companyConfig) };
         await dbService.put('tasks', newTask);
         setTasks(prev => [...prev, newTask]);
-    }, [tasks]);
+    }, [tasks, auth]);
 
     const updateTask = useCallback(async (task: any) => {
         await dbService.put('tasks', task);
