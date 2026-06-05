@@ -251,6 +251,8 @@ export const WorkflowDesigner: React.FC = () => {
               <div>
                 <label className="block text-sm font-medium mb-2">Name *</label>
                 <Input
+                  id="workflow-name"
+                  name="workflow_name"
                   value={workflow.name || ''}
                   onChange={(e) => setWorkflow({ ...workflow, name: e.target.value })}
                   placeholder="Enter workflow name"
@@ -260,6 +262,8 @@ export const WorkflowDesigner: React.FC = () => {
               <div>
                 <label className="block text-sm font-medium mb-2">Description</label>
                 <textarea
+                  id="workflow-description"
+                  name="workflow_description"
                   value={workflow.description || ''}
                   onChange={(e) => setWorkflow({ ...workflow, description: e.target.value })}
                   placeholder="Enter description"
@@ -271,6 +275,8 @@ export const WorkflowDesigner: React.FC = () => {
               <div>
                 <label className="block text-sm font-medium mb-2">Entity Type *</label>
                 <select
+                  id="entity-type"
+                  name="entity_type"
                   value={workflow.entityType || 'expense'}
                   onChange={(e) => setWorkflow({ 
                     ...workflow, 
@@ -296,6 +302,7 @@ export const WorkflowDesigner: React.FC = () => {
                 <input
                   type="checkbox"
                   id="isActive"
+                  name="is_active"
                   checked={workflow.isActive ?? true}
                   onChange={(e) => setWorkflow({ ...workflow, isActive: e.target.checked })}
                   className="mr-2"
@@ -309,6 +316,7 @@ export const WorkflowDesigner: React.FC = () => {
                 <input
                   type="checkbox"
                   id="allowParallel"
+                  name="allow_parallel"
                   checked={workflow.allowParallelInstances ?? true}
                   onChange={(e) => setWorkflow({ 
                     ...workflow, 
@@ -393,6 +401,8 @@ export const WorkflowDesigner: React.FC = () => {
                 <div>
                   <label className="block text-sm font-medium mb-2">Step Name</label>
                   <Input
+                    id="step-name"
+                    name="step_name"
                     value={selectedStep.name}
                     onChange={(e) => updateStep(selectedStep.id, { name: e.target.value })}
                   />
@@ -401,6 +411,8 @@ export const WorkflowDesigner: React.FC = () => {
                 <div>
                   <label className="block text-sm font-medium mb-2">Approver Role *</label>
                   <select
+                    id="approver-role"
+                    name="approver_role"
                     value={selectedStep.approverRole}
                     onChange={(e) => updateStep(selectedStep.id, { approverRole: e.target.value })}
                     className="w-full border rounded-md p-2"
@@ -417,6 +429,8 @@ export const WorkflowDesigner: React.FC = () => {
                 <div>
                   <label className="block text-sm font-medium mb-2">Required Approvals</label>
                   <Input
+                    id="required-approvals"
+                    name="required_approvals"
                     type="number"
                     min={1}
                     value={selectedStep.requiredApprovals}
@@ -429,6 +443,8 @@ export const WorkflowDesigner: React.FC = () => {
                 <div>
                   <label className="block text-sm font-medium mb-2">Timeout (hours)</label>
                   <Input
+                    id="timeout-hours"
+                    name="timeout_hours"
                     type="number"
                     min={1}
                     value={selectedStep.timeoutHours || ''}
@@ -442,6 +458,8 @@ export const WorkflowDesigner: React.FC = () => {
                 <div>
                   <label className="block text-sm font-medium mb-2">Escalation After (hours)</label>
                   <Input
+                    id="escalation-after-hours"
+                    name="escalation_after_hours"
                     type="number"
                     min={1}
                     value={selectedStep.escalationAfterHours || ''}
@@ -455,6 +473,8 @@ export const WorkflowDesigner: React.FC = () => {
                 <div>
                   <label className="block text-sm font-medium mb-2">Escalation Step</label>
                   <select
+                    id="escalation-step"
+                    name="escalation_step"
                     value={selectedStep.escalationStepId || ''}
                     onChange={(e) => updateStep(selectedStep.id, { 
                       escalationStepId: e.target.value || undefined 
@@ -476,6 +496,7 @@ export const WorkflowDesigner: React.FC = () => {
                   <input
                     type="checkbox"
                     id="notifyRequester"
+                    name="notify_requester"
                     checked={selectedStep.notifyRequester ?? false}
                     onChange={(e) => updateStep(selectedStep.id, { notifyRequester: e.target.checked })}
                     className="mr-2"
@@ -487,6 +508,7 @@ export const WorkflowDesigner: React.FC = () => {
                   <input
                     type="checkbox"
                     id="requireComments"
+                    name="require_comments"
                     checked={selectedStep.requireComments ?? false}
                     onChange={(e) => updateStep(selectedStep.id, { requireComments: e.target.checked })}
                     className="mr-2"
@@ -498,6 +520,7 @@ export const WorkflowDesigner: React.FC = () => {
                   <input
                     type="checkbox"
                     id="requireAttachments"
+                    name="require_attachments"
                     checked={selectedStep.requireAttachments ?? false}
                     onChange={(e) => updateStep(selectedStep.id, { requireAttachments: e.target.checked })}
                     className="mr-2"
@@ -509,6 +532,7 @@ export const WorkflowDesigner: React.FC = () => {
                   <input
                     type="checkbox"
                     id="autoApprove"
+                    name="auto_approve"
                     checked={selectedStep.autoApprove ?? false}
                     onChange={(e) => updateStep(selectedStep.id, { autoApprove: e.target.checked })}
                     className="mr-2"
@@ -534,6 +558,8 @@ export const WorkflowDesigner: React.FC = () => {
                   {selectedStep.conditions?.map((condition) => (
                     <div key={condition.id} className="flex gap-2 items-center p-2 bg-gray-50 rounded">
                       <select
+                        id="condition-field"
+                        name="condition_field"
                         value={condition.field}
                         onChange={(e) => updateCondition(selectedStep.id, condition.id, { field: e.target.value })}
                         className="border rounded p-1"
@@ -545,6 +571,8 @@ export const WorkflowDesigner: React.FC = () => {
                       </select>
 
                       <select
+                        id="condition-operator"
+                        name="condition_operator"
                         value={condition.operator}
                         onChange={(e) => updateCondition(selectedStep.id, condition.id, { 
                           operator: e.target.value as WorkflowCondition['operator']

@@ -19,8 +19,8 @@ interface InventoryContextType {
     marketAdjustments: MarketAdjustment[];
     refreshMarketAdjustments: () => Promise<void>;
     isLoading: boolean;
-    fetchInventoryData: () => Promise<void>;
-    fetchInventory: () => Promise<void>;
+    fetchInventoryData: (silent?: boolean) => Promise<void>;
+    fetchInventory: (silent?: boolean) => Promise<void>;
     fetchProcurementData: () => Promise<void>;
 
     addItem: (item: Item) => Promise<void>;

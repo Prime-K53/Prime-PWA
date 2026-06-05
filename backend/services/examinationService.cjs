@@ -705,16 +705,21 @@ const normalizeMarketAdjustmentMeta = (row, columns) => {
   };
 };
 
-const resolveEffectiveClassAdjustments = async () => {
+const resolveEffectiveClassAdjustments = async (companyId) => {
+  companyId = (typeof companyId === 'string' && companyId.trim()) ? companyId.trim() : '';
   const columns = await getTableColumnSet('market_adjustments');
   const whereClauses = buildActiveMarketAdjustmentWhereClauses(columns);
+  if (companyId) {
+    whereClauses.push('company_id = ?');
+  }
   const whereSql = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : '';
   const orderSql = buildMarketAdjustmentOrderSql(columns);
+  const params = companyId ? [companyId] : [];
   const adjustments = await runQuery(`
     SELECT * FROM market_adjustments
     ${whereSql}
     ${orderSql}
-  `);
+  `, params);
   return adjustments;
 };
 
@@ -839,12 +844,16 @@ const resolveConfiguredExamMaterial = ({
   };
 };
 
-const resolveExamMaterialConfiguration = async () => {
+const resolveExamMaterialConfiguration = async (companyId) => {
+  companyId = (typeof companyId === 'string' && companyId.trim()) ? companyId.trim() : '';
   await ensureExaminationPricingSchema();
-  const [inventory, bomDefaults] = await Promise.all([
-    runQuery('SELECT * FROM inventory'),
-    runQuery('SELECT * FROM bom_default_materials')
-  ]);
+  const inventoryQuery = companyId
+    ? runQuery('SELECT * FROM inventory WHERE company_id = ?', [companyId])
+    : runQuery('SELECT * FROM inventory');
+  const bomDefaultsQuery = companyId
+    ? runQuery('SELECT * FROM bom_default_materials WHERE company_id = ?', [companyId])
+    : runQuery('SELECT * FROM bom_default_materials');
+  const [inventory, bomDefaults] = await Promise.all([inventoryQuery, bomDefaultsQuery]);
 
   const paperItem = resolveConfiguredExamMaterial({
     inventory,
@@ -1354,6 +1363,8 @@ const ensureCoreExaminationSchema = async () => {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
 
+    await addColumnIfMissing('examination_batches', 'company_id', 'TEXT DEFAULT \'\'');
+
     await runRun(`CREATE TABLE IF NOT EXISTS examination_classes (
       id TEXT PRIMARY KEY,
       batch_id TEXT NOT NULL,
@@ -1577,12 +1588,14 @@ const ensureExaminationSyncSchema = async () => {
 
   ensureSyncSchemaPromise = (async () => {
     await runRun(`CREATE TABLE IF NOT EXISTS examination_sync_state (
-      entity_type TEXT PRIMARY KEY,
+      entity_type TEXT NOT NULL,
+      company_id TEXT NOT NULL DEFAULT '',
       last_synced_at DATETIME,
       last_checksum TEXT,
       item_count INTEGER DEFAULT 0,
       last_payload_json TEXT,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (entity_type, company_id)
     )`);
 
     await ensureColumnIfMissing('market_adjustments', 'percentage', 'REAL');
@@ -1787,26 +1800,26 @@ const updateSyncState = async (entityType, records) => {
   const payload = stringifyDetails(normalizedRecords);
   await runRun(
     `INSERT INTO examination_sync_state (
-      entity_type, last_synced_at, last_checksum, item_count, last_payload_json, updated_at
-    ) VALUES (?, CURRENT_TIMESTAMP, ?, ?, ?, CURRENT_TIMESTAMP)
-    ON CONFLICT(entity_type) DO UPDATE SET
+      entity_type, company_id, last_synced_at, last_checksum, item_count, last_payload_json, updated_at
+    ) VALUES (?, ?, CURRENT_TIMESTAMP, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(entity_type, company_id) DO UPDATE SET
       last_synced_at = CURRENT_TIMESTAMP,
       last_checksum = excluded.last_checksum,
       item_count = excluded.item_count,
       last_payload_json = excluded.last_payload_json,
       updated_at = CURRENT_TIMESTAMP`,
-    [entityType, checksum, normalizedRecords.length, payload]
+    [entityType, companyId || '', checksum, normalizedRecords.length, payload]
   );
   return { checksum, itemCount: normalizedRecords.length };
 };
 
-const getSyncStateRow = async (entityType) => {
+const getSyncStateRow = async (entityType, companyId) => {
   await ensureExaminationSyncSchema();
   return runGet(
-    `SELECT entity_type, last_synced_at, last_checksum, item_count, updated_at
+    `SELECT entity_type, company_id, last_synced_at, last_checksum, item_count, updated_at
      FROM examination_sync_state
-     WHERE entity_type = ?`,
-    [entityType]
+     WHERE entity_type = ? AND company_id = ?`,
+    [entityType, companyId || '']
   );
 };
 
@@ -1825,13 +1838,17 @@ const getPreferredBomMaterialIds = async () => {
   }
 };
 
-const buildBackendMarketAdjustmentChecksumPayload = async () => {
+const buildBackendMarketAdjustmentChecksumPayload = async (companyId) => {
+  companyId = (typeof companyId === 'string' && companyId.trim()) ? companyId.trim() : '';
   const columns = await getTableColumnSet('market_adjustments');
   const orderSql = buildMarketAdjustmentOrderSql(columns);
+  const whereSql = companyId ? 'WHERE company_id = ?' : '';
+  const params = companyId ? [companyId] : [];
   const rows = await runQuery(`
     SELECT * FROM market_adjustments
+    ${whereSql}
     ${orderSql}
-  `);
+  `, params);
 
   return (rows || [])
     .map((row) => normalizeMarketAdjustmentSyncRecord(row))
@@ -1852,9 +1869,14 @@ const buildBackendMarketAdjustmentChecksumPayload = async () => {
     }));
 };
 
-const buildBackendInventoryChecksumPayload = async () => {
+const buildBackendInventoryChecksumPayload = async (companyId) => {
+  companyId = (typeof companyId === 'string' && companyId.trim()) ? companyId.trim() : '';
   const preferredIds = await getPreferredBomMaterialIds();
-  const rows = await runQuery('SELECT * FROM inventory ORDER BY id ASC');
+  const query = companyId
+    ? 'SELECT * FROM inventory WHERE company_id = ? ORDER BY id ASC'
+    : 'SELECT * FROM inventory ORDER BY id ASC';
+  const params = companyId ? [companyId] : [];
+  const rows = await runQuery(query, params);
   return (rows || [])
     .map((row) => normalizeInventorySyncRecord(row))
     .filter(Boolean)
@@ -1998,16 +2020,17 @@ const examinationService = {
   },
 
   // --- Settings ---
-  getExamPricingSettings: async () => {
+  getExamPricingSettings: async (companyId) => {
+    companyId = (typeof companyId === 'string' && companyId.trim()) ? companyId.trim() : '';
     await ensureExaminationPricingSchema();
-    const activeAdjustments = await resolveEffectiveClassAdjustments();
+    const activeAdjustments = await resolveEffectiveClassAdjustments(companyId);
     const {
       paperItem,
       tonerItem,
       paperUnitCost,
       tonerUnitCost,
       paperConversionRate
-    } = await resolveExamMaterialConfiguration();
+    } = await resolveExamMaterialConfiguration(companyId);
 
     return {
       paper_item_id: paperItem ? paperItem.id : null,
@@ -2044,6 +2067,7 @@ const examinationService = {
   },
 
   updateExamPricingSettings: async (payload, options = {}) => {
+    const companyId = (typeof options.companyId === 'string' && options.companyId.trim()) ? options.companyId.trim() : '';
     await ensureExaminationPricingSchema();
     const userId = options.userId || 'System';
     const triggerRecalculate = payload?.trigger_recalculate === undefined ? true : toBoolean(payload.trigger_recalculate);
@@ -2077,12 +2101,16 @@ const examinationService = {
           throw new Error('Conversion rate must be greater than zero.');
         }
 
+        const updateWhere = companyId
+          ? `WHERE (conversion_rate IS NOT NULL OR conversion_rate IS NULL) AND company_id = ?`
+          : `WHERE conversion_rate IS NOT NULL OR conversion_rate IS NULL`;
+        const updateParams = companyId ? [normalizedRate, companyId] : [normalizedRate];
         await runRun(
           `UPDATE inventory
            SET conversion_rate = ?,
                last_updated = CURRENT_TIMESTAMP
-           WHERE conversion_rate IS NOT NULL OR conversion_rate IS NULL`,
-          [normalizedRate]
+           ${updateWhere}`,
+          updateParams
         );
       }
 
@@ -2101,7 +2129,8 @@ const examinationService = {
       recalcSummary = await examinationService.recalculateNonInvoicedBatches({
         trigger: 'SETTINGS_UPDATE',
         userId,
-        includeApproved: false
+        includeApproved: false,
+        companyId
       });
     }
 
@@ -2109,7 +2138,8 @@ const examinationService = {
     if (lockPricingSnapshot && lockBatchId) {
       lockSummary = await examinationService.lockBatchPricingSnapshot(lockBatchId, {
         userId,
-        reason: lockReason || 'Saved via examination pricing settings'
+        reason: lockReason || 'Saved via examination pricing settings',
+        companyId
       });
 
       await examinationService.calculateBatch(lockBatchId, {
@@ -2130,10 +2160,10 @@ const examinationService = {
     await ensureCoreExaminationSchema();
     const includeSubjectPages = options?.includeSubjectPages !== false;
     const includeClassStats = options?.includeClassStats !== false;
+    const companyId = options?.companyId || '';
+    const companyFilter = companyId ? 'WHERE b.company_id = ?' : '';
     const runBatchListQuery = async () => {
       if (!includeClassStats) {
-        // Summary mode: calculate total_pages using available class and subject aggregates
-        // This tries to use class.calculated_total_pages, but will also estimate from subjects when present
         return await runQuery(`
           SELECT
             b.*,
@@ -2170,8 +2200,9 @@ const examinationService = {
             INNER JOIN examination_subjects sub ON sub.class_id = cls.id
             GROUP BY cls.batch_id
           ) subj ON subj.batch_id = b.id
+          ${companyFilter}
           ORDER BY b.created_at DESC
-        `);
+        `, companyId ? [companyId] : []);
       }
 
       const classColumns = await getTableColumnSet('examination_classes');
@@ -2255,11 +2286,12 @@ const examinationService = {
           GROUP BY batch_id
         ) cls ON cls.batch_id = b.id
         ${subjectJoinSql}
+        ${companyFilter}
         ORDER BY b.created_at DESC
       `;
 
       try {
-        return await runQuery(primaryQuery);
+        return await runQuery(primaryQuery, companyId ? [companyId] : []);
       } catch (error) {
         if (!isSchemaDriftError(error)) throw error;
 
@@ -2280,8 +2312,9 @@ const examinationService = {
             FROM examination_classes
             GROUP BY batch_id
           ) cls ON cls.batch_id = b.id
+          ${companyFilter}
           ORDER BY b.created_at DESC
-        `);
+        `, companyId ? [companyId] : []);
       }
     };
 
@@ -2294,9 +2327,11 @@ const examinationService = {
     }
   },
 
-  getBatchById: async (id) => {
+  getBatchById: async (id, companyId = '') => {
     const runBatchDetailQuery = async () => {
-      const batch = await runGet('SELECT * FROM examination_batches WHERE id = ?', [id]);
+      const companyFilter = companyId ? ' AND company_id = ?' : '';
+      const params = companyId ? [id, companyId] : [id];
+      const batch = await runGet(`SELECT * FROM examination_batches WHERE id = ?${companyFilter}`, params);
       if (!batch) {
         console.log(JSON.stringify({
           ts: new Date().toISOString(),
@@ -2374,13 +2409,17 @@ const examinationService = {
     return await runQuery('SELECT * FROM examination_bom_calculations WHERE batch_id = ? ORDER BY class_id, item_name', [batchId]);
   },
 
-  getMarketAdjustmentMeta: async () => {
+  getMarketAdjustmentMeta: async (companyId) => {
+    companyId = (typeof companyId === 'string' && companyId.trim()) ? companyId.trim() : '';
     const columns = await getTableColumnSet('market_adjustments');
     const orderSql = buildMarketAdjustmentOrderSql(columns);
+    const whereSql = companyId ? 'WHERE company_id = ?' : '';
+    const params = companyId ? [companyId] : [];
     const rows = await runQuery(`
       SELECT * FROM market_adjustments
+      ${whereSql}
       ${orderSql}
-    `);
+    `, params);
     return rows.map((row) => normalizeMarketAdjustmentMeta(row, columns));
   },
 
@@ -2396,12 +2435,15 @@ const examinationService = {
       ? (payload?.triggerRecalculate === undefined ? false : toBoolean(payload.triggerRecalculate))
       : toBoolean(payload.trigger_recalculate);
     const userId = payload?.user_id || payload?.userId || options?.userId || 'System';
+    const companyId = (typeof options.companyId === 'string' && options.companyId.trim()) ? options.companyId.trim() : '';
 
     const normalized = rawAdjustments
       .map((entry) => normalizeMarketAdjustmentSyncRecord(entry))
       .filter(Boolean);
 
-    const existingRows = await runQuery('SELECT * FROM market_adjustments');
+    const existingRows = companyId
+      ? await runQuery('SELECT * FROM market_adjustments WHERE company_id = ?', [companyId])
+      : await runQuery('SELECT * FROM market_adjustments');
     const existingById = new Map(
       (existingRows || [])
         .map((row) => normalizeMarketAdjustmentSyncRecord(row))
@@ -2421,13 +2463,40 @@ const examinationService = {
           changedCount += 1;
         }
 
+        const upsertParams = [
+          adjustment.id,
+          adjustment.name,
+          adjustment.type,
+          adjustment.value,
+          adjustment.percentage,
+          adjustment.applies_to,
+          adjustment.active,
+          adjustment.is_active,
+          adjustment.description,
+          adjustment.category,
+          adjustment.display_name,
+          adjustment.adjustment_category,
+          adjustment.sort_order,
+          adjustment.is_system_default,
+          adjustment.apply_to_categories,
+          adjustment.created_at,
+          adjustment.last_applied_at,
+          adjustment.total_applied_amount,
+          adjustment.application_count,
+          adjustment.sync_checksum
+        ];
+        if (companyId) {
+          upsertParams.push(companyId);
+        }
+        const companyIdCol = companyId ? ', company_id' : '';
+        const companyIdVal = companyId ? ', ?' : '';
         await runRun(
           `INSERT INTO market_adjustments (
             id, name, type, value, percentage, applies_to, active, is_active,
             description, category, display_name, adjustment_category, sort_order,
             is_system_default, apply_to_categories, created_at, last_applied_at,
-            total_applied_amount, application_count, last_synced_at, sync_checksum
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), ?, ?, ?, CURRENT_TIMESTAMP, ?)
+            total_applied_amount, application_count, last_synced_at, sync_checksum${companyIdCol}
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), ?, ?, ?, CURRENT_TIMESTAMP, ?${companyIdVal})
           ON CONFLICT(id) DO UPDATE SET
             name = excluded.name,
             type = excluded.type,
@@ -2448,28 +2517,7 @@ const examinationService = {
             application_count = excluded.application_count,
             last_synced_at = CURRENT_TIMESTAMP,
             sync_checksum = excluded.sync_checksum`,
-          [
-            adjustment.id,
-            adjustment.name,
-            adjustment.type,
-            adjustment.value,
-            adjustment.percentage,
-            adjustment.applies_to,
-            adjustment.active,
-            adjustment.is_active,
-            adjustment.description,
-            adjustment.category,
-            adjustment.display_name,
-            adjustment.adjustment_category,
-            adjustment.sort_order,
-            adjustment.is_system_default,
-            adjustment.apply_to_categories,
-            adjustment.created_at,
-            adjustment.last_applied_at,
-            adjustment.total_applied_amount,
-            adjustment.application_count,
-            adjustment.sync_checksum
-          ]
+          upsertParams
         );
         upsertedCount += 1;
       }
@@ -2478,22 +2526,28 @@ const examinationService = {
         let deactivateResult;
         if (normalized.length > 0) {
           const placeholders = normalized.map(() => '?').join(', ');
+          const deactivateParams = normalized.map((item) => item.id);
+          const companyFilter = companyId ? ' AND company_id = ?' : '';
+          if (companyId) deactivateParams.push(companyId);
           deactivateResult = await runRun(
             `UPDATE market_adjustments
              SET active = 0,
                  is_active = 0,
                  last_synced_at = CURRENT_TIMESTAMP
              WHERE id NOT IN (${placeholders})
-               AND COALESCE(active, is_active, 1) = 1`,
-            normalized.map((item) => item.id)
+               AND COALESCE(active, is_active, 1) = 1${companyFilter}`,
+            deactivateParams
           );
         } else {
+          const companyFilter = companyId ? ' AND company_id = ?' : '';
+          const deactivateParams = companyId ? [companyId] : [];
           deactivateResult = await runRun(
             `UPDATE market_adjustments
              SET active = 0,
                  is_active = 0,
                  last_synced_at = CURRENT_TIMESTAMP
-             WHERE COALESCE(active, is_active, 1) = 1`
+             WHERE COALESCE(active, is_active, 1) = 1${companyFilter}`,
+            deactivateParams
           );
         }
         deactivatedCount = Number(deactivateResult?.changes || 0);
@@ -2511,7 +2565,7 @@ const examinationService = {
     }
 
     // Always snapshot backend-normalized rows so drift health compares like-for-like.
-    const backendPayload = await buildBackendMarketAdjustmentChecksumPayload();
+    const backendPayload = await buildBackendMarketAdjustmentChecksumPayload(companyId);
     const syncState = await updateSyncState(
       SYNC_ENTITY_MARKET_ADJUSTMENTS,
       backendPayload
@@ -2523,7 +2577,8 @@ const examinationService = {
         trigger: 'SYNC_MARKET_ADJUSTMENTS',
         userId,
         includeApproved: false,
-        signal: options?.signal
+        signal: options?.signal,
+        companyId
       });
     }
 
@@ -2547,6 +2602,7 @@ const examinationService = {
       ? (payload?.triggerRecalculate === undefined ? false : toBoolean(payload.triggerRecalculate))
       : toBoolean(payload.trigger_recalculate);
     const userId = payload?.user_id || payload?.userId || options?.userId || 'System';
+    const companyId = (typeof options.companyId === 'string' && options.companyId.trim()) ? options.companyId.trim() : '';
 
     const preferredIds = await getPreferredBomMaterialIds();
     const normalizedAll = rawItems
@@ -2556,7 +2612,7 @@ const examinationService = {
 
     if (normalized.length === 0) {
       // Keep sync state aligned to backend selection scope even when nothing is upserted.
-      const backendPayload = await buildBackendInventoryChecksumPayload();
+      const backendPayload = await buildBackendInventoryChecksumPayload(companyId);
       const syncState = await updateSyncState(SYNC_ENTITY_INVENTORY_ITEMS, backendPayload);
       return {
         success: true,
@@ -2570,7 +2626,9 @@ const examinationService = {
     }
 
     const existingById = new Map(
-      (await runQuery('SELECT * FROM inventory'))
+      (companyId
+        ? await runQuery('SELECT * FROM inventory WHERE company_id = ?', [companyId])
+        : await runQuery('SELECT * FROM inventory'))
         .map((row) => [String(row.id), row])
     );
 
@@ -2600,11 +2658,25 @@ const examinationService = {
           ? (toNumericValue(existing?.quantity) ?? 0)
           : item.quantity;
 
+        const upsertParams = [
+          item.id,
+          item.name,
+          item.material,
+          quantityForInsert,
+          item.cost_per_unit,
+          item.unit,
+          item.category_id,
+          item.conversion_rate,
+          item.last_updated,
+          item.sync_checksum
+        ];
+        const companyIdCol = companyId ? ', company_id' : '';
+        if (companyId) upsertParams.push(companyId);
         await runRun(
           `INSERT INTO inventory (
             id, name, material, quantity, cost_per_unit, unit, category_id,
-            conversion_rate, last_updated, last_synced_at, sync_checksum
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), CURRENT_TIMESTAMP, ?)
+            conversion_rate, last_updated, last_synced_at, sync_checksum${companyIdCol}
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), CURRENT_TIMESTAMP, ?${companyId ? ', ?' : ''})
           ON CONFLICT(id) DO UPDATE SET
             name = excluded.name,
             material = COALESCE(excluded.material, inventory.material),
@@ -2616,18 +2688,7 @@ const examinationService = {
             last_updated = CURRENT_TIMESTAMP,
             last_synced_at = CURRENT_TIMESTAMP,
             sync_checksum = excluded.sync_checksum`,
-          [
-            item.id,
-            item.name,
-            item.material,
-            quantityForInsert,
-            item.cost_per_unit,
-            item.unit,
-            item.category_id,
-            item.conversion_rate,
-            item.last_updated,
-            item.sync_checksum
-          ]
+          upsertParams
         );
         upsertedCount += 1;
       }
@@ -2643,7 +2704,7 @@ const examinationService = {
     }
 
     // Always snapshot backend-normalized rows so drift health compares like-for-like.
-    const backendPayload = await buildBackendInventoryChecksumPayload();
+    const backendPayload = await buildBackendInventoryChecksumPayload(companyId);
     const syncState = await updateSyncState(
       SYNC_ENTITY_INVENTORY_ITEMS,
       backendPayload
@@ -2655,7 +2716,8 @@ const examinationService = {
         trigger: 'SYNC_INVENTORY_ITEMS',
         userId,
         includeApproved: false,
-        signal: options?.signal
+        signal: options?.signal,
+        companyId
       });
     }
 
@@ -2670,13 +2732,14 @@ const examinationService = {
     };
   },
 
-  getSyncHealth: async () => {
+  getSyncHealth: async (companyId) => {
+    companyId = (typeof companyId === 'string' && companyId.trim()) ? companyId.trim() : '';
     await ensureExaminationSyncSchema();
     const [marketState, inventoryState, marketPayload, inventoryPayload] = await Promise.all([
       getSyncStateRow(SYNC_ENTITY_MARKET_ADJUSTMENTS),
       getSyncStateRow(SYNC_ENTITY_INVENTORY_ITEMS),
-      buildBackendMarketAdjustmentChecksumPayload(),
-      buildBackendInventoryChecksumPayload()
+      buildBackendMarketAdjustmentChecksumPayload(companyId),
+      buildBackendInventoryChecksumPayload(companyId)
     ]);
 
     const backendMarketChecksum = buildStateChecksum(marketPayload);
@@ -2711,6 +2774,7 @@ const examinationService = {
 
   lockBatchPricingSnapshot: async (batchId, options = {}) => {
     await ensureExaminationPricingSchema();
+    const companyId = (typeof options.companyId === 'string' && options.companyId.trim()) ? options.companyId.trim() : '';
 
     const normalizedBatchId = String(batchId || '').trim();
     if (!normalizedBatchId) {
@@ -2730,8 +2794,8 @@ const examinationService = {
       paperUnitCost,
       tonerUnitCost,
       paperConversionRate
-    } = await resolveExamMaterialConfiguration();
-    const activeAdjustments = await resolveEffectiveClassAdjustments();
+    } = await resolveExamMaterialConfiguration(companyId);
+    const activeAdjustments = await resolveEffectiveClassAdjustments(companyId);
     const lockedAdjustmentsJson = serializeAdjustmentSnapshot(activeAdjustments);
 
     await runRun(
@@ -2770,6 +2834,7 @@ const examinationService = {
   },
 
   recalculateNonInvoicedBatches: async (options = {}) => {
+    const companyId = (typeof options?.companyId === 'string' && options.companyId.trim()) ? options.companyId.trim() : '';
     const trigger = String(options?.trigger || 'BACKFILL_NON_INVOICED').trim() || 'BACKFILL_NON_INVOICED';
     const userId = options?.userId || 'System';
     const includeApproved = toBoolean(options?.includeApproved);
@@ -2781,6 +2846,10 @@ const examinationService = {
       FROM examination_batches
       WHERE COALESCE(status, 'Draft') <> 'Invoiced'
     `;
+    if (companyId) {
+      query += ` AND company_id = ?`;
+      params.push(companyId);
+    }
     if (!includeApproved) {
       query += ` AND COALESCE(status, 'Draft') <> 'Approved'`;
     }
@@ -2912,6 +2981,7 @@ const examinationService = {
       id,
       batch_number: batchNumber,
       school_id: String(schoolIdCandidate).trim(),
+      company_id: String(data?.company_id || '').trim(),
       name: String(nameCandidate).trim(),
       academic_year: String(academicYearCandidate || '').trim() || new Date().getFullYear().toString(),
       term: String(termCandidate || '').trim() || '1',
@@ -2949,6 +3019,7 @@ const examinationService = {
       const preferredColumnOrder = [
         'id',
         'batch_number',
+        'company_id',
         'school_id',
         'name',
         'academic_year',
@@ -3062,9 +3133,8 @@ const examinationService = {
     return batch;
   },
 
-  updateBatch: async (id, data, userId = 'System') => {
+  updateBatch: async (id, data, userId = 'System', companyId = '') => {
     const { name, academic_year, term, exam_type, status, currency, sub_account_name } = data;
-    // Dynamic update
     let fields = [];
     let params = [];
     if (name) { fields.push('name = ?'); params.push(name); }
@@ -3075,12 +3145,12 @@ const examinationService = {
     if (currency) { fields.push('currency = ?'); params.push(currency); }
     if (sub_account_name) { fields.push('sub_account_name = ?'); params.push(sub_account_name); }
 
-    if (fields.length === 0) return await examinationService.getBatchById(id);
+    if (fields.length === 0) return await examinationService.getBatchById(id, companyId);
 
     params.push(id);
-    await runRun(`UPDATE examination_batches SET ${fields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, params);
+    if (companyId) params.push(companyId);
+    await runRun(`UPDATE examination_batches SET ${fields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?${companyId ? ' AND company_id = ?' : ''}`, params);
 
-    // Audit Log
     await writeAuditLog({
       userId,
       action: 'UPDATE',
@@ -3090,11 +3160,12 @@ const examinationService = {
       newValue: data
     });
 
-    return await examinationService.getBatchById(id);
+    return await examinationService.getBatchById(id, companyId);
   },
 
-  deleteBatch: async (id, userId = 'System') => {
-    const existingBatch = await runGet('SELECT * FROM examination_batches WHERE id = ?', [id]);
+  deleteBatch: async (id, userId = 'System', companyId = '') => {
+    const params = companyId ? [id, companyId] : [id];
+    const existingBatch = await runGet(`SELECT * FROM examination_batches WHERE id = ?${companyId ? ' AND company_id = ?' : ''}`, params);
     if (!existingBatch) {
       return { success: true };
     }
@@ -4010,7 +4081,8 @@ const examinationService = {
     };
   },
 
-  approveBatch: async (batchId, userId = 'System') => {
+  approveBatch: async (batchId, userId = 'System', companyId) => {
+    companyId = (typeof companyId === 'string' && companyId.trim()) ? companyId.trim() : '';
     await ensureExaminationPricingSchema();
     const batch = await examinationService.getBatchById(batchId);
     if (!batch) throw new Error('Batch not found');
@@ -4022,7 +4094,7 @@ const examinationService = {
       paperUnitCost,
       tonerUnitCost,
       paperConversionRate
-    } = await resolveExamMaterialConfiguration();
+    } = await resolveExamMaterialConfiguration(companyId);
 
     const deductions = batchWorkflow.calculateApprovalMaterialDeductions({
       classes: batch.classes || [],
@@ -4040,7 +4112,9 @@ const examinationService = {
     await runRun('BEGIN TRANSACTION');
     try {
       for (const deduction of deductions) {
-        const item = await runGet('SELECT * FROM inventory WHERE id = ?', [deduction.item_id]);
+        const item = companyId
+          ? await runGet('SELECT * FROM inventory WHERE id = ? AND company_id = ?', [deduction.item_id, companyId])
+          : await runGet('SELECT * FROM inventory WHERE id = ?', [deduction.item_id]);
         if (!item) {
           console.warn(`Item ${deduction.item_id} not found in inventory during batch approval`);
           continue;
@@ -4064,8 +4138,8 @@ const examinationService = {
           `UPDATE inventory
            SET quantity = ?,
                last_updated = CURRENT_TIMESTAMP
-           WHERE id = ?`,
-          [newQuantity, deduction.item_id]
+           WHERE id = ?${companyId ? ' AND company_id = ?' : ''}`,
+          companyId ? [newQuantity, deduction.item_id, companyId] : [newQuantity, deduction.item_id]
         );
 
         await runRun(
@@ -4117,7 +4191,8 @@ const examinationService = {
     return { batch: approvedBatch, warnings };
   },
 
-  generateInvoice: async (batchId, userId = 'System', options = {}) => {
+  generateInvoice: async (batchId, userId = 'System', options = {}, companyId) => {
+    companyId = (typeof companyId === 'string' && companyId.trim()) ? companyId.trim() : '';
     const requestedInvoiceNumber = options?.invoiceNumber || options?.invoice_number;
     await ensureExaminationInvoiceSchema();
     const batch = await examinationService.getBatchById(batchId);
@@ -4131,13 +4206,17 @@ const examinationService = {
 
     const schoolLookupId = toNumericValue(batch.school_id);
     const school = schoolLookupId !== null
-      ? await runGet('SELECT * FROM schools WHERE id = ?', [schoolLookupId])
+      ? companyId
+        ? await runGet('SELECT * FROM schools WHERE id = ? AND company_id = ?', [schoolLookupId, companyId])
+        : await runGet('SELECT * FROM schools WHERE id = ?', [schoolLookupId])
       : null;
     let customer = null;
     try {
       const customerLookupId = String(batch.customer_id || batch.school_id || '').trim();
       customer = customerLookupId
-        ? await runGet('SELECT * FROM customers WHERE id = ?', [customerLookupId])
+        ? companyId
+          ? await runGet('SELECT * FROM customers WHERE id = ? AND company_id = ?', [customerLookupId, companyId])
+          : await runGet('SELECT * FROM customers WHERE id = ?', [customerLookupId])
         : null;
     } catch {
       customer = null;
@@ -4156,24 +4235,27 @@ const examinationService = {
     }
 
     const findExistingInvoice = async () => {
+      const companyFilter = companyId ? ' AND company_id = ?' : '';
       if (idempotencyKey) {
+        const params = [idempotencyKey];
+        if (companyId) params.push(companyId);
         const byIdempotency = await runGet(
-          'SELECT * FROM invoices WHERE idempotency_key = ? ORDER BY id DESC LIMIT 1',
-          [idempotencyKey]
+          `SELECT * FROM invoices WHERE idempotency_key = ?${companyFilter} ORDER BY id DESC LIMIT 1`,
+          params
         );
         if (byIdempotency) return byIdempotency;
       }
 
       const byOrigin = await runGet(
-        'SELECT * FROM invoices WHERE origin_module = ? AND origin_batch_id = ? ORDER BY id DESC LIMIT 1',
-        [INVOICE_ORIGIN_EXAMINATION, String(batchId)]
+        `SELECT * FROM invoices WHERE origin_module = ? AND origin_batch_id = ?${companyFilter} ORDER BY id DESC LIMIT 1`,
+        companyId ? [INVOICE_ORIGIN_EXAMINATION, String(batchId), companyId] : [INVOICE_ORIGIN_EXAMINATION, String(batchId)]
       );
       if (byOrigin) return byOrigin;
 
       if (batch.invoice_id) {
         const byBatchRef = await runGet(
-          'SELECT * FROM invoices WHERE invoice_number = ? OR id = ? ORDER BY id DESC LIMIT 1',
-          [batch.invoice_id, batch.invoice_id]
+          `SELECT * FROM invoices WHERE (invoice_number = ? OR id = ?)${companyFilter} ORDER BY id DESC LIMIT 1`,
+          companyId ? [batch.invoice_id, batch.invoice_id, companyId] : [batch.invoice_id, batch.invoice_id]
         );
         if (byBatchRef) return byBatchRef;
       }
@@ -4233,30 +4315,54 @@ const examinationService = {
           invoice_number, origin_module, origin_batch_id, idempotency_key,
           line_items_json, notes, document_title,
           rounding_difference, rounding_method, adjustment_total, adjustment_snapshots_json,
-          created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-        [
-          persistedSchoolId,
-          persistedCustomerId,
-          customerName,
-          batch.sub_account_name || null,
-          batchTotalAmount,
-          batchTotalAmount,
-          invoiceDraft.currency,
-          'unpaid',
-          dueDateIso,
-          null,
-          invoiceDraft.originModule,
-          invoiceDraft.originBatchId,
-          idempotencyKey || null,
-          lineItemsJson,
-          invoiceNote,
-          documentTitle,
-          toNumericValue(batch.rounding_adjustment_total) || 0,
-          batch.rounding_method || 'nearest_50',
-          toNumericValue(batch.calculated_adjustment_total) || 0,
-          batch.adjustment_snapshots_json || '[]'
-        ]
+          created_at, updated_at${companyId ? ', company_id' : ''}
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP${companyId ? ', ?' : ''})`,
+        companyId
+          ? [
+              persistedSchoolId,
+              persistedCustomerId,
+              customerName,
+              batch.sub_account_name || null,
+              batchTotalAmount,
+              batchTotalAmount,
+              invoiceDraft.currency,
+              'unpaid',
+              dueDateIso,
+              null,
+              invoiceDraft.originModule,
+              invoiceDraft.originBatchId,
+              idempotencyKey || null,
+              lineItemsJson,
+              invoiceNote,
+              documentTitle,
+              toNumericValue(batch.rounding_adjustment_total) || 0,
+              batch.rounding_method || 'nearest_50',
+              toNumericValue(batch.calculated_adjustment_total) || 0,
+              batch.adjustment_snapshots_json || '[]',
+              companyId
+            ]
+          : [
+              persistedSchoolId,
+              persistedCustomerId,
+              customerName,
+              batch.sub_account_name || null,
+              batchTotalAmount,
+              batchTotalAmount,
+              invoiceDraft.currency,
+              'unpaid',
+              dueDateIso,
+              null,
+              invoiceDraft.originModule,
+              invoiceDraft.originBatchId,
+              idempotencyKey || null,
+              lineItemsJson,
+              invoiceNote,
+              documentTitle,
+              toNumericValue(batch.rounding_adjustment_total) || 0,
+              batch.rounding_method || 'nearest_50',
+              toNumericValue(batch.calculated_adjustment_total) || 0,
+              batch.adjustment_snapshots_json || '[]'
+            ]
       );
 
       invoiceId = Number(invoiceResult.lastID);
@@ -4274,25 +4380,44 @@ const examinationService = {
             school_id, customer_id, customer_name, sub_account_name,
             subtotal, total_amount, currency, status, due_date,
             invoice_number, origin_module, origin_batch_id, idempotency_key,
-            line_items_json, notes, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-          [
-            persistedSchoolId,
-            persistedCustomerId,
-            customerName,
-            batch.sub_account_name || null,
-            batchTotalAmount,
-            batchTotalAmount,
-            invoiceDraft.currency,
-            'unpaid',
-            dueDateIso,
-            null,
-            invoiceDraft.originModule,
-            invoiceDraft.originBatchId,
-            idempotencyKey || null,
-            lineItemsJson,
-            invoiceNote
-          ]
+            line_items_json, notes, created_at, updated_at${companyId ? ', company_id' : ''}
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP${companyId ? ', ?' : ''})`,
+          companyId
+            ? [
+                persistedSchoolId,
+                persistedCustomerId,
+                customerName,
+                batch.sub_account_name || null,
+                batchTotalAmount,
+                batchTotalAmount,
+                invoiceDraft.currency,
+                'unpaid',
+                dueDateIso,
+                null,
+                invoiceDraft.originModule,
+                invoiceDraft.originBatchId,
+                idempotencyKey || null,
+                lineItemsJson,
+                invoiceNote,
+                companyId
+              ]
+            : [
+                persistedSchoolId,
+                persistedCustomerId,
+                customerName,
+                batch.sub_account_name || null,
+                batchTotalAmount,
+                batchTotalAmount,
+                invoiceDraft.currency,
+                'unpaid',
+                dueDateIso,
+                null,
+                invoiceDraft.originModule,
+                invoiceDraft.originBatchId,
+                idempotencyKey || null,
+                lineItemsJson,
+                invoiceNote
+              ]
         );
         invoiceId = Number(invoiceResult.lastID);
         const logicalNumber = requestedInvoiceNumber || examinationInvoiceAdapter.buildExaminationLogicalInvoiceNumber(invoiceId);
@@ -4316,7 +4441,9 @@ const examinationService = {
       }
     }
 
-    const invoiceRow = await runGet('SELECT * FROM invoices WHERE id = ?', [invoiceId]);
+    const invoiceRow = companyId
+      ? await runGet('SELECT * FROM invoices WHERE id = ? AND company_id = ?', [invoiceId, companyId])
+      : await runGet('SELECT * FROM invoices WHERE id = ?', [invoiceId]);
     if (!invoiceRow) {
       throw new Error('Invoice creation failed: invoice not found after insert');
     }
@@ -4612,17 +4739,21 @@ const examinationService = {
       errors
     };
   },
-  getNotifications: async (userId, limit = 50) => {
+  getNotifications: async (userId, limit = 50, companyId) => {
     await ensureNotificationSchema();
     if (!userId) return [];
     const normalizedUserId = String(userId).trim();
+    const normalizedCompanyId = (typeof companyId === 'string' && companyId.trim()) ? companyId.trim() : '';
     const normalizedLimit = Math.min(Math.max(Number.parseInt(String(limit), 10) || 50, 1), 1000);
+    const params = normalizedCompanyId
+      ? [normalizedUserId, normalizedCompanyId, normalizedLimit]
+      : [normalizedUserId, normalizedLimit];
     const rows = await runQuery(
       `SELECT * FROM examination_batch_notifications
-       WHERE user_id = ?
+       WHERE user_id = ?${normalizedCompanyId ? ' AND company_id = ?' : ''}
        ORDER BY created_at DESC
        LIMIT ?`,
-      [normalizedUserId, normalizedLimit]
+      params
     );
     return (rows || []).map(normalizeNotificationRow).filter(Boolean);
   },

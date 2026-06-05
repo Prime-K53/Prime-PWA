@@ -1,7 +1,7 @@
 
 import { Item, User, Account, Warehouse, WorkCenter, ProductionResource, PermissionNode, UserGroup } from './types';
 
-export const OFFLINE_MODE = true;
+export const OFFLINE_MODE = false;
 
 export const INITIAL_INVENTORY: Item[] = [
   // Raw Materials
@@ -125,6 +125,24 @@ export const INITIAL_USER_GROUPS: UserGroup[] = [
     permissions: ['dashboard.view', 'sale.process', 'sale.refund', 'inventory.view']
   },
   {
+    id: 'GRP-MANAGER',
+    name: 'Managers',
+    description: 'Operational managers with sales, inventory, and report visibility',
+    permissions: ['dashboard.view', 'reports.view', 'sales.view', 'sale.process', 'inventory.view', 'inventory.adjust', 'procurement.view']
+  },
+  {
+    id: 'GRP-SALES',
+    name: 'Sales Staff',
+    description: 'Sales users who can manage customers, quotations, invoices, and receipts',
+    permissions: ['dashboard.view', 'sales.view', 'sale.process', 'quotation.manage', 'inventory.view']
+  },
+  {
+    id: 'GRP-USER',
+    name: 'Standard Users',
+    description: 'Baseline authenticated access',
+    permissions: ['dashboard.view']
+  },
+  {
     id: 'GRP-OPERATOR',
     name: 'Production Operators',
     description: 'Production logging and work order execution',
@@ -149,5 +167,3 @@ export const MOCK_RESOURCES: ProductionResource[] = [
   { id: 'RES-BND-01', name: 'Horizon Binder', workCenterId: 'WC-BND-01', status: 'Active' },
   { id: 'RES-CUT-01', name: 'Polar Cutter', workCenterId: 'WC-CUT-01', status: 'Active' },
 ];
-
-

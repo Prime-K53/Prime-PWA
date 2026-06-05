@@ -73,17 +73,11 @@ export const resolveSequentialNumberingPadding = (type: string, config?: Company
   }
 
   if (padding == null) {
-    if (isInvoiceNumberingType(type)) {
-      throw new Error('Missing invoice padding configuration.');
-    }
     return DEFAULT_PADDING;
   }
 
   const parsed = Number(padding);
   if (!Number.isInteger(parsed) || parsed <= 0) {
-    if (isInvoiceNumberingType(type)) {
-      throw new Error('Invalid invoice padding configuration.');
-    }
     return DEFAULT_PADDING;
   }
 

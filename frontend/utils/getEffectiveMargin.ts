@@ -42,6 +42,7 @@ export async function getEffectiveMargin(
         headers: {
           'x-user-id': localStorage.getItem('prime_user_id') || 'guest',
           'x-user-role': localStorage.getItem('prime_user_role') || 'Viewer',
+          'x-company-id': (() => { try { const r = localStorage.getItem('nexus_company_config'); return r ? JSON.parse(r)?.companyId : null; } catch { return null; } })(),
         },
       }
     );

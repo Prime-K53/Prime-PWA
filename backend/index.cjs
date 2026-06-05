@@ -246,9 +246,11 @@ try {
 app.use((req, res, next) => {
   try {
     res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-XSS-Protection', '0');
     res.setHeader('Referrer-Policy', process.env.REFERRER_POLICY || 'no-referrer-when-downgrade');
-    // Only set HSTS if explicitly enabled via env to avoid local dev issues
-    if (process.env.ENABLE_HSTS === 'true') {
+    // HSTS enabled in production; configurable via env for dev
+    if (process.env.ENABLE_HSTS === 'true' || process.env.NODE_ENV === 'production') {
       res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
     }
     // Minimal CSP to mitigate inline script attacks; configurable via env
@@ -279,12 +281,15 @@ app.use((req, res, next) => {
 // Audit middleware for correlation ID propagation and context capture
 const { auditContextMiddleware, auditAuthMiddleware, auditCrudMiddleware } = require('./auditMiddleware.cjs');
 const { validateTransactionPrice, calculateSellingPrice } = require('./services/pricingEngine.cjs');
-const { verifyToken, requireRole } = require('./middleware/auth.cjs');
+const { verifyToken, requireRole, requirePermission } = require('./middleware/auth.cjs');
+const { tenantContext } = require('./middleware/tenantContext.cjs');
 const { validateBody, sanitizeInput, inventorySchemas, salesSchemas, userSchemas, financialSchemas, productionSchemas, documentSchemas, exchangeSchemas, orderSchemas, classSchemas, subjectSchemas, notificationSchemas } = require('./middleware/validation.cjs');
+const { apiLimiter, authLimiter, sensitiveLimiter } = require('./middleware/rateLimiter.cjs');
 const authRoutes = require('./routes/auth.cjs');
 app.use(auditContextMiddleware);
+app.use('/api', apiLimiter({ windowMs: 60 * 1000, maxRequests: 120 }));
 
-app.use('/api/auth', auditAuthMiddleware, authRoutes);
+app.use('/api/auth', auditAuthMiddleware, authLimiter({ windowMs: 15 * 60 * 1000, maxAttempts: 10 }), authRoutes);
 
 // CORS configuration - accepts all local/LAN origins for browser-based access
 const corsOptions = {
@@ -313,7 +318,7 @@ const corsOptions = {
     return callback(null, false);
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id', 'x-user-role', 'x-user-email', 'x-correlation-id'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id', 'x-user-role', 'x-user-email', 'x-correlation-id', 'x-company-id', 'x-idempotency-key'],
   credentials: true
 };
 
@@ -343,6 +348,8 @@ app.use((req, res, next) => {
 
 // Apply JWT verification to all /api routes (auth routes are skipped by verifyToken internally)
 app.use('/api', verifyToken);
+// Attach tenant context from x-company-id header to all /api routes
+app.use('/api', tenantContext);
 
 // Shared helper for pricing validation
 async function validateItemsPricing(items) {
@@ -442,8 +449,20 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+function validateEnv() {
+  const required = ['JWT_SECRET', 'SESSION_SECRET', 'ENCRYPTION_KEY'];
+  const missing = required.filter(k => !process.env[k] || process.env[k] === 'your-secret-key-here');
+  if (missing.length) {
+    console.error(`[ENV] FATAL: Missing or default secrets: ${missing.join(', ')}`);
+    console.error('[ENV] Set these in .env or environment before starting.');
+    process.exit(1);
+  }
+  console.log('[ENV] All required secrets present.');
+}
+
 async function startServer() {
   console.log('--- STARTING SERVER ---');
+  validateEnv();
 
   try {
     await ensurePortAvailable(PORT);
@@ -489,7 +508,7 @@ async function startServer() {
 
   // SUSPECTED DEAD: No frontend or test caller found as of April 21, 2026.
   // Confirm before removing.
-  app.get('/api/system/license', (req, res) => {
+  app.get('/api/system/license', verifyToken, requirePermission('admin_settings'), (req, res) => {
     res.json({
       fingerprint: licenseService.getFingerprint(),
       license: licenseService.validateLicense()
@@ -516,29 +535,34 @@ async function startServer() {
 
     try {
       const offset = `-${days - 1} days`;
+      const companyId = req.companyId || '';
       const [revenueRow, todayRow, outstandingRow, chartRows, salesRows, invoiceRows] = await Promise.all([
-        getOne(`SELECT SUM(total_amount) as revenue FROM sales`),
-        getOne(`SELECT SUM(total_amount) as todaySales FROM sales WHERE date(date) = date('now')`),
-        getOne(`SELECT COUNT(*) as outstandingInvoices FROM invoices WHERE lower(COALESCE(status, '')) != 'paid'`),
+        getOne(`SELECT SUM(total_amount) as revenue FROM sales WHERE company_id = ?`, [companyId]),
+        getOne(`SELECT SUM(total_amount) as todaySales FROM sales WHERE date(date) = date('now') AND company_id = ?`, [companyId]),
+        getOne(`SELECT COUNT(*) as outstandingInvoices FROM invoices WHERE lower(COALESCE(status, '')) != 'paid' AND company_id = ?`, [companyId]),
         getAll(
           `SELECT date(date) as day, SUM(total_amount) as total
            FROM sales
-           WHERE date(date) >= date('now', ?)
+           WHERE date(date) >= date('now', ?) AND company_id = ?
            GROUP BY date(date)
            ORDER BY day`,
-          [offset]
+          [offset, companyId]
         ),
         getAll(
           `SELECT id, customer_id as customerId, customer_name as customerName, total_amount as totalAmount, date
            FROM sales
+           WHERE company_id = ?
            ORDER BY date DESC
-           LIMIT 200`
+           LIMIT 200`,
+          [companyId]
         ),
         getAll(
           `SELECT id, customer_id as customerId, customer_name as customerName, total_amount as totalAmount, status, created_at as createdAt
            FROM invoices
+           WHERE company_id = ?
            ORDER BY created_at DESC
-           LIMIT 50`
+           LIMIT 50`,
+          [companyId]
         )
       ]);
 
@@ -563,7 +587,8 @@ async function startServer() {
         invoices: invoiceRows
       });
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      console.error('[Dashboard] error:', error);
+      res.status(500).json({ error: 'Failed to load dashboard data' });
     }
   });
 
@@ -576,11 +601,13 @@ async function startServer() {
         adjustment_snapshots_json as adjustmentSnapshots,
         status, payment_method as paymentMethod, source, items_json, payments_json
        FROM sales
+       WHERE company_id = ?
        ORDER BY date DESC`,
-      [],
+      [req.companyId || ''],
       (error, rows) => {
         if (error) {
-          return res.status(500).json({ error: error.message });
+          console.error('[Sales] GET error:', error);
+          return res.status(500).json({ error: 'Failed to retrieve sales' });
         }
         const sales = (rows || []).map((row) => ({
           id: row.id,
@@ -611,8 +638,8 @@ async function startServer() {
     try {
       await validateItemsPricing(payload.items);
     } catch (validationError) {
-      console.error('[BACKEND] [Pricing Validation Failed]', validationError.message);
-      return res.status(400).json({ error: validationError.message, code: 'PRICE_VALIDATION_FAILED' });
+      console.error('[Backend] Pricing validation failed, returning generic error');
+      return res.status(400).json({ error: 'Price validation failed. Please verify item pricing.', code: 'PRICE_VALIDATION_FAILED' });
     }
 
     const id = payload.id || randomUUID();
@@ -643,18 +670,18 @@ async function startServer() {
         `INSERT OR REPLACE INTO sales (
           id, date, customer_id, customer_name, sub_account_name, 
           total_amount, material_total, adjustment_total, profit_margin_total, rounding_total,
-          adjustment_snapshots_json, status, payment_method, source, items_json, payments_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          adjustment_snapshots_json, status, payment_method, source, items_json, payments_json, company_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id, date, customerId, customerName, subAccountName,
           totalAmount, materialTotal, adjustmentTotal, profitMarginTotal, roundingTotal,
-          snapshotsJson, status, paymentMethod, source, itemsJson, paymentsJson
+          snapshotsJson, status, paymentMethod, source, itemsJson, paymentsJson, req.companyId || ''
         ],
         (error) => {
           if (error) {
             db.run("ROLLBACK");
             console.error(`[BACKEND] Error creating sale #${id}:`, error.message);
-            return res.status(500).json({ error: error.message });
+            return res.status(500).json({ error: 'Failed to create sale' });
           }
           db.run("COMMIT");
           res.json({
@@ -700,9 +727,18 @@ async function startServer() {
     next();
   }, settingsRoutes);
 
+  // --- Tasks Endpoints ---
+  const tasksRoutes = require('./routes/tasks.cjs');
+  app.use('/api/tasks', (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    next();
+  }, tasksRoutes);
+
   // --- System & Workspace Endpoints ---
   const systemRoutes = require('./routes/system.cjs');
-  app.use('/api/system', systemRoutes);
+  app.use('/api/system', verifyToken, systemRoutes);
 
   // Helper: ensure production tables exist
   const createProductionTables = () => new Promise((resolve, reject) => {
@@ -753,8 +789,9 @@ async function startServer() {
   // Production: fetch real work centers from database
   app.get('/api/production/work-centers', async (req, res) => {
     try {
+      const companyId = req.companyId || '';
       const rows = await new Promise((resolve, reject) => {
-        db.all('SELECT id, name, description, hourly_rate as hourlyRate, capacity_per_day as capacityPerDay, status FROM work_centers WHERE status = ? ORDER BY name', ['Active'], (err, rows) => {
+        db.all('SELECT id, name, description, hourly_rate as hourlyRate, capacity_per_day as capacityPerDay, status FROM work_centers WHERE status = ? AND company_id = ? ORDER BY name', ['Active', companyId], (err, rows) => {
           if (err) reject(err);
           else resolve(rows || []);
         });
@@ -773,8 +810,9 @@ async function startServer() {
   // Production: fetch real resources from database
   app.get('/api/production/resources', async (req, res) => {
     try {
+      const companyId = req.companyId || '';
       const rows = await new Promise((resolve, reject) => {
-        db.all('SELECT id, name, work_center_id as workCenterId, status FROM production_resources WHERE status = ? ORDER BY name', ['Active'], (err, rows) => {
+        db.all('SELECT id, name, work_center_id as workCenterId, status FROM production_resources WHERE status = ? AND company_id = ? ORDER BY name', ['Active', companyId], (err, rows) => {
           if (err) reject(err);
           else resolve(rows || []);
         });
@@ -807,22 +845,55 @@ async function startServer() {
    * Standardized error responder to ensure valid JSON and consistent fields.
    * Enforces mandatory diagnostic metadata for the document preview pipeline.
    */
-  const sendError = (res, statusCode, message, code = 'INTERNAL_ERROR', diagnostic = null) => {
-    // Default diagnostic generator to ensure it's never null or empty
-    const generateDefaultDiagnostic = (msg, errCode) => {
-      const timestamp = new Date().toISOString();
-      return `[${timestamp}] Error ${errCode}: ${msg}. Please contact system administrator if this persists.`;
+  const safeErrorMessage = (code) => {
+    const safe = {
+      'REGISTRATION_FAILED': 'Failed to register document.',
+      'CREATE_FAILED': 'Failed to create resource.',
+      'UPDATE_FAILED': 'Failed to update resource.',
+      'VOID_FAILED': 'Failed to void document.',
+      'FINALIZE_FAILED': 'Failed to finalize document.',
+      'PREVIEW_PIPELINE_ERROR': 'Failed to generate preview.',
+      'EXPORT_FAILED': 'Failed to export document.',
+      'BATCH_FINALIZE_FAILED': 'Failed to finalize batch.',
+      'BATCH_EXPORT_FAILED': 'Failed to export batch.',
+      'FETCH_EXCHANGES_FAILED': 'Failed to retrieve exchanges.',
+      'FETCH_EXCHANGE_FAILED': 'Failed to retrieve exchange.',
+      'CREATE_EXCHANGE_FAILED': 'Failed to create exchange.',
+      'APPROVE_EXCHANGE_FAILED': 'Failed to approve exchange.',
+      'FETCH_SALES_ORDERS_FAILED': 'Failed to retrieve sales orders.',
+      'FETCH_SALES_ORDER_FAILED': 'Failed to retrieve sales order.',
+      'CREATE_SALES_ORDER_FAILED': 'Failed to create sales order.',
+      'UPDATE_SALES_ORDER_FAILED': 'Failed to update sales order.',
+      'DELETE_SALES_ORDER_FAILED': 'Failed to delete sales order.',
+      'FETCH_REPRINTS_FAILED': 'Failed to retrieve reprints.',
+      'UPDATE_REPRINT_FAILED': 'Failed to update reprint.',
+      'VERIFICATION_FAILED': 'Verification failed.',
+      'AUDIT_FETCH_FAILED': 'Failed to retrieve audit log.',
+      'DISPATCH_FAILED': 'Failed to dispatch document.',
+      'PDF_GENERATION_FAILED': 'Failed to generate PDF.',
+      'PRICE_VALIDATION_FAILED': 'Price validation failed. Please verify item pricing.',
+      'ACCESS_DENIED': 'You do not have permission to perform this action.',
+      'INVALID_DISPATCH_REQUEST': 'Invalid dispatch request.',
+      'INVALID_BATCH_REQUEST': 'Invalid batch request.',
+      'MISSING_FIELDS': 'Required fields are missing.',
+      'MISSING_HTML': 'HTML content is required.',
+      'MISSING_BLUEPRINT': 'Layout blueprint is required.',
+      'NOT_FOUND': 'The requested resource was not found.',
     };
+    return safe[code] || 'An unexpected error occurred.';
+  };
 
+  const sendError = (res, statusCode, message, code = 'INTERNAL_ERROR', diagnostic = null) => {
+    const safeMsg = safeErrorMessage(code);
     const finalDiagnostic = diagnostic && diagnostic.trim() !== "" 
       ? diagnostic 
-      : generateDefaultDiagnostic(message, code);
+      : null;
 
     res.status(statusCode).json({
       status: 'error',
-      error: message,
+      error: safeMsg,
       code: code,
-      diagnostic: finalDiagnostic
+      ...(finalDiagnostic ? { diagnostic: finalDiagnostic } : {})
     });
   };
 
@@ -851,9 +922,10 @@ async function startServer() {
       if (!type || !payload) {
         return sendError(res, 400, 'Document type and payload are required', 'MISSING_FIELDS');
       }
-      const result = await documentService.registerDocument(type, payload, req.userId, id);
+      const companyId = req.companyId || '';
+      const result = await documentService.registerDocument(type, payload, req.userId, companyId, id);
       try {
-        await documentService.logAudit(req.userId, result.isNew ? 'CREATE' : 'UPDATE', 'document', result.id, { type, auto_registered: true });
+        await documentService.logAudit(req.userId, result.isNew ? 'CREATE' : 'UPDATE', 'document', result.id, { type, auto_registered: true }, companyId);
       } catch (auditErr) {
         console.error('[Documents] Audit log failed (non-fatal):', auditErr);
       }
@@ -866,8 +938,9 @@ async function startServer() {
   app.post('/api/documents', checkPermission('create_document'), validateBody(documentSchemas.create), auditCrudMiddleware('document'), async (req, res) => {
     try {
       const { type, payload } = req.body;
-      const result = await documentService.createDocument(type, payload, req.userId);
-      await documentService.logAudit(req.userId, 'CREATE', 'document', result.id, { type });
+      const companyId = req.companyId || '';
+      const result = await documentService.createDocument(type, payload, req.userId, companyId);
+      await documentService.logAudit(req.userId, 'CREATE', 'document', result.id, { type }, companyId);
       res.status(201).json(result);
     } catch (err) {
       sendError(res, 500, err.message, 'CREATE_FAILED');
@@ -877,8 +950,9 @@ async function startServer() {
   app.put('/api/documents/:id', checkPermission('edit_document'), validateBody(documentSchemas.update), async (req, res) => {
     try {
       const { payload } = req.body;
-      const result = await documentService.updateDocument(req.params.id, payload, req.userId);
-      await documentService.logAudit(req.userId, 'UPDATE', 'document', req.params.id, { payload_updated: true });
+      const companyId = req.companyId || '';
+      const result = await documentService.updateDocument(req.params.id, payload, req.userId, companyId);
+      await documentService.logAudit(req.userId, 'UPDATE', 'document', req.params.id, { payload_updated: true }, companyId);
       res.json(result);
     } catch (err) {
       sendError(res, 400, err.message, 'UPDATE_FAILED');
@@ -895,8 +969,9 @@ async function startServer() {
         return sendError(res, 400, 'Layout blueprint is required for finalization', 'MISSING_BLUEPRINT');
       }
       
-      const result = await documentService.finalizeDocument(req.params.id, blueprint, req.userId);
-      await documentService.logAudit(req.userId, 'FINALIZE', 'document', req.params.id, { fingerprint: result.fingerprint });
+      const companyId = req.companyId || '';
+      const result = await documentService.finalizeDocument(req.params.id, blueprint, req.userId, companyId);
+      await documentService.logAudit(req.userId, 'FINALIZE', 'document', req.params.id, { fingerprint: result.fingerprint }, companyId);
       res.json(result);
     } catch (err) {
       sendError(res, 422, err.message, 'FINALIZE_FAILED');
@@ -905,8 +980,9 @@ async function startServer() {
 
   app.post('/api/documents/:id/void', checkPermission('void_document'), async (req, res) => {
     try {
-      const result = await documentService.voidDocument(req.params.id, req.userId);
-      await documentService.logAudit(req.userId, 'VOID', 'document', req.params.id, {});
+      const companyId = req.companyId || '';
+      const result = await documentService.voidDocument(req.params.id, req.userId, companyId);
+      await documentService.logAudit(req.userId, 'VOID', 'document', req.params.id, {}, companyId);
       res.json(result);
     } catch (err) {
       sendError(res, 500, err.message, 'VOID_FAILED');
@@ -926,7 +1002,8 @@ async function startServer() {
       // However, the PreviewButton now handles the 'register-then-preview' flow via POST /register.
       // We still keep this robust by ensuring the resolver is context-aware.
       
-      const renderModel = await documentService.getPreview(identifier, { purpose });
+      const companyId = req.companyId || '';
+      const renderModel = await documentService.getPreview(identifier, { purpose }, companyId);
       res.json(renderModel);
     } catch (err) {
       if (err.name === 'ResolutionError') {
@@ -944,7 +1021,8 @@ async function startServer() {
 
   app.get('/api/documents/:id/export', checkPermission('export_document'), async (req, res) => {
     try {
-      const doc = await documentService.resolveDocument(req.params.id);
+      const companyId = req.companyId || '';
+      const doc = await documentService.resolveDocument(req.params.id, companyId);
       if (!doc) return sendError(res, 404, 'Document not found', 'NOT_FOUND');
 
       const pdfBytes = await documentService.exportPdf(req.params.id);
@@ -995,7 +1073,7 @@ async function startServer() {
         filename,
         streamed: isStream,
         savedToDisk: !isStream
-      });
+      }, req.companyId || '');
     } catch (err) {
       sendError(res, 500, err.message, 'EXPORT_FAILED');
     }
@@ -1010,8 +1088,9 @@ async function startServer() {
       if (!Array.isArray(ids) || !blueprint) {
         return sendError(res, 400, 'IDs array and blueprint are required', 'INVALID_BATCH_REQUEST');
       }
-      const results = await documentService.batchFinalize(ids, blueprint, req.userId);
-      await documentService.logAudit(req.userId, 'BATCH_FINALIZE', 'document_batch', null, { count: ids.length });
+      const companyId = req.companyId || '';
+      const results = await documentService.batchFinalize(ids, blueprint, req.userId, companyId);
+      await documentService.logAudit(req.userId, 'BATCH_FINALIZE', 'document_batch', null, { count: ids.length }, companyId);
       res.json(results);
     } catch (err) {
       sendError(res, 500, err.message, 'BATCH_FINALIZE_FAILED');
@@ -1033,7 +1112,7 @@ async function startServer() {
         pdfBase64: Buffer.from(p.pdfBytes).toString('base64')
       }));
       
-      await documentService.logAudit(req.userId, 'BATCH_EXPORT', 'document_batch', null, { count: ids.length });
+      await documentService.logAudit(req.userId, 'BATCH_EXPORT', 'document_batch', null, { count: ids.length }, req.companyId || '');
       res.json(results);
     } catch (err) {
       sendError(res, 500, err.message, 'BATCH_EXPORT_FAILED');
@@ -1044,7 +1123,7 @@ async function startServer() {
    * Sales Exchange Module Endpoints
    */
   app.get('/api/sales-exchanges', checkPermission('view_exchanges'), (req, res) => {
-    db.all('SELECT * FROM sales_exchanges ORDER BY exchange_date DESC', [], (err, rows) => {
+    db.all('SELECT * FROM sales_exchanges WHERE company_id = ? ORDER BY exchange_date DESC', [req.companyId || ''], (err, rows) => {
       if (err) return sendError(res, 500, err.message, 'FETCH_EXCHANGES_FAILED');
       res.json(rows);
     });
@@ -1053,8 +1132,9 @@ async function startServer() {
   app.get('/api/sales-exchanges/:id', checkPermission('view_exchanges'), async (req, res) => {
     try {
       const exchangeId = req.params.id;
+      const companyId = req.companyId || '';
       const exchange = await new Promise((resolve, reject) => {
-        db.get('SELECT * FROM sales_exchanges WHERE id = ?', [exchangeId], (err, row) => {
+        db.get('SELECT * FROM sales_exchanges WHERE id = ? AND company_id = ?', [exchangeId, companyId], (err, row) => {
           if (err) return reject(err);
           resolve(row);
         });
@@ -1063,19 +1143,19 @@ async function startServer() {
 
       const [items, reprints, approvals] = await Promise.all([
         new Promise((resolve, reject) => {
-          db.all('SELECT * FROM sales_exchange_items WHERE exchange_id = ?', [exchangeId], (err, rows) => {
+          db.all('SELECT * FROM sales_exchange_items WHERE exchange_id = ? AND company_id = ?', [exchangeId, companyId], (err, rows) => {
             if (err) return reject(err);
             resolve(rows);
           });
         }),
         new Promise((resolve, reject) => {
-          db.all('SELECT * FROM reprint_jobs WHERE exchange_id = ?', [exchangeId], (err, rows) => {
+          db.all('SELECT * FROM reprint_jobs WHERE exchange_id = ? AND company_id = ?', [exchangeId, companyId], (err, rows) => {
             if (err) return reject(err);
             resolve(rows);
           });
         }),
         new Promise((resolve, reject) => {
-          db.all('SELECT * FROM sales_exchange_approvals WHERE exchange_id = ?', [exchangeId], (err, rows) => {
+          db.all('SELECT * FROM sales_exchange_approvals WHERE exchange_id = ? AND company_id = ?', [exchangeId, companyId], (err, rows) => {
             if (err) return reject(err);
             resolve(rows);
           });
@@ -1110,9 +1190,9 @@ async function startServer() {
           db.run("BEGIN TRANSACTION");
 
           db.run(
-            `INSERT INTO sales_exchanges (exchange_number, invoice_id, customer_id, customer_name, reason, remarks, created_by) 
-              VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [exchange_number, invoice_id, customer_id, customer_name, reason, remarks, req.userId],
+            `INSERT INTO sales_exchanges (exchange_number, invoice_id, customer_id, customer_name, reason, remarks, created_by, company_id) 
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [exchange_number, invoice_id, customer_id, customer_name, reason, remarks, req.userId, req.companyId || ''],
             function(err) {
               if (err) {
                 db.run("ROLLBACK");
@@ -1120,15 +1200,15 @@ async function startServer() {
               }
               const newId = this.lastID;
               const itemStmt = db.prepare(
-                `INSERT INTO sales_exchange_items (exchange_id, product_id, product_name, qty_returned, qty_replaced, price_difference, item_condition) 
-                  VALUES (?, ?, ?, ?, ?, ?, ?)`
+                `INSERT INTO sales_exchange_items (exchange_id, product_id, product_name, qty_returned, qty_replaced, price_difference, item_condition, company_id) 
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
               );
 
               let itemError = null;
               for (const item of items) {
                 itemStmt.run([
                   newId, item.product_id, item.product_name, item.qty_returned, 
-                  item.qty_replaced, item.price_difference || 0, item.condition
+                  item.qty_replaced, item.price_difference || 0, item.condition, req.companyId || ''
                 ], (err) => {
                   if (err) itemError = err;
                 });
@@ -1147,7 +1227,7 @@ async function startServer() {
         });
       });
 
-      await documentService.logAudit(req.userId, 'CREATE', 'sales_exchange', exchangeId, { exchange_number });
+      await documentService.logAudit(req.userId, 'CREATE', 'sales_exchange', exchangeId, { exchange_number }, req.companyId || '');
 
       res.status(201).json({ id: exchangeId, exchange_number });
     } catch (err) {
@@ -1158,10 +1238,11 @@ async function startServer() {
       const exchangeId = req.params.id;
       const { comments } = req.body;
 
+      const companyId = req.companyId || '';
       await new Promise((resolve, reject) => {
         db.run(
-          "UPDATE sales_exchanges SET status = 'approved' WHERE id = ?",
-          [exchangeId],
+          "UPDATE sales_exchanges SET status = 'approved' WHERE id = ? AND company_id = ?",
+          [exchangeId, companyId],
           function(err) {
             if (err) return reject(err);
             resolve();
@@ -1171,8 +1252,8 @@ async function startServer() {
 
       await new Promise((resolve, reject) => {
         db.run(
-          "INSERT INTO sales_exchange_approvals (exchange_id, approved_by, comments, status) VALUES (?, ?, ?, ?)",
-          [exchangeId, req.userId, comments, 'approved'],
+          "INSERT INTO sales_exchange_approvals (exchange_id, approved_by, comments, status, company_id) VALUES (?, ?, ?, ?, ?)",
+          [exchangeId, req.userId, comments, 'approved', companyId],
           (err) => {
             if (err) return reject(err);
             resolve();
@@ -1182,7 +1263,7 @@ async function startServer() {
 
       // Auto-generate reprint job
       const exchangeRow = await new Promise((resolve, reject) => {
-        db.get("SELECT * FROM sales_exchanges WHERE id = ?", [exchangeId], (err, row) => {
+        db.get("SELECT * FROM sales_exchanges WHERE id = ? AND company_id = ?", [exchangeId, companyId], (err, row) => {
           if (err) return reject(err);
           resolve(row);
         });
@@ -1191,8 +1272,8 @@ async function startServer() {
       if (exchangeRow) {
         await new Promise((resolve, reject) => {
           db.run(
-            "INSERT INTO reprint_jobs (exchange_id, job_description) VALUES (?, ?)",
-            [exchangeId, `Reprint for Exchange ${exchangeRow.exchange_number}: ${exchangeRow.reason}`],
+            "INSERT INTO reprint_jobs (exchange_id, job_description, company_id) VALUES (?, ?, ?)",
+            [exchangeId, `Reprint for Exchange ${exchangeRow.exchange_number}: ${exchangeRow.reason}`, companyId],
             (err) => {
               if (err) return reject(err);
               resolve();
@@ -1211,7 +1292,7 @@ async function startServer() {
    * Sales Orders Endpoints
    */
   app.get('/api/sales-orders', checkPermission('view_sales_orders'), (req, res) => {
-    db.all('SELECT * FROM sales_orders ORDER BY orderDate DESC', [], (err, rows) => {
+    db.all('SELECT * FROM sales_orders WHERE company_id = ? ORDER BY orderDate DESC', [req.companyId || ''], (err, rows) => {
       if (err) return sendError(res, 500, err.message, 'FETCH_SALES_ORDERS_FAILED');
       res.json(rows);
     });
@@ -1219,7 +1300,7 @@ async function startServer() {
 
   app.get('/api/sales-orders/:id', checkPermission('view_sales_orders'), (req, res) => {
     const id = req.params.id;
-    db.get('SELECT * FROM sales_orders WHERE id = ?', [id], (err, row) => {
+    db.get('SELECT * FROM sales_orders WHERE id = ? AND company_id = ?', [id, req.companyId || ''], (err, row) => {
       if (err) return sendError(res, 500, err.message, 'FETCH_SALES_ORDER_FAILED');
       if (!row) return sendError(res, 404, 'Sales order not found', 'NOT_FOUND');
       res.json(row);
@@ -1243,16 +1324,16 @@ async function startServer() {
       const now = new Date().toISOString();
       await new Promise((resolve, reject) => {
         db.run(
-          `INSERT INTO sales_orders (id, quotation_id, customer_id, orderDate, deliveryDate, status, items, subtotal, discounts, tax, total, notes, created_by, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [o.id, o.quotationId || null, o.customerId || null, o.orderDate || now, o.deliveryDate || null, o.status || 'Draft', JSON.stringify(o.items), o.subtotal || 0, o.discounts || 0, o.tax || 0, o.total || 0, o.notes || '', req.userId, now],
+          `INSERT INTO sales_orders (id, quotation_id, customer_id, orderDate, deliveryDate, status, items, subtotal, discounts, tax, total, notes, created_by, created_at, company_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [o.id, o.quotationId || null, o.customerId || null, o.orderDate || now, o.deliveryDate || null, o.status || 'Draft', JSON.stringify(o.items), o.subtotal || 0, o.discounts || 0, o.tax || 0, o.total || 0, o.notes || '', req.userId, now, req.companyId || ''],
           function(err) {
             if (err) return reject(err);
             resolve();
           }
         );
       });
-      await documentService.logAudit(req.userId, 'CREATE', 'sales_order', o.id, { created: true });
+      await documentService.logAudit(req.userId, 'CREATE', 'sales_order', o.id, { created: true }, req.companyId || '');
       res.status(201).json({ id: o.id });
     } catch (err) {
       sendError(res, 500, err.message, 'CREATE_SALES_ORDER_FAILED');
@@ -1263,8 +1344,8 @@ async function startServer() {
     const id = req.params.id;
     const o = req.body || {};
     db.run(
-      `UPDATE sales_orders SET quotation_id = ?, customer_id = ?, orderDate = ?, deliveryDate = ?, status = ?, items = ?, subtotal = ?, discounts = ?, tax = ?, total = ?, notes = ?, updated_by = ?, updated_at = ? WHERE id = ?`,
-      [o.quotationId || null, o.customerId || null, o.orderDate || null, o.deliveryDate || null, o.status || 'Draft', JSON.stringify(o.items || []), o.subtotal || 0, o.discounts || 0, o.tax || 0, o.total || 0, o.notes || '', req.userId, new Date().toISOString(), id],
+      `UPDATE sales_orders SET quotation_id = ?, customer_id = ?, orderDate = ?, deliveryDate = ?, status = ?, items = ?, subtotal = ?, discounts = ?, tax = ?, total = ?, notes = ?, updated_by = ?, updated_at = ? WHERE id = ? AND company_id = ?`,
+      [o.quotationId || null, o.customerId || null, o.orderDate || null, o.deliveryDate || null, o.status || 'Draft', JSON.stringify(o.items || []), o.subtotal || 0, o.discounts || 0, o.tax || 0, o.total || 0, o.notes || '', req.userId, new Date().toISOString(), id, req.companyId || ''],
       function(err) {
         if (err) return sendError(res, 500, err.message, 'UPDATE_SALES_ORDER_FAILED');
         res.json({ status: 'updated' });
@@ -1274,14 +1355,14 @@ async function startServer() {
 
   app.delete('/api/sales-orders/:id', checkPermission('delete_sales_order'), (req, res) => {
     const id = req.params.id;
-    db.run('DELETE FROM sales_orders WHERE id = ?', [id], function(err) {
+    db.run('DELETE FROM sales_orders WHERE id = ? AND company_id = ?', [id, req.companyId || ''], function(err) {
       if (err) return sendError(res, 500, err.message, 'DELETE_SALES_ORDER_FAILED');
       res.json({ status: 'deleted' });
     });
   });
 
   app.get('/api/reprint-jobs', checkPermission('view_reprints'), (req, res) => {
-    db.all('SELECT * FROM reprint_jobs ORDER BY created_at DESC', [], (err, rows) => {
+    db.all('SELECT * FROM reprint_jobs WHERE company_id = ? ORDER BY created_at DESC', [req.companyId || ''], (err, rows) => {
       if (err) return sendError(res, 500, err.message, 'FETCH_REPRINTS_FAILED');
       res.json(rows);
     });
@@ -1294,8 +1375,8 @@ async function startServer() {
     db.run(
       `UPDATE reprint_jobs 
        SET status = ?, paper_used = ?, ink_used = ?, finishing_cost = ?, total_reprint_cost = ?, completed_at = ?
-       WHERE id = ?`,
-      [status, paper_used, ink_used, finishing_cost, total_reprint_cost, completed_at, req.params.id],
+       WHERE id = ? AND company_id = ?`,
+      [status, paper_used, ink_used, finishing_cost, total_reprint_cost, completed_at, req.params.id, req.companyId || ''],
       function(err) {
         if (err) return sendError(res, 500, err.message, 'UPDATE_REPRINT_FAILED');
         res.json({ status: 'updated' });
@@ -1305,7 +1386,7 @@ async function startServer() {
 
   app.get('/api/documents/:id/verify', checkPermission('verify_document'), async (req, res) => {
     try {
-      const result = await documentService.verifySignature(req.params.id);
+      const result = await documentService.verifySignature(req.params.id, req.companyId || '');
       res.json(result);
     } catch (err) {
       sendError(res, 404, err.message, 'VERIFICATION_FAILED');
@@ -1313,7 +1394,7 @@ async function startServer() {
   });
 
   app.get('/api/documents/:id/audit', checkPermission('view_audit'), (req, res) => {
-    db.all("SELECT * FROM audit_logs WHERE entity_id = ? ORDER BY timestamp DESC", [req.params.id], (err, rows) => {
+    db.all("SELECT * FROM audit_logs WHERE entity_id = ? AND company_id = ? ORDER BY timestamp DESC", [req.params.id, req.companyId || ''], (err, rows) => {
       if (err) return sendError(res, 500, err.message, 'AUDIT_FETCH_FAILED');
       res.json(rows);
     });
@@ -1399,79 +1480,71 @@ async function startServer() {
 
   // --- End of Document Engine Endpoints ---
   app.get('/api/classes', (req, res) => {
-    db.all("SELECT * FROM classes ORDER BY name", [], (err, rows) => {
-      if (err) return res.status(500).json({ error: err.message });
+    db.all("SELECT * FROM classes WHERE company_id = ? ORDER BY name", [req.companyId || ''], (err, rows) => {
+      if (err) { console.error('[Classes] GET error:', err); return res.status(500).json({ error: 'Failed to retrieve classes' }); }
       res.json(rows);
     });
   });
 
   app.post('/api/classes', validateBody(classSchemas.create), (req, res) => {
     const { name } = req.body;
-    db.run("INSERT INTO classes (name) VALUES (?)", [name], function(err) {
-      if (err) return res.status(500).json({ error: err.message });
+    db.run("INSERT INTO classes (name, company_id) VALUES (?, ?)", [name, req.companyId || ''], function(err) {
+      if (err) { console.error('[Classes] POST error:', err); return res.status(500).json({ error: 'Failed to create class' }); }
       res.json({ id: this.lastID, name });
     });
   });
 
   app.delete('/api/classes/:id', (req, res) => {
-    db.run("DELETE FROM classes WHERE id = ?", [req.params.id], (err) => {
-      if (err) return res.status(500).json({ error: err.message });
+    db.run("DELETE FROM classes WHERE id = ? AND company_id = ?", [req.params.id, req.companyId || ''], (err) => {
+      if (err) { console.error('[Classes] DELETE error:', err); return res.status(500).json({ error: 'Failed to delete class' }); }
       res.json({ success: true });
     });
   });
 
   // --- Subjects Endpoints ---
   app.get('/api/subjects', (req, res) => {
-    db.all("SELECT * FROM subjects ORDER BY name", [], (err, rows) => {
-      if (err) return res.status(500).json({ error: err.message });
+    db.all("SELECT * FROM subjects WHERE company_id = ? ORDER BY name", [req.companyId || ''], (err, rows) => {
+      if (err) { console.error('[Subjects] GET error:', err); return res.status(500).json({ error: 'Failed to retrieve subjects' }); }
       res.json(rows);
     });
   });
 
   app.post('/api/subjects', validateBody(subjectSchemas.create), (req, res) => {
     const { name, code } = req.body;
-    db.run("INSERT INTO subjects (name, code) VALUES (?, ?)", [name, code], function(err) {
-      if (err) return res.status(500).json({ error: err.message });
+    db.run("INSERT INTO subjects (name, code, company_id) VALUES (?, ?, ?)", [name, code, req.companyId || ''], function(err) {
+      if (err) { console.error('[Subjects] POST error:', err); return res.status(500).json({ error: 'Failed to create subject' }); }
       res.json({ id: this.lastID, name, code });
     });
   });
 
   app.delete('/api/subjects/:id', (req, res) => {
-    db.run("DELETE FROM subjects WHERE id = ?", [req.params.id], (err) => {
-      if (err) return res.status(500).json({ error: err.message });
+    db.run("DELETE FROM subjects WHERE id = ? AND company_id = ?", [req.params.id, req.companyId || ''], (err) => {
+      if (err) { console.error('[Subjects] DELETE error:', err); return res.status(500).json({ error: 'Failed to delete subject' }); }
       res.json({ success: true });
     });
   });
 
   // 1. GET Schools
-  // SUSPECTED DEAD: No frontend or test caller found as of April 21, 2026.
-  // Confirm before removing.
   app.get('/api/schools', checkPermission('view_schools'), (req, res) => {
-    db.all("SELECT * FROM schools", [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+    db.all("SELECT * FROM schools WHERE company_id = ?", [req.companyId || ''], (err, rows) => {
+    if (err) { console.error('[Schools] GET error:', err); return res.status(500).json({ error: 'Failed to retrieve schools' }); }
     res.json(rows);
   });
 });
 
   // 2. GET Inventory
-  // SUSPECTED DEAD: No frontend or test caller found as of April 21, 2026.
-  // Confirm before removing.
   app.get('/api/inventory', checkPermission('view_inventory'), (req, res) => {
-    db.all("SELECT * FROM inventory", [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+    db.all("SELECT * FROM inventory WHERE company_id = ?", [req.companyId || ''], (err, rows) => {
+    if (err) { console.error('[Inventory] GET error:', err); return res.status(500).json({ error: 'Failed to retrieve inventory' }); }
     res.json(rows);
   });
 });
 
-// [REMOVED] Dead routes 2.1-9: calculate-variant-price, examinations, calculate,
-// confirm-batch, complete-subject, generate-invoice, invoices, invoices/:id/pay
-// These were marked SUSPECTED DEAD and replaced by routes/examination.cjs
-
 // 11. Delete Examination Batch
 app.delete('/api/examinations/batch/:batch_id', (req, res) => {
   const { batch_id } = req.params;
-  db.run("DELETE FROM examinations WHERE batch_id = ? AND status = 'pending'", [batch_id], (err) => {
-    if (err) return res.status(500).json({ error: err.message });
+  db.run("DELETE FROM examinations WHERE batch_id = ? AND status = 'pending' AND company_id = ?", [batch_id, req.companyId || ''], (err) => {
+    if (err) { console.error('[Examination] delete batch error:', err); return res.status(500).json({ error: 'Failed to delete batch' }); }
     res.json({ success: true });
   });
 });
@@ -1480,8 +1553,8 @@ app.delete('/api/examinations/batch/:batch_id', (req, res) => {
 app.post('/api/examinations/batch/:batch_id/recurring', (req, res) => {
   const { batch_id } = req.params;
   const { is_recurring } = req.body;
-  db.run("UPDATE examinations SET is_recurring = ? WHERE batch_id = ?", [is_recurring ? 1 : 0, batch_id], (err) => {
-    if (err) return res.status(500).json({ error: err.message });
+  db.run("UPDATE examinations SET is_recurring = ? WHERE batch_id = ? AND company_id = ?", [is_recurring ? 1 : 0, batch_id, req.companyId || ''], (err) => {
+    if (err) { console.error('[Examination] toggle recurring error:', err); return res.status(500).json({ error: 'Failed to update recurring status' }); }
     res.json({ success: true });
   });
 });
@@ -1491,35 +1564,36 @@ app.get('/api/invoices/:id/details', (req, res) => {
   const { id } = req.params;
   db.all(`SELECT class, SUM(candidates) as learner_count, AVG(charge_per_learner) as charge_per_learner, SUM(selling_price) as total
           FROM examinations 
-          WHERE invoice_id = ? 
-          GROUP BY class`, [id], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+          WHERE invoice_id = ? AND company_id = ?
+          GROUP BY class`, [id, req.companyId || ''], (err, rows) => {
+    if (err) { console.error('[Invoices] details error:', err); return res.status(500).json({ error: 'Failed to retrieve invoice details' }); }
     res.json(rows);
   });
 });
 
   // 10. Get Examination Stats
   app.get('/api/stats/examination', checkPermission('view_stats'), (req, res) => {
+    const companyId = req.companyId || '';
     const stats = {};
     
-    db.get("SELECT COUNT(*) as count FROM examinations WHERE status = 'pending'", (err, row) => {
-      if (err) return res.status(500).json({ error: err.message });
+    db.get("SELECT COUNT(*) as count FROM examinations WHERE status = 'pending' AND company_id = ?", [companyId], (err, row) => {
+      if (err) { console.error('[Stats] pending count error:', err); return res.status(500).json({ error: 'Failed to load stats' }); }
       stats.pending_jobs = row?.count || 0;
       
-      db.get("SELECT SUM(total_amount) as total FROM invoices WHERE status = 'paid'", (err, row) => {
-        if (err) return res.status(500).json({ error: err.message });
+      db.get("SELECT SUM(total_amount) as total FROM invoices WHERE status = 'paid' AND company_id = ?", [companyId], (err, row) => {
+        if (err) { console.error('[Stats] revenue error:', err); return res.status(500).json({ error: 'Failed to load stats' }); }
         stats.total_revenue = row?.total || 0;
         
-        db.get("SELECT SUM(total_amount) as total FROM invoices WHERE status = 'unpaid'", (err, row) => {
-          if (err) return res.status(500).json({ error: err.message });
+        db.get("SELECT SUM(total_amount) as total FROM invoices WHERE status = 'unpaid' AND company_id = ?", [companyId], (err, row) => {
+          if (err) { console.error('[Stats] outstanding error:', err); return res.status(500).json({ error: 'Failed to load stats' }); }
           stats.outstanding_amount = row?.total || 0;
           
-          db.get("SELECT SUM(actual_waste_sheets) as waste FROM examinations", (err, row) => {
-            if (err) return res.status(500).json({ error: err.message });
+          db.get("SELECT SUM(actual_waste_sheets) as waste FROM examinations WHERE company_id = ?", [companyId], (err, row) => {
+            if (err) { console.error('[Stats] waste error:', err); return res.status(500).json({ error: 'Failed to load stats' }); }
             stats.total_waste = row?.waste || 0;
             
-            db.get("SELECT SUM(total_sheets_used) as total, SUM(internal_cost) as cost FROM examinations", (err, row) => {
-              if (err) return res.status(500).json({ error: err.message });
+            db.get("SELECT SUM(total_sheets_used) as total, SUM(internal_cost) as cost FROM examinations WHERE company_id = ?", [companyId], (err, row) => {
+              if (err) { console.error('[Stats] sheets/cost error:', err); return res.status(500).json({ error: 'Failed to load stats' }); }
               stats.total_sheets = row?.total || 0;
               stats.total_cost = row?.cost || 0;
               res.json(stats);
@@ -1533,6 +1607,7 @@ app.get('/api/invoices/:id/details', (req, res) => {
   // 14. Get Monthly Examination Data for Dashboard
   app.get('/api/stats/monthly-data', checkPermission('view_stats'), (req, res) => {
     const currentYear = new Date().getFullYear();
+    const companyId = req.companyId || '';
     
     const query = `
       SELECT 
@@ -1547,20 +1622,20 @@ app.get('/api/invoices/:id/details', (req, res) => {
       LEFT JOIN (
         SELECT strftime('%m', created_at) as month, SUM(total_amount) as revenue
         FROM invoices 
-        WHERE strftime('%Y', created_at) = ? AND status != 'cancelled'
+        WHERE strftime('%Y', created_at) = ? AND status != 'cancelled' AND company_id = ?
         GROUP BY month
       ) i ON m.month = i.month
       LEFT JOIN (
         SELECT strftime('%m', created_at) as month, SUM(internal_cost) as month_cost
         FROM examinations
-        WHERE strftime('%Y', created_at) = ?
+        WHERE strftime('%Y', created_at) = ? AND company_id = ?
         GROUP BY month
       ) e ON m.month = e.month
       ORDER BY m.month
     `;
 
-    db.all(query, [currentYear.toString(), currentYear.toString()], (err, rows) => {
-      if (err) return res.status(500).json({ error: err.message });
+    db.all(query, [currentYear.toString(), companyId, currentYear.toString(), companyId], (err, rows) => {
+      if (err) { console.error('[Stats] monthly-data error:', err); return res.status(500).json({ error: 'Failed to load monthly data' }); }
       res.json(rows);
     });
   });
@@ -1575,7 +1650,7 @@ app.get('/api/invoices/:id/details', (req, res) => {
 
       // Get current inventory
       const item = await new Promise((resolve, reject) => {
-        db.get("SELECT * FROM inventory WHERE id = ?", [itemId], (err, row) => {
+        db.get("SELECT * FROM inventory WHERE id = ? AND company_id = ?", [itemId, req.companyId || ''], (err, row) => {
           if (err) return reject(err);
           resolve(row);
         });
@@ -1607,11 +1682,11 @@ app.get('/api/invoices/:id/details', (req, res) => {
 
           db.run(`INSERT INTO inventory_transactions 
             (id, item_id, warehouse_id, batch_id, type, quantity, previous_quantity, new_quantity, 
-              unit_cost, total_cost, reason, reference, reference_id, performed_by, timestamp)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, 
+              unit_cost, total_cost, reason, reference, reference_id, performed_by, timestamp, company_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, 
             [transactionId, itemId, warehouseId || null, batchId || null, type || (isDeduction ? 'OUT' : 'IN'),
               quantity, currentQuantity, newQuantity, unitCost, isDeduction ? -totalCost : totalCost,
-              reason, reference || null, referenceId || null, performedBy || 'system', new Date().toISOString()],
+              reason, reference || null, referenceId || null, performedBy || 'system', new Date().toISOString(), req.companyId || ''],
             (err) => {
             if (err) {
               db.run("ROLLBACK");
@@ -1619,7 +1694,7 @@ app.get('/api/invoices/:id/details', (req, res) => {
             }
 
             // Update inventory
-            db.run("UPDATE inventory SET quantity = ? WHERE id = ?", [newQuantity, itemId], (err) => {
+            db.run("UPDATE inventory SET quantity = ? WHERE id = ? AND company_id = ?", [newQuantity, itemId, req.companyId || ''], (err) => {
               if (err) {
                 db.run("ROLLBACK");
                 return reject(err);
@@ -1653,10 +1728,10 @@ app.get('/api/invoices/:id/details', (req, res) => {
     const limit = parseInt(req.query.limit) || 50;
     
     db.all(`SELECT * FROM inventory_transactions 
-            WHERE item_id = ? 
+            WHERE item_id = ? AND company_id = ?
             ORDER BY timestamp DESC 
-            LIMIT ?`, [itemId, limit], (err, rows) => {
-      if (err) return res.status(500).json({ error: err.message });
+            LIMIT ?`, [itemId, req.companyId || '', limit], (err, rows) => {
+      if (err) { console.error('[Inventory] transactions error:', err); return res.status(500).json({ error: 'Failed to load transactions' }); }
       res.json(rows || []);
     });
   });
@@ -1664,12 +1739,13 @@ app.get('/api/invoices/:id/details', (req, res) => {
   // Get warehouse inventory
   app.get('/api/inventory/warehouse/:warehouseId', (req, res) => {
     const { warehouseId } = req.params;
+    const companyId = req.companyId || '';
     
     db.all(`SELECT wi.*, i.name as item_name, i.material, i.cost_per_unit, i.unit
             FROM warehouse_inventory wi
             LEFT JOIN inventory i ON wi.item_id = i.id
-            WHERE wi.warehouse_id = ?`, [warehouseId], (err, rows) => {
-      if (err) return res.status(500).json({ error: err.message });
+            WHERE wi.warehouse_id = ? AND wi.company_id = ? AND i.company_id = ?`, [warehouseId, companyId, companyId], (err, rows) => {
+      if (err) { console.error('[Inventory] warehouse error:', err); return res.status(500).json({ error: 'Failed to load warehouse inventory' }); }
       res.json(rows || []);
     });
   });
@@ -1679,9 +1755,9 @@ app.get('/api/invoices/:id/details', (req, res) => {
     const { itemId } = req.params;
     
     db.all(`SELECT * FROM material_batches 
-            WHERE item_id = ? AND status = 'active' AND remaining_quantity > 0
-            ORDER BY received_date ASC`, [itemId], (err, rows) => {
-      if (err) return res.status(500).json({ error: err.message });
+            WHERE item_id = ? AND status = 'active' AND remaining_quantity > 0 AND company_id = ?
+            ORDER BY received_date ASC`, [itemId, req.companyId || ''], (err, rows) => {
+      if (err) { console.error('[Inventory] item batches error:', err); return res.status(500).json({ error: 'Failed to load batches' }); }
       res.json(rows || []);
     });
   });
@@ -1716,7 +1792,8 @@ app.get('/api/invoices/:id/details', (req, res) => {
       res.setHeader('Content-Type', 'application/octet-stream');
       res.send(data);
     } catch (err) {
-      res.status(500).json({ success: false, error: err.message });
+      console.error('[File] read-file error:', err);
+      res.status(500).json({ success: false, error: 'Failed to read file' });
     }
   });
 
@@ -1736,7 +1813,8 @@ app.get('/api/invoices/:id/details', (req, res) => {
       fs.writeFileSync(filePath, buffer);
       res.json({ success: true, path: filePath, size: buffer.length });
     } catch (err) {
-      res.status(500).json({ success: false, error: err.message });
+      console.error('[File] write-temp-pdf error:', err);
+      res.status(500).json({ success: false, error: 'Failed to write PDF' });
     }
   });
 
@@ -1770,7 +1848,8 @@ app.get('/api/invoices/:id/details', (req, res) => {
       const stream = fs.createReadStream(filePath);
       stream.pipe(res);
     } catch (err) {
-      res.status(500).json({ success: false, error: err.message });
+      console.error('[File] serve-file error:', err);
+      res.status(500).json({ success: false, error: 'Failed to serve file' });
     }
   });
 

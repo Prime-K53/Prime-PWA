@@ -6,16 +6,23 @@ const SUPABASE_ENABLED = Boolean(
   import.meta.env.VITE_SUPABASE_URL !== 'https://placeholder.supabase.co'
 );
 
+const AUTH_TIMEOUT = 15000;
+
+async function withTimeout<T>(promise: Promise<T>, ms: number = AUTH_TIMEOUT): Promise<T> {
+  const timer = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error(`Request timed out after ${ms}ms`)), ms)
+  );
+  return Promise.race([promise, timer]);
+}
+
 export interface AuthResult {
   success: boolean;
   error?: string;
-  emailVerified?: boolean;
   userId?: string;
 }
 
 export interface SessionInfo {
   user: any;
-  emailVerified: boolean;
 }
 
 function getEmailForUser(username: string, domain = 'prime-erp.local'): string {
@@ -30,14 +37,13 @@ export async function signUp(email: string, password: string, metadata?: Record<
     if (!targetEmail || !targetEmail.includes('@') || targetEmail.startsWith('@')) {
       return { success: false, error: 'Please enter a valid email address.' };
     }
-    const { data, error } = await supabase.auth.signUp({
+    const { data, error } = await withTimeout(supabase.auth.signUp({
       email: targetEmail,
       password,
       options: {
         data: metadata || {},
-        emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}#/setup` : undefined,
       },
-    });
+    }));
     if (error) {
       console.error('[Supabase] signUp error:', error);
       if (error.message?.toLowerCase().includes('already registered')) {
@@ -55,39 +61,46 @@ export async function signUp(email: string, password: string, metadata?: Record<
       if (error.message?.toLowerCase().includes('rate limit') || error.message?.toLowerCase().includes('too many requests') || (error as any)?.status === 429) {
         return { success: false, error: 'Too many attempts. Please wait about 60 seconds and try again.' };
       }
+      if (error.message?.toLowerCase().includes('database error saving new user')) {
+        const status = (error as any)?.status || (error as any)?.statusCode;
+        return { success: false, error: `Supabase signup failed (server error). This is usually caused by a database trigger on the auth.users table. Please check: 1) Go to your Supabase Dashboard → Database → Triggers and remove any "on_auth_user_created" triggers. 2) If using a "profiles" table, ensure it exists and has proper RLS policies. 3) Check the Supabase Dashboard → Logs for the exact PostgreSQL error.` };
+      }
       return { success: false, error: error.message };
     }
+    if (data.session?.user) {
+      return {
+        success: true,
+        userId: data.session.user.id,
+      };
+    }
+
+    const { data: signInData, error: signInError } = await withTimeout(supabase.auth.signInWithPassword({
+      email: targetEmail,
+      password,
+    }));
+
+    if (signInError) {
+      console.error('[Supabase] Auto-login after signup failed:', signInError);
+      return { success: false, error: signInError.message };
+    }
+
     return {
       success: true,
-      userId: data.user?.id,
-      emailVerified: data.user?.email_confirmed_at != null,
+      userId: signInData.user?.id || data.user?.id,
     };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : 'Network error. Please try again.' };
   }
 }
 
-export async function checkEmailConfirmation(email: string): Promise<boolean> {
-  if (!SUPABASE_ENABLED) return false;
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user && user.email_confirmed_at) return true;
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user?.email_confirmed_at) return true;
-    return false;
-  } catch {
-    return false;
-  }
-}
-
-export async function verifyOtp(email: string, token: string, type: 'signup' | 'recovery' = 'signup'): Promise<AuthResult> {
+export async function verifyOtp(email: string, token: string, type: 'recovery' = 'recovery'): Promise<AuthResult> {
   if (!SUPABASE_ENABLED) return { success: false, error: 'Supabase is not configured.' };
   try {
-    const { data, error } = await supabase.auth.verifyOtp({
+    const { data, error } = await withTimeout(supabase.auth.verifyOtp({
       email: getEmailForUser(email),
       token,
       type,
-    });
+    }));
     if (error) {
       if (error.message?.toLowerCase().includes('expired')) {
         return { success: false, error: 'This verification code has expired. Request a new one.' };
@@ -100,49 +113,40 @@ export async function verifyOtp(email: string, token: string, type: 'signup' | '
     return {
       success: true,
       userId: data.user?.id,
-      emailVerified: data.user?.email_confirmed_at != null,
     };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : 'Verification failed.' };
   }
 }
 
-export async function resendOtp(email: string, type: 'signup' | 'recovery' = 'signup'): Promise<AuthResult> {
+export async function signIn(email: string, password: string): Promise<AuthResult> {
   if (!SUPABASE_ENABLED) return { success: false, error: 'Supabase is not configured.' };
   try {
-    const { error } = await supabase.auth.resend({
-      type,
-      email: getEmailForUser(email),
-    });
-    if (error) return { success: false, error: error.message };
-    return { success: true };
-  } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : 'Failed to resend code.' };
-  }
-}
-
-export async function signIn(email: string, password: string): Promise<AuthResult & { emailVerified?: boolean }> {
-  if (!SUPABASE_ENABLED) return { success: false, error: 'Supabase is not configured.' };
-  try {
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await withTimeout(supabase.auth.signInWithPassword({
       email: getEmailForUser(email),
       password,
-    });
+    }));
+
+    console.log("AUTH RESPONSE:", data);
+    console.log("AUTH ERROR:", error);
+
     if (error) {
+      console.error("LOGIN FAILED:", {
+        code: (error as any).code,
+        message: error.message,
+        status: (error as any).status,
+        name: error.name,
+      });
+
       if (error.message?.toLowerCase().includes('invalid login credentials')) {
-        return { success: false, error: 'Invalid email or password.' };
-      }
-      if (error.message?.toLowerCase().includes('email not confirmed')) {
-        return { success: false, error: 'EMAIL_NOT_VERIFIED', emailVerified: false };
+        return { success: false, error: error.message };
       }
       return { success: false, error: error.message };
     }
     if (!data.user) return { success: false, error: 'No user data returned.' };
-    const emailVerified = data.user.email_confirmed_at != null;
     return {
       success: true,
       userId: data.user.id,
-      emailVerified,
     };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : 'Login failed.' };
@@ -151,17 +155,16 @@ export async function signIn(email: string, password: string): Promise<AuthResul
 
 export async function signOut(): Promise<void> {
   if (!SUPABASE_ENABLED) return;
-  try { await supabase.auth.signOut(); } catch { }
+  try { await withTimeout(supabase.auth.signOut(), 5000); } catch { }
 }
 
 export async function getSession(): Promise<SessionInfo | null> {
   if (!SUPABASE_ENABLED) return null;
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await withTimeout(supabase.auth.getSession());
     if (!session?.user) return null;
     return {
       user: session.user,
-      emailVerified: session.user.email_confirmed_at != null,
     };
   } catch {
     return null;
@@ -171,7 +174,7 @@ export async function getSession(): Promise<SessionInfo | null> {
 export async function sendPasswordResetOtp(email: string): Promise<AuthResult> {
   if (!SUPABASE_ENABLED) return { success: false, error: 'Supabase is not configured.' };
   try {
-    const { error } = await supabase.auth.resetPasswordForEmail(getEmailForUser(email));
+    const { error } = await withTimeout(supabase.auth.resetPasswordForEmail(getEmailForUser(email)));
     if (error) return { success: false, error: error.message };
     return { success: true };
   } catch (err) {
@@ -182,7 +185,7 @@ export async function sendPasswordResetOtp(email: string): Promise<AuthResult> {
 export async function updatePassword(newPassword: string): Promise<AuthResult> {
   if (!SUPABASE_ENABLED) return { success: false, error: 'Supabase is not configured.' };
   try {
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    const { error } = await withTimeout(supabase.auth.updateUser({ password: newPassword }));
     if (error) return { success: false, error: error.message };
     return { success: true };
   } catch (err) {
@@ -192,7 +195,7 @@ export async function updatePassword(newPassword: string): Promise<AuthResult> {
 
 export async function getSupabaseUser(): Promise<any | null> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await withTimeout(supabase.auth.getUser());
     return user;
   } catch {
     return null;

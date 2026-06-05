@@ -16,6 +16,7 @@ import { addDays, addMonths, addYears, isBefore, parseISO, format, isSameDay } f
 import { aggregateMarketAdjustmentSnapshots, attachPricingBreakdown, summarizePricingBreakdown } from '../utils/pricingBreakdown';
 
 import { customerNotificationService, type NotificationActivityType } from '../services/customerNotificationService';
+import { isSupabaseConfigured } from '../services/cloudMode';
 
 type ApprovedQuotationResult = {
     batchId?: string;
@@ -76,7 +77,7 @@ interface SalesContextType {
     isLoading: boolean;
     isPosModalOpen: boolean;
     setIsPosModalOpen: (open: boolean) => void;
-    fetchSalesData: () => Promise<void>;
+    fetchSalesData: (silent?: boolean) => Promise<void>;
 
 
     addSale: (sale: Sale, excessHandling?: 'Change' | 'Wallet') => Promise<{ success: boolean; id?: string; message?: string }>;
@@ -137,15 +138,12 @@ export const SalesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     useEffect(() => {
         if (!isInitialized) return;
 
-        // Auth initialized, fetching sales data
         salesStore.fetchSalesData().then(async () => {
             try {
                 await syncExistingCustomerPaymentTerms();
-                await salesStore.fetchSalesData();
             } catch (error) {
                 console.error('Failed to synchronize customer payment terms policy', error);
             }
-
             runRecurringBilling();
         }).catch(err => {
             notify("Failed to load sales history.", "error");
@@ -250,6 +248,7 @@ export const SalesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
 
     const syncExistingCustomerPaymentTerms = async () => {
+        if (isSupabaseConfigured()) return;
         const currentCustomers = useSalesStore.getState().customers || [];
         const customersToUpdate = currentCustomers
             .map((customer) => {

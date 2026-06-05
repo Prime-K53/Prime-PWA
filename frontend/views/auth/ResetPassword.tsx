@@ -21,7 +21,7 @@ const ResetPassword: React.FC = () => {
   useEffect(() => {
     if (!SUPABASE_ENABLED) return;
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY' && session) {
         setSessionReady(true);
       }

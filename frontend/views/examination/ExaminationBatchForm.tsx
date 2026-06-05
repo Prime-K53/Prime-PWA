@@ -310,6 +310,8 @@ const ExaminationBatchForm: React.FC = () => {
                    Sub Account
                  </label>
                  <select
+                   id="sub-account"
+                   name="sub_account_name"
                    value={formData.sub_account_name}
                    onChange={(event) => handleChange('sub_account_name', event.target.value)}
                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
@@ -326,6 +328,8 @@ const ExaminationBatchForm: React.FC = () => {
                <div>
                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1.5">Creation Date</label>
                  <input
+                   id="batch-date"
+                   name="batch_date"
                    type="date"
                    value={formData.batch_date}
                    onChange={(event) => handleChange('batch_date', event.target.value)}
@@ -338,6 +342,8 @@ const ExaminationBatchForm: React.FC = () => {
              <div>
                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1.5">Valid Until</label>
                <input
+                 id="valid-until"
+                 name="valid_until"
                  type="date"
                  value={formData.valid_until}
                  onChange={(event) => handleChange('valid_until', event.target.value)}
@@ -349,6 +355,8 @@ const ExaminationBatchForm: React.FC = () => {
              <div>
                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1.5">Academic Year</label>
                <input
+                 id="academic-year"
+                 name="academic_year"
                  value={formData.academic_year}
                  onChange={(event) => handleChange('academic_year', event.target.value)}
                  placeholder="e.g. 2026"
@@ -360,6 +368,8 @@ const ExaminationBatchForm: React.FC = () => {
              <div>
                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1.5">Term</label>
                <select
+                 id="term"
+                 name="term"
                  value={formData.term}
                  onChange={(event) => handleChange('term', event.target.value)}
                  required
@@ -374,6 +384,8 @@ const ExaminationBatchForm: React.FC = () => {
              <div>
                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1.5">Exam Type</label>
                <select
+                 id="exam-type"
+                 name="exam_type"
                  value={formData.exam_type}
                  onChange={(event) => handleChange('exam_type', event.target.value)}
                  required
@@ -420,6 +432,8 @@ const ExaminationBatchForm: React.FC = () => {
                 Customer Name <span className="text-red-500">*</span>
               </label>
               <input
+                id="customer-name"
+                name="customer_name"
                 value={newCustomer.name}
                 onChange={(event) => setNewCustomer((prev) => ({ ...prev, name: event.target.value }))}
                 placeholder="Enter customer/school name"
@@ -430,6 +444,8 @@ const ExaminationBatchForm: React.FC = () => {
             <div>
               <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1.5">Email</label>
               <input
+                id="customer-email"
+                name="customer_email"
                 type="email"
                 value={newCustomer.email}
                 onChange={(event) => setNewCustomer((prev) => ({ ...prev, email: event.target.value }))}
@@ -440,6 +456,8 @@ const ExaminationBatchForm: React.FC = () => {
             <div>
               <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1.5">Phone</label>
               <input
+                id="customer-phone"
+                name="customer_phone"
                 value={newCustomer.phone}
                 onChange={(event) => setNewCustomer((prev) => ({ ...prev, phone: event.target.value }))}
                 placeholder={getPlaceholder.phone()}
@@ -449,6 +467,8 @@ const ExaminationBatchForm: React.FC = () => {
             <div>
               <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1.5">Address</label>
               <input
+                id="customer-address"
+                name="customer_address"
                 value={newCustomer.address}
                 onChange={(event) => setNewCustomer((prev) => ({ ...prev, address: event.target.value }))}
                 placeholder="Street address"
@@ -458,6 +478,8 @@ const ExaminationBatchForm: React.FC = () => {
             <div>
               <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1.5">City</label>
               <input
+                id="customer-city"
+                name="customer_city"
                 value={newCustomer.city}
                 onChange={(event) => setNewCustomer((prev) => ({ ...prev, city: event.target.value }))}
                 placeholder="City"

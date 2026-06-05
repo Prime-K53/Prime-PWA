@@ -54,6 +54,8 @@ export const VatReports: React.FC = () => {
 
                 <div className="flex items-center space-x-2 bg-white p-2 rounded-xl border border-slate-200 shadow-sm">
                     <select
+                        id="period-month"
+                        name="period_month"
                         className="border-none bg-transparent focus:ring-0 text-sm font-medium"
                         value={period.month}
                         onChange={(e) => setPeriod(p => ({ ...p, month: parseInt(e.target.value) }))}
@@ -63,6 +65,8 @@ export const VatReports: React.FC = () => {
                         ))}
                     </select>
                     <select
+                        id="period-year"
+                        name="period_year"
                         className="border-none bg-transparent focus:ring-0 text-sm font-medium"
                         value={period.year}
                         onChange={(e) => setPeriod(p => ({ ...p, year: parseInt(e.target.value) }))}

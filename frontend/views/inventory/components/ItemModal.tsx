@@ -2231,15 +2231,16 @@ dbService.getAll<BOMTemplate>('bomTemplates')
                                                       </div>
                                                       <div className="flex flex-col sm:flex-row gap-2">
                                                           <div className="relative">
-                                                              <input
-                                                                  type="number"
-                                                                  min="0"
-                                                                  step="0.01"
-                                                                  value={displayedProductPrice}
-                                                                  onChange={(e) => handleManualProductPriceChange(Number(e.target.value))}
-                                                                  className="w-full sm:w-40 px-3 py-2.5 bg-white border border-amber-200 rounded-xl text-sm font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-amber-100"
-                                                              />
-                                                              <div className="absolute left-3 top-1.5 text-[10px] uppercase tracking-wider text-slate-400">Override Price</div>
+                                                               <input
+                                                                    type="number"
+                                                                    name="productOverridePrice"
+                                                                    min="0"
+                                                                    step="0.01"
+                                                                    value={displayedProductPrice}
+                                                                    onChange={(e) => handleManualProductPriceChange(Number(e.target.value))}
+                                                                    className="w-full sm:w-40 px-3 py-2.5 bg-white border border-amber-200 rounded-xl text-sm font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-amber-100"
+                                                               />
+                                                               <div className="absolute left-3 top-1.5 text-[10px] uppercase tracking-wider text-slate-400">Override Price</div>
                                                           </div>
                                                           {!isItemManualOverride ? (
                                                               <button
@@ -2346,29 +2347,30 @@ dbService.getAll<BOMTemplate>('bomTemplates')
                                                               return (
                                                                   <div key={adj.id} className={styles.row + " rounded-lg " + (isSelected ? "bg-slate-50" : "")}>
                                                                       <label className="flex items-center gap-3 cursor-pointer flex-1">
-                                                                          <input
-                                                                              type="checkbox"
-                                                                              checked={isSelected}
-                                                                              onChange={() => handleToggleAdjustment(adj.id)}
-                                                                              className="sr-only peer"
-                                                                              disabled={isSubmitting}
-                                                                          />
-                                                                          <div className={`w-10 h-5 rounded-full transition-colors ${isSelected ? 'bg-blue-600' : 'bg-slate-200'} flex items-center ${isSelected ? 'justify-end' : 'justify-start'} px-0.5`}>
-                                                                              <div className="w-4 h-4 bg-white rounded-full shadow"></div>
-                                                                          </div>
-                                                                          <div>
-                                                                              <div className="text-sm font-medium text-slate-700">{adj.name}</div>
-                                                                              <div className="text-[10px] text-slate-400">
-                                                                                  {adj.type === 'PERCENTAGE' ? `${adj.value}%` : `${currency}${adj.value}`}
-                                                                              </div>
-                                                                          </div>
-                                                                      </label>
-                                                                      {isSelected && (
-                                                                          <div className={styles.priceTag + " bg-emerald-50 text-emerald-700 border border-emerald-200"}>
-                                                                              +{currency}{adj.type === 'PERCENTAGE' 
-                                                                                  ? ((enginePreview?.cost || 0) * adj.value / 100).toFixed(2)
-                                                                                  : adj.value.toFixed(2)}
-                                                                          </div>
+                                                                       <input
+                                                                           type="checkbox"
+                                                                           name="marketAdjustment"
+                                                                           checked={isSelected}
+                                                                           onChange={() => handleToggleAdjustment(adj.id)}
+                                                                           className="sr-only peer"
+                                                                           disabled={isSubmitting}
+                                                                       />
+                                                                       <div className={`w-10 h-5 rounded-full transition-colors ${isSelected ? 'bg-blue-600' : 'bg-slate-200'} flex items-center ${isSelected ? 'justify-end' : 'justify-start'} px-0.5`}>
+                                                                           <div className="w-4 h-4 bg-white rounded-full shadow"></div>
+                                                                       </div>
+                                                                       <div>
+                                                                           <div className="text-sm font-medium text-slate-700">{adj.name}</div>
+                                                                           <div className="text-[10px] text-slate-400">
+                                                                               {adj.type === 'PERCENTAGE' ? `${adj.value}%` : `${currency}${adj.value}`}
+                                                                           </div>
+                                                                       </div>
+                                                                   </label>
+                                                                   {isSelected && (
+                                                                       <div className={styles.priceTag + " bg-emerald-50 text-emerald-700 border border-emerald-200"}>
+                                                                           +{currency}{adj.type === 'PERCENTAGE' 
+                                                                               ? ((enginePreview?.cost || 0) * adj.value / 100).toFixed(2)
+                                                                               : adj.value.toFixed(2)}
+                                                                       </div>
                                                                       )}
                                                                   </div>
                                                               );
@@ -2497,21 +2499,22 @@ dbService.getAll<BOMTemplate>('bomTemplates')
 
                                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                       <div>
-                                                          <label className={styles.label}>Cost Price ({currency})</label>
-                                                          <div className="relative">
-                                                              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium">{currency}</div>
-                                                               <input
-                                                                   type="number"
-                                                                   step="0.01"
-                                                                   min="0"
-                                                                   value={formData.cost || 0}
-                                                                   onChange={(e) => {
-                                                                       const val = Math.max(0, Number(e.target.value) || 0);
-                                                                       setFormData({ ...formData, cost: val, cost_price: val, price: val, selling_price: val });
-                                                                   }}
-                                                                   className={styles.input + " pl-10"}
-                                                                   placeholder="0.00"
-                                                                />
+                                                               <label className={styles.label}>Cost Price ({currency})</label>
+                                                           <div className="relative">
+                                                               <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium">{currency}</div>
+                                                                <input
+                                                                    type="number"
+                                                                    name="materialCostPrice"
+                                                                    step="0.01"
+                                                                    min="0"
+                                                                    value={formData.cost || 0}
+                                                                    onChange={(e) => {
+                                                                        const val = Math.max(0, Number(e.target.value) || 0);
+                                                                        setFormData({ ...formData, cost: val, cost_price: val, price: val, selling_price: val });
+                                                                    }}
+                                                                    className={styles.input + " pl-10"}
+                                                                    placeholder="0.00"
+                                                                 />
                                                            </div>
                                                            {errors.cost && (
                                                                <p className="mt-1.5 text-xs text-red-500 flex items-center gap-1">
@@ -2535,13 +2538,14 @@ dbService.getAll<BOMTemplate>('bomTemplates')
                                                   </div>
                                                   
                                                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                                      <div>
-                                                          <label className={styles.label}>Purchase Unit</label>
-                                                          <select
-                                                              value={formData.purchaseUnit || ''}
-                                                              onChange={(e) => setFormData({ ...formData, purchaseUnit: e.target.value })}
-                                                              className={styles.select}
-                                                          >
+                                                       <div>
+                                                           <label className={styles.label}>Purchase Unit</label>
+                                                           <select
+                                                               name="purchaseUnit"
+                                                               value={formData.purchaseUnit || ''}
+                                                               onChange={(e) => setFormData({ ...formData, purchaseUnit: e.target.value })}
+                                                               className={styles.select}
+                                                           >
                                                               <option value="">Select Unit</option>
                                                               {['Box', 'Pack', 'Roll', 'Ream', 'Kilogram', 'Liter', 'Pallet', 'Case', 'Set'].map(u => (
                                                                   <option key={u} value={u}>{u}</option>
@@ -2550,13 +2554,14 @@ dbService.getAll<BOMTemplate>('bomTemplates')
                                                           <p className="mt-1.5 text-[10px] text-slate-400">Unit used when buying from suppliers</p>
                                                       </div>
 
-                                                      <div>
-                                                          <label className={styles.label}>Usage Unit</label>
-                                                          <select
-                                                              value={formData.usageUnit || ''}
-                                                              onChange={(e) => setFormData({ ...formData, usageUnit: e.target.value })}
-                                                              className={styles.select}
-                                                          >
+                                                       <div>
+                                                           <label className={styles.label}>Usage Unit</label>
+                                                           <select
+                                                               name="usageUnit"
+                                                               value={formData.usageUnit || ''}
+                                                               onChange={(e) => setFormData({ ...formData, usageUnit: e.target.value })}
+                                                               className={styles.select}
+                                                           >
                                                               <option value="">Select Unit</option>
                                                               {['Sheet', 'Piece', 'Gram', 'Milliliter', 'Meter', 'Unit', 'Copy'].map(u => (
                                                                   <option key={u} value={u}>{u}</option>
@@ -2566,16 +2571,17 @@ dbService.getAll<BOMTemplate>('bomTemplates')
                                                       </div>
 
                                                       <div>
-                                                          <label className={styles.label}>Conversion Rate</label>
-                                                          <div className="relative">
-                                                              <input
-                                                                  type="number"
-                                                                  min="1"
-                                                                  value={formData.conversionRate || 1}
-                                                                  onChange={(e) => setFormData({ ...formData, conversionRate: Number(e.target.value) })}
-                                                                  className={styles.input}
-                                                                  placeholder="e.g. 500"
-                                                              />
+                                                           <label className={styles.label}>Conversion Rate</label>
+                                                           <div className="relative">
+                                                               <input
+                                                                   type="number"
+                                                                   name="conversionRate"
+                                                                   min="1"
+                                                                   value={formData.conversionRate || 1}
+                                                                   onChange={(e) => setFormData({ ...formData, conversionRate: Number(e.target.value) })}
+                                                                   className={styles.input}
+                                                                   placeholder="e.g. 500"
+                                                               />
                                                               <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded">
                                                                   {formData.usageUnit || 'Units'} / {formData.purchaseUnit || 'Bulk'}
                                                               </div>
@@ -2660,15 +2666,16 @@ dbService.getAll<BOMTemplate>('bomTemplates')
                                                               </div>
                                                               <div className="flex flex-col sm:flex-row gap-2">
                                                                   <div className="relative">
-                                                                      <input
-                                                                          type="number"
-                                                                          min="0"
-                                                                          step="0.01"
-                                                                          value={displayedStationeryUnitPrice}
-                                                                          onChange={(e) => handleManualStationeryPriceChange(Number(e.target.value))}
-                                                                          className="w-full sm:w-40 px-3 py-2.5 bg-white border border-amber-200 rounded-xl text-sm font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-amber-100"
-                                                                      />
-                                                                      <div className="absolute left-3 top-1.5 text-[10px] uppercase tracking-wider text-slate-400">Override Price</div>
+                                                                   <input
+                                                                       type="number"
+                                                                       name="stationeryOverridePrice"
+                                                                       min="0"
+                                                                       step="0.01"
+                                                                       value={displayedStationeryUnitPrice}
+                                                                       onChange={(e) => handleManualStationeryPriceChange(Number(e.target.value))}
+                                                                       className="w-full sm:w-40 px-3 py-2.5 bg-white border border-amber-200 rounded-xl text-sm font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-amber-100"
+                                                                   />
+                                                                   <div className="absolute left-3 top-1.5 text-[10px] uppercase tracking-wider text-slate-400">Override Price</div>
                                                                   </div>
                                                                   {!isItemManualOverride ? (
                                                                       <button
@@ -2703,25 +2710,27 @@ dbService.getAll<BOMTemplate>('bomTemplates')
                                                       {formData.isStationeryPack ? (
                                                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                                               <div>
-                                                                  <label className={styles.label}>Cost Per Pack</label>
-                                                                  <input
-                                                                      type="number"
-                                                                      value={formData.costPerPack || 0}
-                                                                      onChange={(e) => setFormData({ ...formData, costPerPack: Number(e.target.value) })}
-                                                                      className={styles.input}
-                                                                      step="0.01"
-                                                                      min="0"
-                                                                  />
+                                                               <label className={styles.label}>Cost Per Pack</label>
+                                                                   <input
+                                                                       type="number"
+                                                                       name="costPerPack"
+                                                                       value={formData.costPerPack || 0}
+                                                                       onChange={(e) => setFormData({ ...formData, costPerPack: Number(e.target.value) })}
+                                                                       className={styles.input}
+                                                                       step="0.01"
+                                                                       min="0"
+                                                                   />
                                                               </div>
                                                               <div>
-                                                                  <label className={styles.label}>Units per Pack</label>
-                                                                  <input
-                                                                      type="number"
-                                                                      value={formData.unitsPerPack || 1}
-                                                                      onChange={(e) => setFormData({ ...formData, unitsPerPack: Number(e.target.value) })}
-                                                                      className={styles.input}
-                                                                      min="1"
-                                                                  />
+                                                                   <label className={styles.label}>Units per Pack</label>
+                                                                   <input
+                                                                       type="number"
+                                                                       name="unitsPerPack"
+                                                                       value={formData.unitsPerPack || 1}
+                                                                       onChange={(e) => setFormData({ ...formData, unitsPerPack: Number(e.target.value) })}
+                                                                       className={styles.input}
+                                                                       min="1"
+                                                                   />
                                                               </div>
                                                               <div>
                                                                   <label className={styles.label}>Global Margin</label>
@@ -2734,15 +2743,16 @@ dbService.getAll<BOMTemplate>('bomTemplates')
                                                       ) : (
                                                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                               <div>
-                                                                  <label className={styles.label}>Cost Price (CP) / Unit</label>
-                                                                  <input
-                                                                      type="number"
-                                                                      value={formData.cost || 0}
-                                                                      onChange={(e) => setFormData({ ...formData, cost: Number(e.target.value) })}
-                                                                      className={styles.input}
-                                                                      step="0.01"
-                                                                      min="0"
-                                                                  />
+                                                               <label className={styles.label}>Cost Price (CP) / Unit</label>
+                                                                   <input
+                                                                       type="number"
+                                                                       name="stationeryCostPrice"
+                                                                       value={formData.cost || 0}
+                                                                       onChange={(e) => setFormData({ ...formData, cost: Number(e.target.value) })}
+                                                                       className={styles.input}
+                                                                       step="0.01"
+                                                                       min="0"
+                                                                   />
                                                               </div>
                                                               <div>
                                                                   <label className={styles.label}>Global Margin</label>
@@ -2756,16 +2766,17 @@ dbService.getAll<BOMTemplate>('bomTemplates')
 
                                                       <div className={`grid grid-cols-1 ${((formData.pricingConfig?.selectedRoundingMethod || companyDefaultRoundingMethod) === 'ALWAYS_UP_CUSTOM') ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4 mt-4`}>
                                                           <div>
-                                                              <label className={styles.label}>Rounding Rule</label>
-                                                              <select
-                                                                  value={formData.pricingConfig?.selectedRoundingMethod || '__DEFAULT__'}
-                                                                  onChange={(e) => patchPricingConfig({
-                                                                      selectedRoundingMethod: e.target.value === '__DEFAULT__'
-                                                                          ? undefined
-                                                                          : e.target.value as PricingRoundingMethod
-                                                                  })}
-                                                                  className={styles.select}
-                                                              >
+                                                               <label className={styles.label}>Rounding Rule</label>
+                                                               <select
+                                                                   name="stationeryRoundingRule"
+                                                                   value={formData.pricingConfig?.selectedRoundingMethod || '__DEFAULT__'}
+                                                                   onChange={(e) => patchPricingConfig({
+                                                                       selectedRoundingMethod: e.target.value === '__DEFAULT__'
+                                                                           ? undefined
+                                                                           : e.target.value as PricingRoundingMethod
+                                                                   })}
+                                                                   className={styles.select}
+                                                               >
                                                                   <option value="__DEFAULT__">{getRoundingMethodLabel(undefined)}</option>
                                                                   {ROUNDING_METHOD_OPTIONS.map((option) => (
                                                                       <option key={option.value} value={option.value}>{option.label}</option>
@@ -2774,16 +2785,17 @@ dbService.getAll<BOMTemplate>('bomTemplates')
                                                           </div>
                                                           {((formData.pricingConfig?.selectedRoundingMethod || companyDefaultRoundingMethod) === 'ALWAYS_UP_CUSTOM') && (
                                                               <div>
-                                                                  <label className={styles.label}>Custom Step</label>
-                                                                  <input
-                                                                      type="number"
-                                                                      min="1"
-                                                                      value={Number(formData.pricingConfig?.customRoundingStep ?? companyDefaultCustomRoundingStep)}
-                                                                      onChange={(e) => patchPricingConfig({
-                                                                          customRoundingStep: Math.max(1, Number(e.target.value) || companyDefaultCustomRoundingStep)
-                                                                      })}
-                                                                      className={styles.input}
-                                                                  />
+                                                                   <label className={styles.label}>Custom Step</label>
+                                                                   <input
+                                                                       type="number"
+                                                                       name="customRoundingStep"
+                                                                       min="1"
+                                                                       value={Number(formData.pricingConfig?.customRoundingStep ?? companyDefaultCustomRoundingStep)}
+                                                                       onChange={(e) => patchPricingConfig({
+                                                                           customRoundingStep: Math.max(1, Number(e.target.value) || companyDefaultCustomRoundingStep)
+                                                                       })}
+                                                                       className={styles.input}
+                                                                   />
                                                               </div>
                                                           )}
                                                           <div>
@@ -2823,13 +2835,14 @@ dbService.getAll<BOMTemplate>('bomTemplates')
                                                               const adjustmentAmount = calculateAdjustmentAmount(adj, stationeryAutoPricing.costPrice);
                                                               return (
                                                                   <div key={adj.id} className={styles.row + " rounded-lg " + (isSelected ? "bg-slate-50" : "")}>
-                                                                      <label className="flex items-center gap-3 cursor-pointer flex-1">
-                                                                          <input
-                                                                              type="checkbox"
-                                                                              checked={isSelected}
-                                                                              onChange={() => handleToggleAdjustment(adj.id)}
-                                                                              className="sr-only peer"
-                                                                          />
+                                                                       <label className="flex items-center gap-3 cursor-pointer flex-1">
+                                                                           <input
+                                                                               type="checkbox"
+                                                                               name="stationeryAdjustmentToggle"
+                                                                               checked={isSelected}
+                                                                               onChange={() => handleToggleAdjustment(adj.id)}
+                                                                               className="sr-only peer"
+                                                                           />
                                                                           <div className={`w-10 h-5 rounded-full transition-colors ${isSelected ? 'bg-blue-600' : 'bg-slate-200'} flex items-center ${isSelected ? 'justify-end' : 'justify-start'} px-0.5`}>
                                                                               <div className="w-4 h-4 bg-white rounded-full shadow"></div>
                                                                           </div>
@@ -2962,6 +2975,7 @@ dbService.getAll<BOMTemplate>('bomTemplates')
                                                 <label className={styles.label}>Reorder point</label>
                                                 <input
                                                     type="number"
+                                                    name="reorderPoint"
                                                     min="0"
                                                     value={formData.reorderPoint || 0}
                                                     onChange={(e) => setFormData({ ...formData, reorderPoint: Number(e.target.value) })}
@@ -2973,6 +2987,7 @@ dbService.getAll<BOMTemplate>('bomTemplates')
                                                 <label className={styles.label}>Reorder quantity</label>
                                                 <input
                                                     type="number"
+                                                    name="reorderQty"
                                                     min="1"
                                                     value={formData.minOrderQty || 1}
                                                     onChange={(e) => setFormData({ ...formData, minOrderQty: Number(e.target.value) })}
@@ -2984,6 +2999,7 @@ dbService.getAll<BOMTemplate>('bomTemplates')
                                                 <label className={styles.label}>Storage location</label>
                                                 <input
                                                     type="text"
+                                                    name="storageLocation"
                                                     value={formData.binLocation || ''}
                                                     onChange={(e) => setFormData({ ...formData, binLocation: e.target.value })}
                                                     className={styles.input}
@@ -2992,7 +3008,7 @@ dbService.getAll<BOMTemplate>('bomTemplates')
                                             </div>
                                             <div>
                                                 <label className={styles.label}>Stock status</label>
-                                                <select className={styles.select}>
+                                                <select name="stockStatus" className={styles.select}>
                                                     <option>In Stock</option>
                                                     <option>Low Stock</option>
                                                     <option>Out of Stock</option>
@@ -3011,7 +3027,7 @@ dbService.getAll<BOMTemplate>('bomTemplates')
                                                     <div className="text-xs text-slate-500">Enable variant-level stock tracking</div>
                                                 </div>
                                                 <label className="relative inline-flex items-center cursor-pointer">
-                                                    <input type="checkbox" className="sr-only peer" />
+                                                    <input type="checkbox" name="trackPerVariant" className="sr-only peer" />
                                                     <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
                                                 </label>
                                             </div>
@@ -3103,18 +3119,19 @@ dbService.getAll<BOMTemplate>('bomTemplates')
                                                     <div key={idx} className="bg-white rounded-xl p-5 border border-indigo-100 shadow-sm">
                                                         <div className="flex gap-4 items-start">
                                                             <div className="w-1/3">
-                                                                <label className="text-xs font-bold text-indigo-600 uppercase tracking-wide mb-2 block">Attribute Name</label>
-                                                                <input
-                                                                    type="text"
-                                                                    value={attr.name}
-                                                                    onChange={(e) => {
-                                                                        const newAttrs = [...bulkAttributes];
-                                                                        newAttrs[idx].name = e.target.value;
-                                                                        setBulkAttributes(newAttrs);
-                                                                    }}
-                                                                    className="w-full px-3 py-2.5 border border-indigo-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
-                                                                    placeholder="e.g. Color"
-                                                                />
+                                                                 <label className="text-xs font-bold text-indigo-600 uppercase tracking-wide mb-2 block">Attribute Name</label>
+                                                                 <input
+                                                                     type="text"
+                                                                     name="bulkAttributeName"
+                                                                     value={attr.name}
+                                                                     onChange={(e) => {
+                                                                         const newAttrs = [...bulkAttributes];
+                                                                         newAttrs[idx].name = e.target.value;
+                                                                         setBulkAttributes(newAttrs);
+                                                                     }}
+                                                                     className="w-full px-3 py-2.5 border border-indigo-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+                                                                     placeholder="e.g. Color"
+                                                                 />
                                                             </div>
                                                             <div className="flex-1">
                                                                 <label className="text-xs font-bold text-indigo-600 uppercase tracking-wide mb-2 block">Values</label>
@@ -3137,14 +3154,15 @@ dbService.getAll<BOMTemplate>('bomTemplates')
                                                                     ))}
                                                                 </div>
                                                                 <div className="flex gap-2">
-                                                                    <input
-                                                                        type="text"
-                                                                        value={bulkInputValue[idx] || ''}
-                                                                        onChange={(e) => setBulkInputValue({ ...bulkInputValue, [idx]: e.target.value })}
-                                                                        onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addBulkValue(idx))}
-                                                                        className="flex-1 px-3 py-2.5 border border-indigo-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
-                                                                        placeholder="e.g. Red"
-                                                                    />
+                                                                     <input
+                                                                         type="text"
+                                                                         name="bulkAttributeValue"
+                                                                         value={bulkInputValue[idx] || ''}
+                                                                         onChange={(e) => setBulkInputValue({ ...bulkInputValue, [idx]: e.target.value })}
+                                                                         onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addBulkValue(idx))}
+                                                                         className="flex-1 px-3 py-2.5 border border-indigo-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+                                                                         placeholder="e.g. Red"
+                                                                     />
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => addBulkValue(idx)}
@@ -3196,45 +3214,48 @@ dbService.getAll<BOMTemplate>('bomTemplates')
                                                 <>
                                                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                                                         <div>
-                                                            <label className="block text-xs font-medium text-slate-600 mb-1">Variant Name</label>
-                                                            <input
-                                                                type="text"
-                                                                value={newVariant.name || ''}
-                                                                onChange={(e) => setNewVariant({ ...newVariant, name: e.target.value })}
-                                                                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
-                                                                placeholder="e.g. A4 Notebook"
-                                                            />
-                                                        </div>
-                                                        <div>
-                                                            <label className="block text-xs font-medium text-slate-600 mb-1">Attribute</label>
-                                                            <input
-                                                                type="text"
-                                                                value={getVariantAttributeSummary(newVariant)}
-                                                                onChange={(e) => setNewVariant({
-                                                                    ...newVariant,
-                                                                    attributes: buildVariantAttributesFromText(e.target.value)
-                                                                })}
-                                                                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
-                                                                placeholder="e.g. Red Cover"
-                                                            />
-                                                        </div>
-                                                        <div>
-                                                            <label className="block text-xs font-medium text-slate-600 mb-1">Cost Price ({currency})</label>
-                                                            <input
-                                                                type="number"
-                                                                step="0.01"
-                                                                value={Number(newVariant.cost_price ?? newVariant.cost ?? 0)}
-                                                                onChange={(e) => {
-                                                                    const costPrice = Number(e.target.value);
-                                                                    setNewVariant(recalculateStationeryVariantPrice(newVariant, {
-                                                                        cost: costPrice,
-                                                                        cost_price: costPrice
-                                                                    }));
-                                                                }}
-                                                                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
-                                                                placeholder="e.g. 5.00"
-                                                            />
-                                                        </div>
+                                                             <label className="block text-xs font-medium text-slate-600 mb-1">Variant Name</label>
+                                                             <input
+                                                                 type="text"
+                                                                 name="variantName"
+                                                                 value={newVariant.name || ''}
+                                                                 onChange={(e) => setNewVariant({ ...newVariant, name: e.target.value })}
+                                                                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                                                                 placeholder="e.g. A4 Notebook"
+                                                             />
+                                                         </div>
+                                                         <div>
+                                                             <label className="block text-xs font-medium text-slate-600 mb-1">Attribute</label>
+                                                             <input
+                                                                 type="text"
+                                                                 name="variantAttribute"
+                                                                 value={getVariantAttributeSummary(newVariant)}
+                                                                 onChange={(e) => setNewVariant({
+                                                                     ...newVariant,
+                                                                     attributes: buildVariantAttributesFromText(e.target.value)
+                                                                 })}
+                                                                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                                                                 placeholder="e.g. Red Cover"
+                                                             />
+                                                         </div>
+                                                         <div>
+                                                             <label className="block text-xs font-medium text-slate-600 mb-1">Cost Price ({currency})</label>
+                                                             <input
+                                                                 type="number"
+                                                                 name="variantCostPrice"
+                                                                 step="0.01"
+                                                                 value={Number(newVariant.cost_price ?? newVariant.cost ?? 0)}
+                                                                 onChange={(e) => {
+                                                                     const costPrice = Number(e.target.value);
+                                                                     setNewVariant(recalculateStationeryVariantPrice(newVariant, {
+                                                                         cost: costPrice,
+                                                                         cost_price: costPrice
+                                                                     }));
+                                                                 }}
+                                                                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                                                                 placeholder="e.g. 5.00"
+                                                             />
+                                                         </div>
                                                         <div>
                                                              <label className="block text-xs font-medium text-slate-600 mb-1">Margin ({currency})</label>
                                                              <div className="w-full px-3 py-2 border border-slate-200 bg-slate-50 rounded-lg text-sm text-slate-500 flex justify-between items-center">
@@ -3243,16 +3264,17 @@ dbService.getAll<BOMTemplate>('bomTemplates')
                                                              </div>
                                                          </div>
                                                         <div>
-                                                            <label className="block text-xs font-medium text-slate-600 mb-1">Rounding Rule</label>
-                                                            <select
-                                                                value={(newVariant as any).selectedRoundingMethod || '__DEFAULT__'}
-                                                                onChange={(e) => setNewVariant(recalculateStationeryVariantPrice(newVariant, {
-                                                                    selectedRoundingMethod: e.target.value === '__DEFAULT__'
-                                                                        ? undefined
-                                                                        : e.target.value as PricingRoundingMethod
-                                                                }))}
-                                                                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
-                                                            >
+                                                             <label className="block text-xs font-medium text-slate-600 mb-1">Rounding Rule</label>
+                                                             <select
+                                                                 name="variantRoundingRule"
+                                                                 value={(newVariant as any).selectedRoundingMethod || '__DEFAULT__'}
+                                                                 onChange={(e) => setNewVariant(recalculateStationeryVariantPrice(newVariant, {
+                                                                     selectedRoundingMethod: e.target.value === '__DEFAULT__'
+                                                                         ? undefined
+                                                                         : e.target.value as PricingRoundingMethod
+                                                                 }))}
+                                                                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                                                             >
                                                                 <option value="__DEFAULT__">{getRoundingMethodLabel(undefined)}</option>
                                                                 {ROUNDING_METHOD_OPTIONS.map((option) => (
                                                                     <option key={option.value} value={option.value}>{option.label}</option>
@@ -3273,13 +3295,14 @@ dbService.getAll<BOMTemplate>('bomTemplates')
                                                                         {stationeryAdjustmentOptions.length > 0 ? stationeryAdjustmentOptions.map((adjustment: any) => {
                                                                             const isSelected = ((newVariant as any).selectedAdjustmentIds || []).includes(adjustment.id);
                                                                             return (
-                                                                                <label key={adjustment.id} className="flex items-start gap-3 rounded-lg border border-slate-100 px-3 py-2 hover:bg-slate-50">
-                                                                                    <input
-                                                                                        type="checkbox"
-                                                                                        checked={isSelected}
-                                                                                        onChange={() => toggleNewStationeryAdjustment(adjustment.id)}
-                                                                                        className="mt-0.5"
-                                                                                    />
+                                                                                 <label key={adjustment.id} className="flex items-start gap-3 rounded-lg border border-slate-100 px-3 py-2 hover:bg-slate-50">
+                                                                                     <input
+                                                                                         type="checkbox"
+                                                                                         name="variantAdjustment"
+                                                                                         checked={isSelected}
+                                                                                         onChange={() => toggleNewStationeryAdjustment(adjustment.id)}
+                                                                                         className="mt-0.5"
+                                                                                     />
                                                                                     <div className="flex-1">
                                                                                         <div className="text-sm font-medium text-slate-700">{adjustment.name}</div>
                                                                                         <div className="text-[11px] text-slate-400">
@@ -3303,28 +3326,30 @@ dbService.getAll<BOMTemplate>('bomTemplates')
                                                         {(((newVariant as any).selectedRoundingMethod || formData.pricingConfig?.selectedRoundingMethod || companyDefaultRoundingMethod) === 'ALWAYS_UP_CUSTOM') && (
                                                             <div>
                                                                 <label className="block text-xs font-medium text-slate-600 mb-1">Custom Step</label>
-                                                                <input
-                                                                    type="number"
-                                                                    min="1"
-                                                                    value={Number((newVariant as any).customRoundingStep ?? formData.pricingConfig?.customRoundingStep ?? companyDefaultCustomRoundingStep)}
-                                                                    onChange={(e) => setNewVariant(recalculateStationeryVariantPrice(newVariant, {
-                                                                        customRoundingStep: Math.max(1, Number(e.target.value) || companyDefaultCustomRoundingStep)
-                                                                    }))}
-                                                                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
-                                                                />
+                                                                 <input
+                                                                     type="number"
+                                                                     name="variantCustomStep"
+                                                                     min="1"
+                                                                     value={Number((newVariant as any).customRoundingStep ?? formData.pricingConfig?.customRoundingStep ?? companyDefaultCustomRoundingStep)}
+                                                                     onChange={(e) => setNewVariant(recalculateStationeryVariantPrice(newVariant, {
+                                                                         customRoundingStep: Math.max(1, Number(e.target.value) || companyDefaultCustomRoundingStep)
+                                                                     }))}
+                                                                     className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                                                                 />
                                                             </div>
                                                         )}
                                                         <div>
                                                             <label className="block text-xs font-medium text-slate-600 mb-1">Selling Price ({currency})</label>
                                                             <div className="space-y-2">
-                                                                <input
-                                                                    type="number"
-                                                                    step="0.01"
-                                                                    value={Number(newVariant.selling_price ?? newVariant.price ?? 0)}
-                                                                    onChange={(e) => handleNewStationeryManualPriceChange(Number(e.target.value))}
-                                                                    readOnly={!Boolean((newVariant as any).manualOverride)}
-                                                                    className={`w-full px-3 py-2 rounded-lg text-sm font-semibold ${Boolean((newVariant as any).manualOverride) ? 'border border-amber-200 bg-white text-amber-700' : 'border border-blue-200 bg-blue-50 text-blue-700'}`}
-                                                                />
+                                                                 <input
+                                                                     type="number"
+                                                                     name="variantSellingPrice"
+                                                                     step="0.01"
+                                                                     value={Number(newVariant.selling_price ?? newVariant.price ?? 0)}
+                                                                     onChange={(e) => handleNewStationeryManualPriceChange(Number(e.target.value))}
+                                                                     readOnly={!Boolean((newVariant as any).manualOverride)}
+                                                                     className={`w-full px-3 py-2 rounded-lg text-sm font-semibold ${Boolean((newVariant as any).manualOverride) ? 'border border-amber-200 bg-white text-amber-700' : 'border border-blue-200 bg-blue-50 text-blue-700'}`}
+                                                                 />
                                                                 <div className="flex items-center justify-between text-[11px]">
                                                                     <span className="text-slate-400">Auto: {currency}{Number((newVariant as any).autoSellingPrice ?? calculateStationeryVariantAutoPricing(newVariant).sellingPrice).toFixed(2)}</span>
                                                                     {!Boolean((newVariant as any).manualOverride) ? (
@@ -3357,49 +3382,53 @@ dbService.getAll<BOMTemplate>('bomTemplates')
                                                 <>
                                                     <div className="grid grid-cols-2 gap-4">
                                                         <div>
-                                                            <label className="block text-xs font-medium text-slate-600 mb-1">Variant Name</label>
-                                                            <input
-                                                                type="text"
-                                                                value={newVariant.name || ''}
-                                                                onChange={(e) => setNewVariant({ ...newVariant, name: e.target.value })}
-                                                                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
-                                                                placeholder="e.g. 100gsm"
-                                                            />
-                                                        </div>
+                                                             <label className="block text-xs font-medium text-slate-600 mb-1">Variant Name</label>
+                                                             <input
+                                                                 type="text"
+                                                                 name="productVariantName"
+                                                                 value={newVariant.name || ''}
+                                                                 onChange={(e) => setNewVariant({ ...newVariant, name: e.target.value })}
+                                                                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                                                                 placeholder="e.g. 100gsm"
+                                                             />
+                                                         </div>
 
-                                                        <div>
-                                                            <label className="block text-xs font-medium text-slate-600 mb-1">Cost ({currency})</label>
-                                                            <input
-                                                                type="number"
-                                                                step="0.01"
-                                                                value={newVariant.cost || 0}
-                                                                onChange={(e) => {
-                                                                    const newCost = Number(e.target.value);
-                                                                    const patch = { cost: newCost };
-                                                                    setNewVariant({ ...newVariant, ...patch });
-                                                                }}
-                                                                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
-                                                                placeholder="e.g. 5.00"
-                                                            />
-                                                        </div>
-                                                        <div>
-                                                            <label className="block text-xs font-medium text-slate-600 mb-1">Adj (%)</label>
-                                                            <input
-                                                                type="number"
-                                                                step="0.1"
-                                                                value={newVariant.adjustmentPercent || 0}
-                                                                onChange={(e) => setNewVariant({ ...newVariant, adjustmentPercent: Number(e.target.value) })}
-                                                                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
-                                                                placeholder="e.g. 15.0"
-                                                            />
-                                                        </div>
-                                                        <div>
-                                                            <label className="block text-xs font-medium text-slate-600 mb-1">Rounding</label>
-                                                            <select
-                                                                value={newVariant.selectedRoundingMethod || 'none'}
-                                                                onChange={(e) => setNewVariant({ ...newVariant, selectedRoundingMethod: e.target.value })}
-                                                                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
-                                                            >
+                                                         <div>
+                                                             <label className="block text-xs font-medium text-slate-600 mb-1">Cost ({currency})</label>
+                                                             <input
+                                                                 type="number"
+                                                                 name="variantCost"
+                                                                 step="0.01"
+                                                                 value={newVariant.cost || 0}
+                                                                 onChange={(e) => {
+                                                                     const newCost = Number(e.target.value);
+                                                                     const patch = { cost: newCost };
+                                                                     setNewVariant({ ...newVariant, ...patch });
+                                                                 }}
+                                                                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                                                                 placeholder="e.g. 5.00"
+                                                             />
+                                                         </div>
+                                                         <div>
+                                                             <label className="block text-xs font-medium text-slate-600 mb-1">Adj (%)</label>
+                                                             <input
+                                                                 type="number"
+                                                                 name="variantAdjPercent"
+                                                                 step="0.1"
+                                                                 value={newVariant.adjustmentPercent || 0}
+                                                                 onChange={(e) => setNewVariant({ ...newVariant, adjustmentPercent: Number(e.target.value) })}
+                                                                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                                                                 placeholder="e.g. 15.0"
+                                                             />
+                                                         </div>
+                                                         <div>
+                                                             <label className="block text-xs font-medium text-slate-600 mb-1">Rounding</label>
+                                                             <select
+                                                                 name="variantRounding"
+                                                                 value={newVariant.selectedRoundingMethod || 'none'}
+                                                                 onChange={(e) => setNewVariant({ ...newVariant, selectedRoundingMethod: e.target.value })}
+                                                                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                                                             >
                                                                 <option value="none">None</option>
                                                                 <option value="ROUND_UP">Round Up</option>
                                                                 <option value="ROUND_DOWN">Round Down</option>
@@ -3411,33 +3440,35 @@ dbService.getAll<BOMTemplate>('bomTemplates')
                                                             </select>
                                                         </div>
                                                         <div>
-                                                            <label className="block text-xs font-medium text-slate-600 mb-1">SP ({currency})</label>
-                                                            <input
-                                                                type="number"
-                                                                step="0.01"
-                                                                value={newVariant.price || 0}
-                                                                onChange={(e) => setNewVariant({ ...newVariant, price: Number(e.target.value), calculated_price: Number(e.target.value) })}
-                                                                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
-                                                                placeholder="e.g. 12.50"
-                                                            />
-                                                        </div>
+                                                             <label className="block text-xs font-medium text-slate-600 mb-1">SP ({currency})</label>
+                                                             <input
+                                                                 type="number"
+                                                                 name="variantSP"
+                                                                 step="0.01"
+                                                                 value={newVariant.price || 0}
+                                                                 onChange={(e) => setNewVariant({ ...newVariant, price: Number(e.target.value), calculated_price: Number(e.target.value) })}
+                                                                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                                                                 placeholder="e.g. 12.50"
+                                                             />
+                                                         </div>
 
-                                                        <div>
-                                                            <label className="block text-xs font-medium text-slate-600 mb-1">Pages</label>
-                                                            <input
-                                                                type="number"
-                                                                value={newVariant.pages || 1}
-                                                                onChange={(e) => {
-                                                                    const p = Math.max(1, Number(e.target.value) || 1);
-                                                                    setNewVariant({ ...newVariant, pages: p });
-                                                                    if (formData.smartPricing) {
-                                                                        setVariantPreview(calculateSmartVariantPrice(p, 1));
-                                                                    }
-                                                                }}
-                                                                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
-                                                                placeholder="e.g. 40"
-                                                            />
-                                                        </div>
+                                                         <div>
+                                                             <label className="block text-xs font-medium text-slate-600 mb-1">Pages</label>
+                                                             <input
+                                                                 type="number"
+                                                                 name="variantPages"
+                                                                 value={newVariant.pages || 1}
+                                                                 onChange={(e) => {
+                                                                     const p = Math.max(1, Number(e.target.value) || 1);
+                                                                     setNewVariant({ ...newVariant, pages: p });
+                                                                     if (formData.smartPricing) {
+                                                                         setVariantPreview(calculateSmartVariantPrice(p, 1));
+                                                                     }
+                                                                 }}
+                                                                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                                                                 placeholder="e.g. 40"
+                                                             />
+                                                         </div>
                                                     </div>
 
                                                     {formData.smartPricing && variantPreview && (
@@ -3599,41 +3630,44 @@ dbService.getAll<BOMTemplate>('bomTemplates')
 
                                                                 return (
                                                                 <tr key={variant.id || idx} className="hover:bg-slate-50 transition-colors align-top">
-                                                                    <td className="px-4 py-3">
-                                                                        <input
-                                                                            type="text"
-                                                                            value={variant.name || ''}
-                                                                            onChange={(e) => handleStationeryVariantChange(variant.id, { name: e.target.value })}
-                                                                            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700"
-                                                                        />
-                                                                        <div className="mt-1 text-[10px] font-mono text-slate-400">{variant.sku}</div>
-                                                                    </td>
-                                                                    <td className="px-3 py-3">
-                                                                        <input
-                                                                            type="text"
-                                                                            value={getVariantAttributeSummary(variant)}
-                                                                            onChange={(e) => handleStationeryVariantChange(variant.id, {
-                                                                                attributes: buildVariantAttributesFromText(e.target.value)
-                                                                            })}
-                                                                            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700"
-                                                                            placeholder="Variant attribute"
-                                                                        />
-                                                                    </td>
-                                                                    <td className="px-3 py-3">
-                                                                        <input
-                                                                            type="number"
-                                                                            step="0.01"
-                                                                            value={Number(variant.cost_price ?? variant.cost ?? 0)}
-                                                                            onChange={(e) => {
-                                                                                const costPrice = Number(e.target.value);
-                                                                                handleStationeryVariantChange(variant.id, {
-                                                                                    cost: costPrice,
-                                                                                    cost_price: costPrice
-                                                                                });
-                                                                            }}
-                                                                            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-right text-sm text-slate-700"
-                                                                        />
-                                                                    </td>
+                                                                     <td className="px-4 py-3">
+                                                                         <input
+                                                                             type="text"
+                                                                             name="inlineVariantName"
+                                                                             value={variant.name || ''}
+                                                                             onChange={(e) => handleStationeryVariantChange(variant.id, { name: e.target.value })}
+                                                                             className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700"
+                                                                         />
+                                                                         <div className="mt-1 text-[10px] font-mono text-slate-400">{variant.sku}</div>
+                                                                     </td>
+                                                                     <td className="px-3 py-3">
+                                                                         <input
+                                                                             type="text"
+                                                                             name="inlineVariantAttribute"
+                                                                             value={getVariantAttributeSummary(variant)}
+                                                                             onChange={(e) => handleStationeryVariantChange(variant.id, {
+                                                                                 attributes: buildVariantAttributesFromText(e.target.value)
+                                                                             })}
+                                                                             className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700"
+                                                                             placeholder="Variant attribute"
+                                                                         />
+                                                                     </td>
+                                                                     <td className="px-3 py-3">
+                                                                         <input
+                                                                             type="number"
+                                                                             name="inlineVariantCost"
+                                                                             step="0.01"
+                                                                             value={Number(variant.cost_price ?? variant.cost ?? 0)}
+                                                                             onChange={(e) => {
+                                                                                 const costPrice = Number(e.target.value);
+                                                                                 handleStationeryVariantChange(variant.id, {
+                                                                                     cost: costPrice,
+                                                                                     cost_price: costPrice
+                                                                                 });
+                                                                             }}
+                                                                             className="w-full rounded-lg border border-slate-200 px-3 py-2 text-right text-sm text-slate-700"
+                                                                         />
+                                                                     </td>
                                                                     <td className="px-3 py-3">
                                                                         <div className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-right text-sm text-slate-700">
                                                                             {currency}{Number((variant as any).marginAmount ?? autoPricing.marginAmount).toFixed(2)}
@@ -3653,13 +3687,14 @@ dbService.getAll<BOMTemplate>('bomTemplates')
                                                                                     {stationeryAdjustmentOptions.length > 0 ? stationeryAdjustmentOptions.map((adjustment: any) => {
                                                                                         const isSelected = ((variant as any).selectedAdjustmentIds || []).includes(adjustment.id);
                                                                                         return (
-                                                                                            <label key={adjustment.id} className="flex items-start gap-3 rounded-lg border border-slate-100 px-3 py-2 hover:bg-slate-50">
-                                                                                                <input
-                                                                                                    type="checkbox"
-                                                                                                    checked={isSelected}
-                                                                                                    onChange={() => handleStationeryVariantChange(variant.id, toggleStationeryVariantAdjustment(variant, adjustment.id))}
-                                                                                                    className="mt-0.5"
-                                                                                                />
+                                                                                             <label key={adjustment.id} className="flex items-start gap-3 rounded-lg border border-slate-100 px-3 py-2 hover:bg-slate-50">
+                                                                                                 <input
+                                                                                                     type="checkbox"
+                                                                                                     name="inlineVariantAdjustment"
+                                                                                                     checked={isSelected}
+                                                                                                     onChange={() => handleStationeryVariantChange(variant.id, toggleStationeryVariantAdjustment(variant, adjustment.id))}
+                                                                                                     className="mt-0.5"
+                                                                                                 />
                                                                                                 <div className="flex-1">
                                                                                                     <div className="text-sm font-medium text-slate-700">{adjustment.name}</div>
                                                                                                     <div className="text-[11px] text-slate-400">
@@ -3678,41 +3713,44 @@ dbService.getAll<BOMTemplate>('bomTemplates')
                                                                         </details>
                                                                         <div className="mt-1 text-[11px] text-emerald-600">+{currency}{Number((variant as any).adjustmentTotal || 0).toFixed(2)}</div>
                                                                         <select
-                                                                            value={(variant as any).selectedRoundingMethod || '__DEFAULT__'}
-                                                                            onChange={(e) => handleStationeryVariantChange(variant.id, {
-                                                                                selectedRoundingMethod: e.target.value === '__DEFAULT__'
-                                                                                    ? undefined
-                                                                                    : e.target.value as PricingRoundingMethod
-                                                                            } as Partial<ProductVariant>)}
-                                                                            className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700"
-                                                                        >
-                                                                            <option value="__DEFAULT__">{getRoundingMethodLabel(undefined)}</option>
-                                                                            {ROUNDING_METHOD_OPTIONS.map((option) => (
-                                                                                <option key={option.value} value={option.value}>{option.label}</option>
-                                                                            ))}
-                                                                        </select>
-                                                                        {effectiveVariantRoundingMethod === 'ALWAYS_UP_CUSTOM' && (
-                                                                            <input
-                                                                                type="number"
-                                                                                min="1"
-                                                                                value={Number((variant as any).customRoundingStep ?? formData.pricingConfig?.customRoundingStep ?? companyDefaultCustomRoundingStep)}
-                                                                                onChange={(e) => handleStationeryVariantChange(variant.id, {
-                                                                                    customRoundingStep: Math.max(1, Number(e.target.value) || companyDefaultCustomRoundingStep)
-                                                                                } as Partial<ProductVariant>)}
-                                                                                className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700"
-                                                                            />
-                                                                        )}
+                                                                             name="inlineVariantRounding"
+                                                                             value={(variant as any).selectedRoundingMethod || '__DEFAULT__'}
+                                                                             onChange={(e) => handleStationeryVariantChange(variant.id, {
+                                                                                 selectedRoundingMethod: e.target.value === '__DEFAULT__'
+                                                                                     ? undefined
+                                                                                     : e.target.value as PricingRoundingMethod
+                                                                             } as Partial<ProductVariant>)}
+                                                                             className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700"
+                                                                         >
+                                                                             <option value="__DEFAULT__">{getRoundingMethodLabel(undefined)}</option>
+                                                                             {ROUNDING_METHOD_OPTIONS.map((option) => (
+                                                                                 <option key={option.value} value={option.value}>{option.label}</option>
+                                                                             ))}
+                                                                         </select>
+                                                                         {effectiveVariantRoundingMethod === 'ALWAYS_UP_CUSTOM' && (
+                                                                             <input
+                                                                                 type="number"
+                                                                                 name="inlineVariantCustomStep"
+                                                                                 min="1"
+                                                                                 value={Number((variant as any).customRoundingStep ?? formData.pricingConfig?.customRoundingStep ?? companyDefaultCustomRoundingStep)}
+                                                                                 onChange={(e) => handleStationeryVariantChange(variant.id, {
+                                                                                     customRoundingStep: Math.max(1, Number(e.target.value) || companyDefaultCustomRoundingStep)
+                                                                                 } as Partial<ProductVariant>)}
+                                                                                 className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700"
+                                                                             />
+                                                                         )}
                                                                     </td>
                                                                     <td className="px-3 py-3 text-right">
                                                                         <div className="space-y-2">
-                                                                            <input
-                                                                                type="number"
-                                                                                step="0.01"
-                                                                                value={Number(variant.selling_price ?? variant.price ?? 0)}
-                                                                                onChange={(e) => handleStationeryVariantManualPriceChange(variant.id, Number(e.target.value))}
-                                                                                readOnly={!variantManualOverride}
-                                                                                className={`w-full rounded-lg px-3 py-2 text-right text-sm font-semibold ${variantManualOverride ? 'border border-amber-200 bg-white text-amber-700' : 'border border-blue-200 bg-blue-50 text-blue-700'}`}
-                                                                            />
+                                                                             <input
+                                                                                 type="number"
+                                                                                 name="inlineVariantPrice"
+                                                                                 step="0.01"
+                                                                                 value={Number(variant.selling_price ?? variant.price ?? 0)}
+                                                                                 onChange={(e) => handleStationeryVariantManualPriceChange(variant.id, Number(e.target.value))}
+                                                                                 readOnly={!variantManualOverride}
+                                                                                 className={`w-full rounded-lg px-3 py-2 text-right text-sm font-semibold ${variantManualOverride ? 'border border-amber-200 bg-white text-amber-700' : 'border border-blue-200 bg-blue-50 text-blue-700'}`}
+                                                                             />
                                                                             <div className="flex items-center justify-between text-[10px]">
                                                                                 <span className="text-slate-400">Auto {currency}{Number((variant as any).autoSellingPrice ?? autoPricing.sellingPrice).toFixed(2)}</span>
                                                                                 {!variantManualOverride ? (
@@ -3767,13 +3805,14 @@ dbService.getAll<BOMTemplate>('bomTemplates')
 
                                                                         {/* Pages – editable, triggers live reprice */}
                                                                         <td className="px-3 py-3 text-center">
-                                                                            <input
-                                                                                type="number"
-                                                                                min="1"
-                                                                                value={variant.pages || 1}
-                                                                                onChange={(e) => handleVariantPagesChange(variant.id, Math.max(1, Number(e.target.value) || 1))}
-                                                                                className="w-16 px-2 py-1.5 border border-slate-200 rounded-lg text-xs font-medium text-center focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 outline-none"
-                                                                            />
+                                                                             <input
+                                                                                 type="number"
+                                                                                 name="inlineVariantPages"
+                                                                                 min="1"
+                                                                                 value={variant.pages || 1}
+                                                                                 onChange={(e) => handleVariantPagesChange(variant.id, Math.max(1, Number(e.target.value) || 1))}
+                                                                                 className="w-16 px-2 py-1.5 border border-slate-200 rounded-lg text-xs font-medium text-center focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 outline-none"
+                                                                             />
                                                                         </td>
 
                                                                         {/* Total Adjustments */}

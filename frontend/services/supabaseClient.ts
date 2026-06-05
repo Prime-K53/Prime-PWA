@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { PLACEHOLDER_SUPABASE_URL } from './cloudMode'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -10,19 +11,33 @@ if (!supabaseUrl || !supabaseAnonKey) {
   )
 }
 
+const TIMEOUT_MS = 20000
+
+function fetchWithTimeout(url: RequestInfo | URL, options?: RequestInit): Promise<Response> {
+  const controller = new AbortController()
+  const id = setTimeout(() => controller.abort(), TIMEOUT_MS)
+  return fetch(url, { ...options, signal: controller.signal })
+    .finally(() => clearTimeout(id))
+}
+
 export const supabase = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co',
+  supabaseUrl || PLACEHOLDER_SUPABASE_URL,
   supabaseAnonKey || 'placeholder-key',
   {
     auth: {
       autoRefreshToken: true,
-      persistSession: false,
-      detectSessionInUrl: true
+      persistSession: true,
+      detectSessionInUrl: true,
+      flowType: 'pkce',
+      storageKey: 'prime-erp-supabase-auth'
     },
     realtime: {
       params: {
         eventsPerSecond: 10
       }
+    },
+    global: {
+      fetch: fetchWithTimeout
     }
   }
 )

@@ -1175,26 +1175,28 @@ const ExaminationPrintingV2: React.FC = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <label className="text-sm font-medium text-slate-700">School
-                    <select disabled={isReadOnly} value={editingJob.school_id} onChange={e => setJobField('school_id', e.target.value)} className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2 text-sm">
+                    <select id="job-school" name="job_school" disabled={isReadOnly} value={editingJob.school_id} onChange={e => setJobField('school_id', e.target.value)} className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2 text-sm">
                       {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                   </label>
                   <label className="text-sm font-medium text-slate-700">Class
-                    <input disabled={isReadOnly} value={editingJob.class_name} onChange={e => setJobField('class_name', e.target.value)} className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2 text-sm" />
+                    <input id="job-class" name="job_class" disabled={isReadOnly} value={editingJob.class_name} onChange={e => setJobField('class_name', e.target.value)} className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2 text-sm" />
                   </label>
                   <label className="text-sm font-medium text-slate-700">Exam Name
-                    <input disabled={isReadOnly} value={editingJob.exam_name} onChange={e => setJobField('exam_name', e.target.value)} className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2 text-sm" />
+                    <input id="job-exam-name" name="job_exam_name" disabled={isReadOnly} value={editingJob.exam_name} onChange={e => setJobField('exam_name', e.target.value)} className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2 text-sm" />
                   </label>
                   <label className="text-sm font-medium text-slate-700">Learners
-                    <input disabled={isReadOnly} type="number" min={1} value={editingJob.number_of_learners} onChange={e => setJobField('number_of_learners', Number(e.target.value || 0))} className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2 text-sm" />
+                    <input id="job-learners" name="job_learners" disabled={isReadOnly} type="number" min={1} value={editingJob.number_of_learners} onChange={e => setJobField('number_of_learners', Number(e.target.value || 0))} className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2 text-sm" />
                   </label>
                   <label className="text-sm font-medium text-slate-700">BOM
-                    <select disabled={isReadOnly} value={editingJob.bom_id} onChange={e => setJobField('bom_id', e.target.value)} className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2 text-sm">
+                    <select id="job-bom" name="job_bom" disabled={isReadOnly} value={editingJob.bom_id} onChange={e => setJobField('bom_id', e.target.value)} className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2 text-sm">
                       {bomOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
                     </select>
                   </label>
                   <label className="text-sm font-medium text-slate-700">Paper Material
                     <select 
+                      id="job-paper-material"
+                      name="job_paper_material"
                       disabled={isReadOnly} 
                       value={editingJob.paper_material_id || ''} 
                       onChange={e => setJobField('paper_material_id', e.target.value)} 
@@ -1212,6 +1214,8 @@ const ExaminationPrintingV2: React.FC = () => {
                   </label>
                   <label className="text-sm font-medium text-slate-700">Toner Material
                     <select 
+                      id="job-toner-material"
+                      name="job_toner_material"
                       disabled={isReadOnly} 
                       value={editingJob.toner_material_id || ''} 
                       onChange={e => setJobField('toner_material_id', e.target.value)} 
@@ -1229,23 +1233,23 @@ const ExaminationPrintingV2: React.FC = () => {
                   </label>
                   <label className="text-sm font-medium text-slate-700">Adjustment
                     <div className="mt-1 grid grid-cols-2 gap-2">
-                      <select disabled={isReadOnly} value={editingJob.adjustment_type} onChange={e => setJobField('adjustment_type', e.target.value)} className="border border-slate-200 rounded-xl px-3 py-2 text-sm">
+                      <select id="job-adjustment-type" name="job_adjustment_type" disabled={isReadOnly} value={editingJob.adjustment_type} onChange={e => setJobField('adjustment_type', e.target.value)} className="border border-slate-200 rounded-xl px-3 py-2 text-sm">
                         <option value="fixed">Fixed</option>
                         <option value="percentage">Percentage</option>
                       </select>
-                      <input disabled={isReadOnly} type="number" value={editingJob.adjustment_value} onChange={e => setJobField('adjustment_value', Number(e.target.value || 0))} className="border border-slate-200 rounded-xl px-3 py-2 text-sm" />
+                      <input id="job-adjustment-value" name="job_adjustment_value" disabled={isReadOnly} type="number" value={editingJob.adjustment_value} onChange={e => setJobField('adjustment_value', Number(e.target.value || 0))} className="border border-slate-200 rounded-xl px-3 py-2 text-sm" />
                     </div>
                   </label>
                   <label className="text-sm font-medium text-slate-700">Rounding
                     <div className="mt-1 grid grid-cols-2 gap-2">
-                      <select disabled={isReadOnly} value={editingJob.rounding_rule_type} onChange={e => setJobField('rounding_rule_type', e.target.value)} className="border border-slate-200 rounded-xl px-3 py-2 text-sm">
+                      <select id="job-rounding-type" name="job_rounding_type" disabled={isReadOnly} value={editingJob.rounding_rule_type} onChange={e => setJobField('rounding_rule_type', e.target.value)} className="border border-slate-200 rounded-xl px-3 py-2 text-sm">
                         <option value="none">None</option>
                         <option value="nearest_10">Nearest 10</option>
                         <option value="nearest_50">Nearest 50</option>
                         <option value="nearest_100">Nearest 100</option>
                         <option value="custom">Custom</option>
                       </select>
-                      <input disabled={isReadOnly || editingJob.rounding_rule_type !== 'custom'} type="number" value={editingJob.rounding_value || 0} onChange={e => setJobField('rounding_value', Number(e.target.value || 0))} className="border border-slate-200 rounded-xl px-3 py-2 text-sm" />
+                      <input id="job-rounding-value" name="job_rounding_value" disabled={isReadOnly || editingJob.rounding_rule_type !== 'custom'} type="number" value={editingJob.rounding_value || 0} onChange={e => setJobField('rounding_value', Number(e.target.value || 0))} className="border border-slate-200 rounded-xl px-3 py-2 text-sm" />
                     </div>
                   </label>
                 </div>
@@ -1258,9 +1262,9 @@ const ExaminationPrintingV2: React.FC = () => {
                   <div className="divide-y divide-slate-100">
                     {subjectRowsPreview.map((subject, index) => (
                       <div key={subject.id || `new-${index}`} className="grid grid-cols-12 gap-2 px-4 py-3 items-center">
-                        <input disabled={isReadOnly} value={subject.subject_name} onChange={e => setSubjectField(index, 'subject_name', e.target.value)} className="col-span-4 border border-slate-200 rounded-lg px-2 py-1 text-sm" placeholder="e.g. Mathematics" />
-                        <input disabled={isReadOnly} type="number" min={1} value={subject.pages_per_paper} onChange={e => setSubjectField(index, 'pages_per_paper', e.target.value)} className="col-span-2 border border-slate-200 rounded-lg px-2 py-1 text-sm" />
-                        <input disabled={isReadOnly} type="number" min={0} value={subject.extra_copies} onChange={e => setSubjectField(index, 'extra_copies', e.target.value)} className="col-span-2 border border-slate-200 rounded-lg px-2 py-1 text-sm" />
+                        <input id={`subject-name-${index}`} name={`subject_name_${index}`} disabled={isReadOnly} value={subject.subject_name} onChange={e => setSubjectField(index, 'subject_name', e.target.value)} className="col-span-4 border border-slate-200 rounded-lg px-2 py-1 text-sm" placeholder="e.g. Mathematics" />
+                        <input id={`pages-per-paper-${index}`} name={`pages_per_paper_${index}`} disabled={isReadOnly} type="number" min={1} value={subject.pages_per_paper} onChange={e => setSubjectField(index, 'pages_per_paper', e.target.value)} className="col-span-2 border border-slate-200 rounded-lg px-2 py-1 text-sm" />
+                        <input id={`extra-copies-${index}`} name={`extra_copies_${index}`} disabled={isReadOnly} type="number" min={0} value={subject.extra_copies} onChange={e => setSubjectField(index, 'extra_copies', e.target.value)} className="col-span-2 border border-slate-200 rounded-lg px-2 py-1 text-sm" />
                         <div className="col-span-3 text-sm font-semibold text-slate-700">{subject.total_pages.toLocaleString()} pages</div>
                         <button disabled={isReadOnly} onClick={() => handleRemoveSubject(index)} className="col-span-1 text-xs text-red-600 font-bold">Del</button>
                       </div>
@@ -1371,7 +1375,7 @@ const ExaminationPrintingV2: React.FC = () => {
                     <button onClick={handleRecalculate} className="px-3 py-2 rounded-xl border border-slate-200 text-sm font-bold flex items-center gap-2 justify-center"><Calculator size={14} /> Recalculate</button>
                     <button disabled={isReadOnly} onClick={() => setJobField('override_enabled', !editingJob.override_enabled)} className="px-3 py-2 rounded-xl border border-slate-200 text-sm font-bold">Override Price</button>
                     {editingJob.override_enabled && !isReadOnly && (
-                      <input type="number" value={editingJob.manual_price_per_learner || 0} onChange={e => setJobField('manual_price_per_learner', Number(e.target.value || 0))} className="px-3 py-2 rounded-xl border border-slate-200 text-sm" placeholder="e.g. 5.50" />
+                      <input id="manual-price-per-learner" name="manual_price_per_learner" type="number" value={editingJob.manual_price_per_learner || 0} onChange={e => setJobField('manual_price_per_learner', Number(e.target.value || 0))} className="px-3 py-2 rounded-xl border border-slate-200 text-sm" placeholder="e.g. 5.50" />
                     )}
                     <button onClick={handleApprove} className="px-3 py-2 rounded-xl border border-emerald-200 text-emerald-700 text-sm font-bold flex items-center gap-2 justify-center"><CheckCircle size={14} /> Approve</button>
                     <button onClick={handleAddToInvoiceGroup} className="px-3 py-2 rounded-xl border border-blue-200 text-blue-700 text-sm font-bold flex items-center gap-2 justify-center"><Layers size={14} /> Add to Group</button>
@@ -1382,6 +1386,8 @@ const ExaminationPrintingV2: React.FC = () => {
                     <label className="text-sm font-medium text-slate-700 block">
                       Override Reason
                       <input
+                        id="override-reason"
+                        name="override_reason"
                         disabled={isReadOnly}
                         value={editingJob.override_reason || ''}
                         onChange={e => setJobField('override_reason', e.target.value)}
@@ -1402,7 +1408,7 @@ const ExaminationPrintingV2: React.FC = () => {
           <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
             <h2 className="text-base font-black text-slate-900">Create Invoice Group</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <select value={groupSchoolId} onChange={e => setGroupSchoolId(e.target.value)} className="border border-slate-200 rounded-xl px-3 py-2 text-sm">
+              <select id="group-school-id" name="group_school_id" value={groupSchoolId} onChange={e => setGroupSchoolId(e.target.value)} className="border border-slate-200 rounded-xl px-3 py-2 text-sm">
                 <option value="">Select school</option>
                 {customers.map(customer => <option key={customer.id} value={customer.id}>{customer.name}</option>)}
               </select>
@@ -1413,7 +1419,7 @@ const ExaminationPrintingV2: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 {eligibleJobsForGroup.map(job => (
                   <label key={job.id} className="flex items-center gap-2 border border-slate-200 rounded-xl px-3 py-2 text-sm">
-                    <input type="checkbox" checked={selectedJobsForGroup.includes(job.id)} onChange={e => updateGroupSelection(job.id, e.target.checked)} />
+                    <input id={`job-selection-${job.id}`} name={`job_selection_${job.id}`} type="checkbox" checked={selectedJobsForGroup.includes(job.id)} onChange={e => updateGroupSelection(job.id, e.target.checked)} />
                     <span className="font-semibold">{job.class_name}</span>
                     <span className="text-xs text-slate-500 ml-auto">{job.number_of_learners} learners</span>
                   </label>
@@ -1620,20 +1626,20 @@ const ExaminationPrintingV2: React.FC = () => {
             <h3 className="text-lg font-black text-slate-900 flex items-center gap-2"><Repeat size={18} /> Convert to Recurring</h3>
             <div className="grid grid-cols-1 gap-3">
               <label className="text-sm">Frequency
-                <select value={recurringFrequency} onChange={e => setRecurringFrequency(e.target.value as any)} className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2 text-sm">
+                <select id="recurring-frequency" name="recurring_frequency" value={recurringFrequency} onChange={e => setRecurringFrequency(e.target.value as any)} className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2 text-sm">
                   <option value="weekly">Weekly</option>
                   <option value="monthly">Monthly</option>
                   <option value="termly">Termly</option>
                 </select>
               </label>
               <label className="text-sm">Start Date
-                <input type="date" value={recurringStart} onChange={e => setRecurringStart(e.target.value)} className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2 text-sm" />
+                <input id="recurring-start" name="recurring_start" type="date" value={recurringStart} onChange={e => setRecurringStart(e.target.value)} className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2 text-sm" />
               </label>
               <label className="text-sm">End Date
-                <input type="date" value={recurringEnd} onChange={e => setRecurringEnd(e.target.value)} className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2 text-sm" />
+                <input id="recurring-end" name="recurring_end" type="date" value={recurringEnd} onChange={e => setRecurringEnd(e.target.value)} className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2 text-sm" />
               </label>
               <label className="text-sm flex items-center gap-2">
-                <input type="checkbox" checked={recurringAuto} onChange={e => setRecurringAuto(e.target.checked)} />
+                <input id="recurring-auto" name="recurring_auto" type="checkbox" checked={recurringAuto} onChange={e => setRecurringAuto(e.target.checked)} />
                 Auto-generate invoices
               </label>
             </div>

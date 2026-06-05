@@ -11,12 +11,17 @@ import { DEFAULT_SHARED_NUMBERING_RULE, normalizeCompanyNumberingConfig } from '
 import { hydrateCompanyPdfAssets } from '../utils/companyAssetUtils';
 import { supabase } from '../services/supabaseClient';
 import type { AuthResult } from '../services/supabaseAuthService';
+import { cloudDb } from '../services/cloudDb';
+import { isSupabaseConfigured } from '../services/cloudMode';
 
-const SUPABASE_ENABLED = Boolean(
-  import.meta.env.VITE_SUPABASE_URL &&
-  import.meta.env.VITE_SUPABASE_ANON_KEY &&
-  import.meta.env.VITE_SUPABASE_URL !== 'https://placeholder.supabase.co'
-);
+const SUPABASE_ENABLED = isSupabaseConfigured();
+
+async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  const timer = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error(`Request timed out after ${ms}ms`)), ms)
+  );
+  return Promise.race([promise, timer]);
+}
 
 interface Notification {
   id: string;
@@ -50,10 +55,11 @@ interface AuthContextType {
   isOnline: boolean;
   dbSyncStatus: 'idle' | 'connected' | 'syncing' | 'error' | 'restricted';
   lastSyncTime: string | null;
+  loginDiagnostic: LoginDiagnostic | null;
   
   notify: (message: string, type: 'success' | 'error' | 'info' | 'warning') => void;
   clearNotification: () => void;
-  login: (username: string, password?: string, mfaCode?: string) => Promise<'SUCCESS' | 'INVALID' | 'MFA_REQUIRED' | 'EXPIRED' | 'EMAIL_NOT_VERIFIED'>;
+  login: (username: string, password?: string, mfaCode?: string) => Promise<'SUCCESS' | 'INVALID' | 'MFA_REQUIRED' | 'EXPIRED'>;
   logout: () => void;
   checkPermission: (permissionId: string) => boolean;
   validatePasswordStrength: (password: string) => { valid: boolean; errors: string[] };
@@ -81,22 +87,67 @@ interface AuthContextType {
   manualDownloadBackup: () => Promise<void>;
 
   signUpSupabase: (email: string, password: string, metadata?: Record<string, any>) => Promise<AuthResult>;
-  verifyEmailOtp: (email: string, token: string) => Promise<AuthResult>;
-  resendOtp: (email: string, type?: 'signup' | 'recovery') => Promise<AuthResult>;
   sendPasswordResetOtp: (email: string) => Promise<AuthResult>;
   verifyResetOtp: (email: string, token: string) => Promise<AuthResult>;
   updatePasswordAfterReset: (password: string) => Promise<AuthResult>;
-  needsEmailVerification: boolean;
-  setNeedsEmailVerification: (v: boolean) => void;
-  verifyingEmail: string;
-  setVerifyingEmail: (v: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+interface LoginDiagnostic {
+  supabaseUrl: string;
+  email: string;
+  timestamp: string;
+  errorCode: string;
+  errorMessage: string;
+  authState: string;
+  sessionState: string;
+}
+
+class AuthFlowError extends Error {
+  code?: string;
+  status?: number;
+  userMessage: string;
+
+  constructor(message: string, options: { code?: string; status?: number; userMessage?: string } = {}) {
+    super(message);
+    this.name = 'AuthFlowError';
+    this.code = options.code;
+    this.status = options.status;
+    this.userMessage = options.userMessage || message;
+  }
+}
+
 function getEmailForUser(username: string, domain = 'prime-erp.local'): string {
   if (username.includes('@')) return username;
   return `${username}@${domain}`;
+}
+
+function getAuthErrorCode(error: any): string {
+  return error?.code || error?.error_code || error?.name || 'auth_error';
+}
+
+function getUserFriendlyAuthMessage(error: any): string {
+  const code = String(getAuthErrorCode(error)).toLowerCase();
+  const message = String(error?.message || error || '').toLowerCase();
+
+  if (code.includes('email_not_confirmed') || message.includes('email not confirmed')) {
+    return 'Email confirmation is disabled for this ERP. Please ask an administrator to disable Confirm email in Supabase Authentication > Providers > Email, then try again.';
+  }
+  if (code.includes('invalid_credentials') || message.includes('invalid login credentials')) {
+    return 'Invalid email or password. Please check your credentials and try again.';
+  }
+  if (message.includes('user not found')) {
+    return 'No account was found for this email address.';
+  }
+  if (message.includes('failed to fetch') || message.includes('network')) {
+    return 'Unable to reach Supabase Auth. Please check your connection and try again.';
+  }
+  if (message.includes('session')) {
+    return 'Your session could not be established. Please sign in again.';
+  }
+
+  return error?.message || 'Login failed. Please try again.';
 }
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -273,23 +324,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
   const [dbSyncStatus, setDbSyncStatus] = useState<'idle' | 'connected' | 'syncing' | 'error' | 'restricted'>('idle');
-  const [lastSyncTime, setLastSyncTime] = useState<string | null>(localStorage.getItem('nexus_last_sync'));
-  const [needsEmailVerification, setNeedsEmailVerification] = useState(false);
-  const [verifyingEmail, setVerifyingEmail] = useState('');
+  const [lastSyncTime, setLastSyncTime] = useState<string | null>(() => SUPABASE_ENABLED ? null : localStorage.getItem('nexus_last_sync'));
+  const [loginDiagnostic, setLoginDiagnostic] = useState<LoginDiagnostic | null>(null);
 
   useEffect(() => {
     const handleOnline = async () => {
       setIsOnline(true);
-      if (SUPABASE_ENABLED && user) {
+      if (!SUPABASE_ENABLED) {
         try {
-          const { fullSync } = await import('../services/syncService');
-          await fullSync();
+          const { customerNotificationService } = await import('../services/customerNotificationService');
+          await customerNotificationService.processPendingNotifications();
         } catch {}
       }
-      try {
-        const { customerNotificationService } = await import('../services/customerNotificationService');
-        await customerNotificationService.processPendingNotifications();
-      } catch {}
     };
     const handleOffline = () => setIsOnline(false);
     window.addEventListener('online', handleOnline);
@@ -301,47 +347,157 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [user]);
 
-  const syncSupabaseUserToLocal = useCallback(async (supabaseUser: import('@supabase/supabase-js').User): Promise<User | null> => {
-    try {
-      const localUsers = await dbService.getAll<User>('users');
-      const match = localUsers.find(u => u.email === supabaseUser.email || u.id === supabaseUser.id);
-      if (match) {
-        return { ...match, id: supabaseUser.id, tokenExpiry: undefined };
-      }
-      const supabaseProfile: User = {
-        id: supabaseUser.id,
-        username: supabaseUser.user_metadata?.username || supabaseUser.email?.split('@')[0] || 'user',
-        fullName: supabaseUser.user_metadata?.full_name || supabaseUser.email?.split('@')[0] || 'User',
-        name: supabaseUser.user_metadata?.full_name || supabaseUser.email?.split('@')[0] || 'User',
-        email: supabaseUser.email || '',
-        role: (supabaseUser.user_metadata?.role || 'User') as UserRole,
-        status: 'Active',
-        active: true,
-        isSuperAdmin: supabaseUser.user_metadata?.is_super_admin === true,
-        securityLevel: 'Standard',
-        groupIds: supabaseUser.user_metadata?.group_ids || ['GRP-USER'],
-        authMode: 'supabase'
-      };
-      await dbService.put('users', supabaseProfile);
-      return supabaseProfile;
-    } catch {
-      const fallback: User = {
-        id: supabaseUser.id,
-        username: supabaseUser.email?.split('@')[0] || 'user',
-        fullName: supabaseUser.user_metadata?.full_name || supabaseUser.email?.split('@')[0] || 'User',
-        name: supabaseUser.user_metadata?.full_name || supabaseUser.email?.split('@')[0] || 'User',
-        email: supabaseUser.email || '',
-        role: 'User',
-        status: 'Active',
-        active: true,
-        isSuperAdmin: false,
-        securityLevel: 'Standard',
-        groupIds: ['GRP-USER'],
-        authMode: 'supabase'
-      };
-      return fallback;
-    }
+  const roleToGroupIds = useCallback((role?: string, isSuperAdmin?: boolean) => {
+    if (isSuperAdmin || role === 'Super Admin' || role === 'Company Admin' || role === 'Admin') return ['GRP-ADMIN'];
+    if (role === 'Manager') return ['GRP-MANAGER'];
+    if (role === 'Cashier') return ['GRP-CASHIER'];
+    if (role === 'Sales Staff') return ['GRP-SALES'];
+    return ['GRP-USER'];
   }, []);
+
+  const updateLoginDiagnostic = useCallback(async (email: string, updates: Partial<LoginDiagnostic> = {}) => {
+    let authState = 'unknown';
+    let sessionState = 'unknown';
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      authState = user ? `authenticated:${user.id}` : 'no authenticated user';
+    } catch (error) {
+      authState = `auth lookup failed: ${error instanceof Error ? error.message : String(error)}`;
+    }
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      sessionState = session ? `active:${session.user?.id || 'unknown user'}` : 'no active session';
+    } catch (error) {
+      sessionState = `session lookup failed: ${error instanceof Error ? error.message : String(error)}`;
+    }
+
+    setLoginDiagnostic({
+      supabaseUrl: import.meta.env.VITE_SUPABASE_URL || '',
+      email,
+      timestamp: new Date().toISOString(),
+      errorCode: '',
+      errorMessage: '',
+      authState,
+      sessionState,
+      ...updates,
+    });
+  }, []);
+
+  const syncSupabaseUserToLocal = useCallback(async (supabaseUser: import('@supabase/supabase-js').User): Promise<User | null> => {
+    const { data: profileRows, error: profileError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('user_id', supabaseUser.id);
+
+    console.log('[Auth] Profile validation result:', {
+      user_id: supabaseUser.id,
+      rows: profileRows,
+      error: profileError,
+    });
+
+    if (profileError) {
+      console.error('[Auth] Profile lookup failed:', profileError);
+      throw new AuthFlowError(profileError.message, {
+        code: getAuthErrorCode(profileError),
+        status: (profileError as any)?.status,
+        userMessage: 'Your profile could not be loaded. Please contact an administrator.',
+      });
+    }
+
+    if (!profileRows || profileRows.length === 0) {
+      throw new AuthFlowError('Missing profile for authenticated user.', {
+        code: 'profile_missing',
+        userMessage: 'Your user profile is missing. Please contact an administrator.',
+      });
+    }
+
+    if (profileRows.length > 1) {
+      throw new AuthFlowError('Multiple profiles found for authenticated user.', {
+        code: 'profile_duplicate',
+        userMessage: 'Multiple profiles were found for your account. Please contact an administrator.',
+      });
+    }
+
+    const cloudProfile = profileRows[0];
+    const profileData = cloudProfile?.data || {};
+    const companyId = cloudProfile?.company_id || supabaseUser.user_metadata?.company_id || '';
+    const role = (cloudProfile?.role || profileData.role || supabaseUser.user_metadata?.role || 'Sales Staff') as UserRole;
+    const isSuperAdmin = Boolean(profileData.is_super_admin || supabaseUser.user_metadata?.is_super_admin || role === 'Super Admin' || role === 'Company Admin' || role === 'Admin');
+    const groupIds = profileData.group_ids || profileData.groupIds || supabaseUser.user_metadata?.group_ids || roleToGroupIds(String(role), isSuperAdmin);
+    const fullName = cloudProfile?.full_name || profileData.fullName || profileData.full_name || supabaseUser.user_metadata?.full_name || supabaseUser.email?.split('@')[0] || 'User';
+
+    if (!companyId) {
+      throw new AuthFlowError('Profile is missing company_id.', {
+        code: 'profile_company_missing',
+        userMessage: 'Your profile is not linked to a company workspace. Please contact an administrator.',
+      });
+    }
+
+    dbService.setCurrentCompanyId(companyId);
+    cloudDb.setActiveCompanyId(companyId);
+
+    const { data: company, error: companyError } = await supabase
+      .from('companies')
+      .select('*')
+      .eq('id', companyId)
+      .maybeSingle();
+
+    console.log('[Auth] Company validation result:', {
+      company_id: companyId,
+      company,
+      error: companyError,
+    });
+
+    if (companyError) {
+      console.error('[Auth] Company lookup failed:', companyError);
+      throw new AuthFlowError(companyError.message, {
+        code: getAuthErrorCode(companyError),
+        status: (companyError as any)?.status,
+        userMessage: 'Your company workspace could not be loaded. Please contact an administrator.',
+      });
+    }
+
+    if (!company) {
+      throw new AuthFlowError(`Company ${companyId} was not found.`, {
+        code: 'company_missing',
+        userMessage: 'Your company workspace could not be found. Please contact an administrator.',
+      });
+    }
+
+    const companyData = company.data || {};
+    const hydratedConfig = await hydrateCompanyPdfAssets(withNormalizedSecurityConfig(normalizeCompanyNumberingConfig({
+      ...defaultCompanyConfig,
+      ...companyData,
+      companyId,
+      companyName: company.company_name || companyData.companyName || defaultCompanyConfig.companyName,
+      email: company.email || companyData.email || defaultCompanyConfig.email,
+      phone: company.phone || companyData.phone || defaultCompanyConfig.phone,
+      addressLine1: companyData.addressLine1 || company.address || defaultCompanyConfig.addressLine1,
+      pricingSettings: {
+        ...DEFAULT_PRICING_SETTINGS,
+        ...(companyData?.pricingSettings || {})
+      }
+    } as any)));
+    setCompanyConfig(hydratedConfig);
+
+    return {
+      id: supabaseUser.id,
+      username: cloudProfile?.username || profileData.username || supabaseUser.user_metadata?.username || supabaseUser.email?.split('@')[0] || 'user',
+      fullName,
+      name: fullName,
+      email: supabaseUser.email || profileData.email || '',
+      role,
+      status: cloudProfile?.status || profileData.status || 'Active',
+      active: cloudProfile?.status !== 'Inactive',
+      isSuperAdmin,
+      securityLevel: profileData.securityLevel || 'Standard',
+      groupIds,
+      authMode: 'supabase',
+      companyId
+    } as User;
+  }, [defaultCompanyConfig, roleToGroupIds]);
 
   useEffect(() => {
     const loadInitData = async () => {
@@ -352,6 +508,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }, 25000);
 
       try {
+        if (SUPABASE_ENABLED) {
+          let restoredSession: User | null = null;
+          const { data: { session } } = await supabase.auth.getSession();
+
+          if (session?.user) {
+            restoredSession = await syncSupabaseUserToLocal(session.user);
+            if (restoredSession) {
+              setUser(restoredSession);
+            }
+          }
+
+          const [groups, profileRows, logs, storedAlerts, storedReminders] = await Promise.all([
+            dbService.getAll<UserGroup>('userGroups').catch(() => []),
+            cloudDb.listCompanyProfiles().catch(() => []),
+            restoredSession ? dbService.getAll<AuditLogEntry>('auditLogs').catch(() => []) : Promise.resolve([]),
+            restoredSession ? dbService.getAll<SystemAlert>('alerts').catch(() => []) : Promise.resolve([]),
+            restoredSession ? dbService.getAll<Reminder>('reminders').catch(() => []) : Promise.resolve([])
+          ]);
+
+          setUserGroups(groups.length > 0 ? groups : INITIAL_USER_GROUPS);
+          setAllUsers((profileRows || []).map((profile: any) => {
+            const profileData = profile.data || {};
+            const role = profile.role || profileData.role || 'Sales Staff';
+            return {
+              id: profile.user_id || profile.id,
+              username: profile.username || profileData.username || profile.full_name || 'user',
+              fullName: profile.full_name || profileData.fullName || profileData.full_name || 'User',
+              name: profile.full_name || profileData.fullName || profileData.full_name || 'User',
+              email: profile.email || profileData.email || '',
+              role,
+              status: profile.status || 'Active',
+              active: profile.status !== 'Inactive',
+              isSuperAdmin: Boolean(profileData.is_super_admin || role === 'Super Admin' || role === 'Company Admin' || role === 'Admin'),
+              securityLevel: profileData.securityLevel || 'Standard',
+              groupIds: profileData.group_ids || profileData.groupIds || roleToGroupIds(role, profileData.is_super_admin),
+              authMode: 'supabase',
+              companyId: profile.company_id
+            } as User;
+          }));
+
+          setAuditLogs(logs.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+          setAlerts(storedAlerts.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+          setReminders(storedReminders.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+          setRequiresSetup(Boolean(session?.user && !(restoredSession as any)?.companyId));
+          setDbSyncStatus('connected');
+          setLastSyncTime(new Date().toISOString());
+          return;
+        }
+
         const savedConfig = localStorage.getItem('nexus_company_config');
         let parsedConfig: CompanyConfig | null = null;
         if (savedConfig) {
@@ -491,28 +696,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (!SUPABASE_ENABLED) return;
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session?.user) {
-        const profile = await syncSupabaseUserToLocal(session.user);
-        if (profile) {
-          setUser(profile);
-          const currentUsers = await dbService.getAll<User>('users');
-          setAllUsers(currentUsers);
-        }
-      } else if (event === 'SIGNED_OUT') {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
         setUser(null);
-      } else if (event === 'TOKEN_REFRESHED') {
-        if (session?.user && user) {
-          const profile = await syncSupabaseUserToLocal(session.user);
-          if (profile) setUser(profile);
-        }
+        setAllUsers([]);
+        setRequiresSetup(false);
+        cloudDb.setActiveCompanyId(null);
       }
     });
 
     return () => {
       subscription.unsubscribe();
     };
-  }, [syncSupabaseUserToLocal, user]);
+  }, []);
 
   const notify = useCallback((message: string, type: 'success' | 'error' | 'info' | 'warning') => {
     setNotification({ id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, message, type });
@@ -537,44 +733,85 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         reason: params.reason
     };
     setAuditLogs(prev => [entry, ...prev]);
-    await dbService.put('auditLogs', entry);
+    try {
+      await dbService.put('auditLogs', entry);
+    } catch {
+      // Audit logs are non-critical; failures are silently handled
+    }
   }, [user]);
 
-  const login = useCallback(async (username: string, password?: string, mfaCode?: string): Promise<'SUCCESS' | 'INVALID' | 'MFA_REQUIRED' | 'EXPIRED' | 'EMAIL_NOT_VERIFIED'> => {
+  const login = useCallback(async (username: string, password?: string, mfaCode?: string): Promise<'SUCCESS' | 'INVALID' | 'MFA_REQUIRED' | 'EXPIRED'> => {
     try {
-        if (requiresSetup) {
+        if (requiresSetup && !SUPABASE_ENABLED) {
             return 'INVALID';
         }
 
         if (SUPABASE_ENABLED) {
           if (!password) return 'INVALID';
           const email = getEmailForUser(username);
-          const { data: signInData, error } = await supabase.auth.signInWithPassword({
+          await updateLoginDiagnostic(email, {
+            errorCode: '',
+            errorMessage: '',
+            authState: 'login attempt started',
+            sessionState: 'pending',
+          });
+
+          const { data: signInData, error } = await withTimeout(supabase.auth.signInWithPassword({
             email,
             password,
-          });
+          }), 15000);
+
+          console.log("AUTH RESPONSE:", signInData);
+          console.log("AUTH ERROR:", error);
+
           if (error) {
-            if (error.message?.toLowerCase().includes('email not confirmed')) {
-              setNeedsEmailVerification(true);
-              setVerifyingEmail(email);
-            }
-            if (!error.message?.toLowerCase().includes('email not confirmed')) {
-              return 'INVALID';
-            }
+            console.error("LOGIN FAILED:", {
+              code: (error as any).code,
+              message: error.message,
+              status: (error as any).status,
+              name: error.name,
+            });
+
+            await updateLoginDiagnostic(email, {
+              errorCode: getAuthErrorCode(error),
+              errorMessage: error.message,
+            });
+
+            throw new AuthFlowError(error.message, {
+              code: getAuthErrorCode(error),
+              status: (error as any)?.status,
+              userMessage: getUserFriendlyAuthMessage(error),
+            });
           }
-          if (signInData?.user?.email_confirmed_at) {
-            const localUsers = await dbService.getAll<User>('users');
-            const match = localUsers.find(u => u.email === signInData.user!.email || u.id === signInData.user!.id);
-            if (match) {
-              setUser({ ...match, id: signInData.user.id, authMode: 'supabase' });
-            } else {
-              const profile = await syncSupabaseUserToLocal(signInData.user);
-              if (profile) setUser({ ...profile, authMode: 'supabase' });
-            }
-            return 'SUCCESS';
+
+          if (!signInData?.user) {
+            const noUserError = new AuthFlowError('Supabase did not return an authenticated user.', {
+              code: 'session_user_missing',
+              userMessage: 'Your session could not be established. Please sign in again.',
+            });
+            await updateLoginDiagnostic(email, {
+              errorCode: noUserError.code || '',
+              errorMessage: noUserError.message,
+            });
+            throw noUserError;
           }
-          setNeedsEmailVerification(false);
-          setVerifyingEmail('');
+
+          console.log('[Auth] Authenticated Supabase user audit:', {
+            id: signInData.user.id,
+            email: signInData.user.email,
+            last_sign_in_at: signInData.user.last_sign_in_at,
+            user_metadata: signInData.user.user_metadata,
+            app_metadata: signInData.user.app_metadata,
+          });
+
+          const profile = await syncSupabaseUserToLocal(signInData.user);
+          setRequiresSetup(false);
+          setUser({ ...profile, authMode: 'supabase' });
+          await updateLoginDiagnostic(email, {
+            errorCode: '',
+            errorMessage: '',
+          });
+          return 'SUCCESS';
         }
 
         const dbUsers = await dbService.getAll<User>('users');
@@ -666,9 +903,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return 'SUCCESS';
     } catch (err) {
         console.error("AuthContext: Login function error:", err);
+        if (SUPABASE_ENABLED) {
+          const email = getEmailForUser(username);
+          const error = err as any;
+          void updateLoginDiagnostic(email, {
+            errorCode: getAuthErrorCode(error),
+            errorMessage: error?.message || String(error),
+          });
+        }
         throw err;
     }
-  }, [addAuditLog, companyConfig, requiresSetup, SUPABASE_ENABLED]);
+  }, [addAuditLog, companyConfig, requiresSetup, SUPABASE_ENABLED, syncSupabaseUserToLocal, updateLoginDiagnostic]);
 
   const logout = useCallback(() => {
     if (user) {
@@ -688,7 +933,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const checkPermission = useCallback((permissionId: string) => {
     if (!user) return false;
-    if (user.role === 'Admin' || user.isSuperAdmin || user.username?.toLowerCase() === 'admin') return true;
+    if (user.role === 'Admin' || user.isSuperAdmin) return true;
     const groups = userGroups.filter(g => user.groupIds?.includes(g.id));
     return groups.some(g => g.permissions.includes(permissionId));
   }, [user, userGroups]);
@@ -795,7 +1040,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }));
     setCompanyConfig(normalizedConfig);
-    localStorage.setItem('nexus_company_config', JSON.stringify(normalizedConfig));
+    if (SUPABASE_ENABLED) {
+      void cloudDb.upsertCompany(normalizedConfig as any).catch((error) => {
+        console.error('Failed to save company config to Supabase', error);
+        notify('Company config could not be saved to cloud', 'error');
+      });
+    } else {
+      localStorage.setItem('nexus_company_config', JSON.stringify(normalizedConfig));
+    }
     void syncDocumentNumberSeriesConfig(normalizedConfig).catch((error) => {
       console.error('Failed to sync document numbering configuration', error);
     });
@@ -837,6 +1089,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const resetSystem = async () => {
     if (SUPABASE_ENABLED) {
       await supabase.auth.signOut();
+      setUser(null);
+      return;
     }
     await dbService.factoryReset();
     localStorage.clear();
@@ -845,6 +1099,62 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const completeSetup = async (config: CompanyConfig, adminUser: User) => {
+    if (SUPABASE_ENABLED) {
+      const cloudCompanyId = (config as any).companyId || crypto.randomUUID();
+      const normalizedConfig: CompanyConfig = withNormalizedSecurityConfig(normalizeCompanyNumberingConfig({
+        ...defaultCompanyConfig,
+        ...config,
+        companyId: cloudCompanyId,
+        pricingSettings: {
+          ...DEFAULT_PRICING_SETTINGS,
+          ...(config.pricingSettings || {})
+        }
+      }));
+
+      dbService.setCurrentCompanyId(cloudCompanyId);
+      cloudDb.setActiveCompanyId(cloudCompanyId);
+      setCompanyConfig(normalizedConfig);
+
+      const savedCompanyId = await cloudDb.upsertCompany(normalizedConfig as any);
+      const { data: { session } } = await withTimeout(supabase.auth.getSession(), 15000);
+
+      if (!session?.user) {
+        throw new AuthFlowError('No Supabase session is available after signup.', {
+          code: 'signup_session_missing',
+          userMessage: 'Your account was created, but automatic login failed. Please sign in with your email and password.',
+        });
+      }
+
+      await cloudDb.upsertProfile({
+        ...adminUser,
+        user_id: session.user.id,
+        company_id: savedCompanyId || cloudCompanyId,
+        role: 'Company Admin',
+        status: 'Active',
+        is_super_admin: true,
+        group_ids: ['GRP-ADMIN'],
+        email: session.user.email || adminUser.email,
+      });
+      const profile = await syncSupabaseUserToLocal(session.user);
+      if (profile) setUser(profile);
+
+      setUserGroups(INITIAL_USER_GROUPS);
+      setAllUsers([{
+        ...adminUser,
+        id: session.user.id,
+        role: 'Company Admin' as UserRole,
+        status: 'Active',
+        active: true,
+        isSuperAdmin: true,
+        groupIds: ['GRP-ADMIN'],
+        authMode: 'supabase',
+        companyId: savedCompanyId || cloudCompanyId,
+      } as User]);
+      setRequiresSetup(false);
+      setIsInitialized(true);
+      return;
+    }
+
     // Multi-tenant: migrate existing data to old companyId before creating new company
     const oldConfigRaw = localStorage.getItem('nexus_company_config');
     if (oldConfigRaw) {
@@ -947,16 +1257,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return signUp(email, password, metadata);
   };
 
-  const verifyEmailOtp = async (email: string, token: string) => {
-    const { verifyOtp } = await import('../services/supabaseAuthService');
-    return verifyOtp(email, token, 'signup');
-  };
-
-  const resendOtpFn = async (email: string, type: 'signup' | 'recovery' = 'signup') => {
-    const { resendOtp } = await import('../services/supabaseAuthService');
-    return resendOtp(email, type);
-  };
-
   const sendPasswordResetOtp = async (email: string) => {
     const { sendPasswordResetOtp: sendFn } = await import('../services/supabaseAuthService');
     return sendFn(email);
@@ -974,12 +1274,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const value = {
     user, allUsers, userGroups, passwordPolicy, companyConfig, requiresSetup, notification, auditLogs, alerts, isInitialized, activeFinancialYear, reminders, isOnline, dbSyncStatus, lastSyncTime,
+    loginDiagnostic,
     notify, clearNotification, login, logout, checkPermission, validatePasswordStrength,
     manageUser, deleteUser, manageUserGroup, deleteUserGroup, updatePasswordPolicy, updateCompanyConfig,
     addAuditLog, addAlert, dismissAlert, clearAlerts, resetSystem, completeSetup, setFinancialYear,
     addReminder, toggleReminder, deleteReminder, connectDbSync, manualDownloadBackup,
-    signUpSupabase, verifyEmailOtp, resendOtp: resendOtpFn, sendPasswordResetOtp, verifyResetOtp, updatePasswordAfterReset,
-    needsEmailVerification, setNeedsEmailVerification, verifyingEmail, setVerifyingEmail,
+    signUpSupabase, sendPasswordResetOtp, verifyResetOtp, updatePasswordAfterReset,
   };
 
   return (

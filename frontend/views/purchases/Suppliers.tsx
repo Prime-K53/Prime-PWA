@@ -260,6 +260,8 @@ const Suppliers: React.FC = () => {
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
               <input
+                id="search-suppliers"
+                name="search_suppliers"
                 type="text"
                 placeholder="Search by supplier name, email or phone..."
                 value={searchQuery}
@@ -275,6 +277,8 @@ const Suppliers: React.FC = () => {
                 </span>
                 <div className="h-5 w-px bg-slate-200 mx-1" />
                 <select
+                  id="batch-actions"
+                  name="batch_actions"
                   onChange={(e) => {
                     if (e.target.value === 'delete') handleBatchDelete();
                     else if (e.target.value === 'active') handleBatchStatusUpdate('Active');
@@ -294,6 +298,8 @@ const Suppliers: React.FC = () => {
 
           <div className="flex items-center gap-2">
             <select
+              id="filter-status"
+              name="filter_status"
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value as any)}
               className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[13px] font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
@@ -315,6 +321,8 @@ const Suppliers: React.FC = () => {
               <tr className="bg-slate-50/50">
                 <th className="table-header px-4 py-2.5 w-10">
                   <input 
+                    id="select-all-suppliers"
+                    name="select_all"
                     type="checkbox" 
                     checked={selectedIds.length === filteredSuppliers.length && filteredSuppliers.length > 0}
                     onChange={toggleSelectAll}

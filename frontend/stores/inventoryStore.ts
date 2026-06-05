@@ -5,6 +5,7 @@ import { api } from '../services/api';
 import { dbService } from '../services/db';
 import { INITIAL_INVENTORY, MOCK_WAREHOUSES } from '../constants';
 import { generateNextId } from '../utils/helpers';
+import { isSupabaseConfigured } from '../services/cloudMode';
 
 import { transactionService } from '../services/transactionService';
 import { normalizeInventoryItemPricing } from '../utils/pricing';
@@ -19,7 +20,7 @@ interface InventoryState {
   isLoading: boolean;
   error: string | null;
 
-  fetchInventory: () => Promise<void>;
+  fetchInventory: (silent?: boolean) => Promise<void>;
   addItem: (item: Item) => Promise<void>;
   updateItem: (item: Item) => Promise<void>;
   recalculatePrice: (itemId: string) => Promise<Item | undefined>;
@@ -36,8 +37,8 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
   isLoading: false,
   error: null,
 
-  fetchInventory: async () => {
-    set({ isLoading: true, error: null });
+  fetchInventory: async (silent = false) => {
+    if (!silent) set({ isLoading: true, error: null });
     try {
       const [loadedItems, loadedWarehouses] = await Promise.all([
         dbService.getAll<Item>('inventory'),
@@ -45,10 +46,13 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
       ]);
 
       if (loadedItems.length === 0 && loadedWarehouses.length === 0) {
-        // Seed Data using dbService directly to avoid UNAUTHORIZED errors before login
-        set({ inventory: INITIAL_INVENTORY, warehouses: MOCK_WAREHOUSES });
-        for (const i of INITIAL_INVENTORY) await dbService.put('inventory', i);
-        for (const w of MOCK_WAREHOUSES) await dbService.put('warehouses', w);
+        if (!isSupabaseConfigured()) {
+          set({ inventory: INITIAL_INVENTORY, warehouses: MOCK_WAREHOUSES });
+          for (const i of INITIAL_INVENTORY) await dbService.put('inventory', i);
+          for (const w of MOCK_WAREHOUSES) await dbService.put('warehouses', w);
+        } else {
+          set({ inventory: [], warehouses: [] });
+        }
       } else {
         const normalizedItems = loadedItems.map(normalizeInventoryItemPricing);
         const repairedItems = normalizedItems.filter((item, index) => JSON.stringify(item) !== JSON.stringify(loadedItems[index]));
@@ -61,9 +65,9 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
       }
     } catch (error) {
       console.error('Inventory Load Error:', error);
-      set({ error: 'Failed to load inventory data' });
+      if (!silent) set({ error: 'Failed to load inventory data' });
     } finally {
-      set({ isLoading: false });
+      if (!silent) set({ isLoading: false });
     }
   },
 

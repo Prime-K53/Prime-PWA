@@ -19,7 +19,7 @@ const SUPABASE_ENABLED = Boolean(
   import.meta.env.VITE_SUPABASE_URL !== 'https://placeholder.supabase.co'
 );
 
-const PUSH_INTERVAL_MS = 10000;
+const PUSH_INTERVAL_MS = 60000;
 let pushTimer: ReturnType<typeof setInterval> | null = null;
 let realtimeSubscribed = false;
 let realtimeChannels: any[] = [];
@@ -100,7 +100,7 @@ const STORE_TO_TABLE: Record<string, string> = {
 const TABLES_TO_SYNC = [
   'users', 'userGroups', 'inventory', 'warehouses', 'customers', 'suppliers',
   'sales', 'invoices', 'purchases', 'accounts', 'ledger',
-  'auditLogs', 'settings', 'reminders',
+  'settings', 'reminders',
   'workCenters', 'workOrders', 'batches', 'resources',
   'salesOrders', 'quotations', 'orders',
   'jobOrders', 'examJobs', 'salesExchanges', 'reprintJobs',

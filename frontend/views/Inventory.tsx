@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, ArrowRightLeft, Warehouse as WarehouseIcon, ClipboardCheck, AlertCircle, Sparkles, Loader2, Settings, RefreshCw } from 'lucide-react';
-import { useData, REFRESH_INTERVAL } from '../context/DataContext';
 import { useModuleRefresh } from '../hooks/useModuleRefresh';
 import { useAuth } from '../context/AuthContext';
 import { useFinance } from '../context/FinanceContext';
@@ -22,17 +21,14 @@ import { generateNextId } from '../utils/helpers';
 
 const Inventory: React.FC = () => {
     const { fetchInventory, fetchProcurementData } = useInventory();
-    const { refreshAllData } = useData();
     const navigate = useNavigate();
 
-    // 5-minute poll + focus refresh
     useModuleRefresh(async () => {
         await Promise.allSettled([
             fetchInventory(),
-            fetchProcurementData(),
-            refreshAllData()
+            fetchProcurementData()
         ]);
-    }, { interval: null }); // Disable polling to avoid race condition with lazy loading
+    }, { interval: null });
     const { inventory, warehouses, addItem, updateItem, transferStock, updateStock, addWarehouse, deleteItem, isLoading, reconcileInventory } = useInventory();
     const { postJournalEntry } = useFinance();
     const { companyConfig, addAuditLog, notify } = useAuth();

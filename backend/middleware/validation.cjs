@@ -289,6 +289,29 @@ const examinationSchemas = {
   })
 };
 
+// Workspace validation schemas
+const workspaceSchemas = {
+  initialize: z.object({
+    companyName: z.string().min(1, 'Company name is required').max(200)
+  }),
+  sync: z.object({
+    filename: z.string().min(1, 'Filename is required').max(255),
+    data: z.any()
+  }),
+  saveDocument: z.object({
+    folder: z.string().optional(),
+    filename: z.string().min(1, 'Filename is required').max(255),
+    data: z.any()
+  })
+};
+
+// Task validation schemas
+const taskSchemas = {
+  create: z.object({
+    title: z.string().min(1, 'Title is required').max(500)
+  })
+};
+
 // Profit margin validation schemas
 const profitMarginSchemas = {
   create: z.object({
@@ -364,5 +387,7 @@ module.exports = {
   subjectSchemas,
   notificationSchemas,
   examinationSchemas,
-  profitMarginSchemas
+  profitMarginSchemas,
+  workspaceSchemas,
+  taskSchemas
 };

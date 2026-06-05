@@ -12,11 +12,16 @@ import { dbService } from '../services/db';
 import { generateNextId } from '../utils/helpers';
 import { runLegacyRefreshTasks } from './legacyDataContext';
 import { generateOpaqueId } from '../utils/idGeneration';
+import { supabase } from '../services/supabaseClient';
+import { cloudDb } from '../services/cloudDb';
+import { isCloudOnlyMode } from '../services/cloudMode';
 
 export const REFRESH_INTERVAL = 300_000;
+const FRESH_THRESHOLD_MS = 15_000;
+const REFRESH_DEBOUNCE_MS = 120;
 
 type DataContextValue = {
-  refreshAllData: () => Promise<void>;
+  refreshAllData: (options?: { force?: boolean }) => Promise<void>;
   startPolling: (intervalMs?: number) => void;
   stopPolling: () => void;
   customerPayments: any[];
@@ -74,38 +79,38 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, [loadTasks]);
 
     const refreshInFlightRef = useRef(false);
-    const queuedRefreshRef = useRef(false);
     const refreshTimerRef = useRef<number | null>(null);
     const pollTimerRef = useRef<number | null>(null);
     const channelRef = useRef<BroadcastChannel | null>(null);
     const lastRefreshAtRef = useRef(0);
     const instanceIdRef = useRef(generateOpaqueId('ctx', { randomLength: 8 }));
 
-    const refreshAllData = useCallback(async () => {
+    const refreshAllData = useCallback(async (options?: { force?: boolean }) => {
+        if (!options?.force && Date.now() - lastRefreshAtRef.current < FRESH_THRESHOLD_MS) {
+            return;
+        }
         if (refreshInFlightRef.current) {
-            queuedRefreshRef.current = true;
             return;
         }
         refreshInFlightRef.current = true;
-        await runLegacyRefreshTasks({
-            finance,
-            sales,
-            inventory,
-            procurement,
-            production,
-            orders,
-            examination,
-            banking: { fetchBankingData: useBankingStore.getState().fetchBankingData }
-        });
-        lastRefreshAtRef.current = Date.now();
-        refreshInFlightRef.current = false;
-        if (queuedRefreshRef.current) {
-            queuedRefreshRef.current = false;
-            await refreshAllData();
+        try {
+            await runLegacyRefreshTasks({
+                finance,
+                sales,
+                inventory,
+                procurement,
+                production,
+                orders,
+                examination,
+                banking: { fetchBankingData: useBankingStore.getState().fetchBankingData }
+            }, true);
+        } finally {
+            lastRefreshAtRef.current = Date.now();
+            refreshInFlightRef.current = false;
         }
     }, [finance, sales, inventory, procurement, production, orders, examination]);
 
-    const queueRefresh = useCallback((delayMs = 120) => {
+    const queueRefresh = useCallback((delayMs = REFRESH_DEBOUNCE_MS) => {
         if (refreshTimerRef.current) {
             window.clearTimeout(refreshTimerRef.current);
         }
@@ -120,10 +125,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             pollTimerRef.current = null;
         }
         pollTimerRef.current = window.setInterval(() => {
-            const isFresh = Date.now() - lastRefreshAtRef.current < 2000;
-            if (!isFresh) {
-                refreshAllData().catch((err) => console.error('[DataContext] poll refresh failed:', err));
-            }
+            refreshAllData().catch((err) => console.error('[DataContext] poll refresh failed:', err));
         }, intervalMs);
     }, [refreshAllData]);
 
@@ -175,6 +177,35 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
         };
     }, [queueRefresh, refreshAllData, startPolling, stopPolling]);
+
+    useEffect(() => {
+        if (!isCloudOnlyMode() || !auth.user || !auth.companyConfig?.companyId) return;
+
+        const companyId = auth.companyConfig.companyId;
+        const channel = supabase.channel(`primeerp-company-data:${companyId}`);
+
+        cloudDb.getRealtimeTables().forEach((table) => {
+            const filter = table === 'companies'
+                ? `id=eq.${companyId}`
+                : `company_id=eq.${companyId}`;
+
+            channel.on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table, filter },
+                () => queueRefresh(80)
+            );
+        });
+
+        channel.subscribe((status) => {
+            if (status === 'SUBSCRIBED') {
+                queueRefresh(0);
+            }
+        });
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [auth.companyConfig?.companyId, auth.user, queueRefresh]);
 
     const addTask = useCallback(async (task: any) => {
         const newTask = { ...task, id: task.id || generateNextId('TASK', tasks, auth.companyConfig) };

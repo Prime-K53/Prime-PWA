@@ -55,6 +55,46 @@ const typeConfig = {
   }
 };
 
+const useFocusTrap = (ref: React.RefObject<HTMLDivElement | null>, open: boolean) => {
+  React.useEffect(() => {
+    if (!open || !ref.current) return;
+
+    const container = ref.current;
+    const previouslyFocused = document.activeElement as HTMLElement;
+
+    const focusableSelectors = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    const getFocusable = () => Array.from(container.querySelectorAll<HTMLElement>(focusableSelectors));
+
+    const focusFirst = () => {
+      const focusable = getFocusable();
+      if (focusable.length > 0) focusable[0].focus();
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+      const focusable = getFocusable();
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    focusFirst();
+    container.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      container.removeEventListener('keydown', handleKeyDown);
+      previouslyFocused?.focus();
+    };
+  }, [open, ref]);
+};
+
 export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   open,
   onOpenChange,
@@ -68,6 +108,9 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   loading = false,
   showCancel = true
 }) => {
+  const dialogRef = React.useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, open);
+
   if (!open) return null;
 
   const config = typeConfig[type];
@@ -94,7 +137,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200"
       onClick={handleBackdropClick}
     >
-      <div className="w-full max-w-md animate-in zoom-in-95 duration-200">
+      <div ref={dialogRef} className="w-full max-w-md animate-in zoom-in-95 duration-200" role="alertdialog" aria-modal="true" aria-label={title}>
         <div className={`relative bg-white rounded-2xl border ${config.borderColor} shadow-xl overflow-hidden`}>
           {/* Header */}
           <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">

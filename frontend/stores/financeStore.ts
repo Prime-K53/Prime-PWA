@@ -8,6 +8,7 @@ import { generateNextSalesInvoiceNumber } from '../services/documentNumberServic
 import { DEFAULT_ACCOUNTS } from '../constants';
 import { generateNextId } from '../utils/helpers';
 import { customerNotificationService } from '../services/customerNotificationService';
+import { isSupabaseConfigured } from '../services/cloudMode';
 
 interface FinanceState {
   accounts: Account[];
@@ -131,8 +132,12 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
       let finalAccounts = accounts;
       if (accounts.length === 0) {
-          finalAccounts = DEFAULT_ACCOUNTS;
-          for(const a of DEFAULT_ACCOUNTS) await dbService.put('accounts', a);
+          if (!isSupabaseConfigured()) {
+            finalAccounts = DEFAULT_ACCOUNTS;
+            for(const a of DEFAULT_ACCOUNTS) await dbService.put('accounts', a);
+          } else {
+            finalAccounts = [];
+          }
       } else {
           // Ensure core banking accounts exist and have correct names
           const coreAccountCodes = ['1000', '1050', '1060'];

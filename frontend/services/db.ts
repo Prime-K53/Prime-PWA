@@ -21,6 +21,7 @@ import {
     BankCategory
 } from '../types/banking';
 import { cloudDb } from './cloudDb';
+import { isCloudOnlyMode, isSupabaseConfigured, requireCloudSessionMessage } from './cloudMode';
 
 interface NexusDB extends DBSchema {
     inventory: { key: string; value: Item; };
@@ -135,6 +136,7 @@ let currentCompanyId = '';
 
 export function setCurrentCompanyId(id: string) {
   currentCompanyId = id || '';
+  cloudDb.setActiveCompanyId(currentCompanyId || null);
 }
 
 function stampCompanyId<T>(item: T): T {
@@ -350,7 +352,9 @@ const emitDataChange = (stores: string[]) => {
     try {
         if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent(DATA_CHANGED_EVENT, { detail: payload }));
-            localStorage.setItem(DATA_CHANGED_EVENT, JSON.stringify(payload));
+            if (!isCloudOnlyMode()) {
+                localStorage.setItem(DATA_CHANGED_EVENT, JSON.stringify(payload));
+            }
         }
     } catch (err) {
         console.warn('[DB] Failed to dispatch data change event:', err);
@@ -410,21 +414,17 @@ const deleteFromLegacyStore = async (storeName: keyof NexusDB, id: string): Prom
     });
 };
 
-const SUPABASE_CONFIGURED = () => {
-  const url = typeof import.meta !== 'undefined' ? import.meta.env?.VITE_SUPABASE_URL : undefined;
-  const key = typeof import.meta !== 'undefined' ? import.meta.env?.VITE_SUPABASE_ANON_KEY : undefined;
-  return Boolean(url && key && url !== 'https://placeholder.supabase.co');
-};
+const SUPABASE_CONFIGURED = isSupabaseConfigured;
 
 const LOCAL_ONLY_STORES = new Set([
   'syncOutbox', 'files', 'idempotencyKeys',
   'customerNotificationLogs',
   'whatsappChats', 'whatsappTemplates', 'whatsappCampaigns', 'whatsappAutomations',
-  'alerts', 'reminders'
+  'alerts', 'reminders', 'auditLogs'
 ]);
 
 const shouldUseCloud = () => {
-  return typeof navigator !== 'undefined' && navigator.onLine && SUPABASE_CONFIGURED();
+  return SUPABASE_CONFIGURED();
 };
 
 const writeSyncOutbox = async (entityId: string, type: string, payload: any) => {
@@ -748,10 +748,26 @@ export const dbService = {
 
     setSyncListener(cb: (status: SyncStatus) => void) {
         onSyncStateChange = cb;
+        if (isCloudOnlyMode()) {
+            cb('connected');
+            return;
+        }
         cb(fileHandle ? 'connected' : 'idle');
     },
 
     async executeAtomicOperation<T>(stores: (keyof NexusDB)[], operation: (tx: any) => Promise<T>): Promise<T> {
+        if (isCloudOnlyMode()) {
+            const cloudTx = {
+                objectStore: (storeName: string) => ({
+                    put: (item: any) => this.put(storeName, item),
+                    get: (id: string) => this.get(storeName, id),
+                    getAll: () => this.getAll(storeName),
+                    delete: (id: string) => this.delete(storeName, id),
+                }),
+                done: Promise.resolve(),
+            };
+            return operation(cloudTx);
+        }
         return withDbRecovery(async (db) => {
             const tx = db.transaction(stores as any, 'readwrite');
             try {
@@ -771,6 +787,10 @@ export const dbService = {
     },
 
     async connectToLocalFile(): Promise<boolean> {
+        if (isCloudOnlyMode()) {
+            notifySyncState('restricted');
+            return false;
+        }
         if (!('showSaveFilePicker' in window)) {
             alert("WebUSB/WebFS restricted. Local backup service disabled.");
             return false;
@@ -806,6 +826,7 @@ export const dbService = {
     },
 
     async triggerSync(immediate: boolean = false) {
+        if (isCloudOnlyMode()) return;
         if (!fileHandle) return;
         if (saveTimer) clearTimeout(saveTimer);
 
@@ -836,6 +857,11 @@ export const dbService = {
     },
 
     async getAll<T>(storeName: keyof NexusDB): Promise<T[]> {
+        if (isCloudOnlyMode() && String(storeName) !== 'syncOutbox') {
+            const cloudValues = await cloudDb.getAll<T>(String(storeName));
+            return cloudValues || [];
+        }
+
         // Cloud-primary: read from Supabase first when online
         if (shouldUseCloud() && !LOCAL_ONLY_STORES.has(String(storeName))) {
             try {
@@ -881,6 +907,11 @@ export const dbService = {
     },
 
     async get<T>(storeName: keyof NexusDB, id: string): Promise<T | undefined> {
+        if (isCloudOnlyMode() && String(storeName) !== 'syncOutbox') {
+            const cloudValue = await cloudDb.get<T>(String(storeName), id);
+            return cloudValue ?? undefined;
+        }
+
         // Cloud-primary: read from Supabase first when online
         if (shouldUseCloud() && !LOCAL_ONLY_STORES.has(String(storeName))) {
             try {
@@ -929,6 +960,16 @@ export const dbService = {
         }
 
         const isFromCloud = (item as any)?._cloudSource === true;
+        if (isCloudOnlyMode() && String(storeName) !== 'syncOutbox') {
+            if (isFromCloud) return String((item as any)?.id || '');
+            const cloudId = await cloudDb.put(String(storeName), item);
+            if (!cloudId) {
+                await putToLegacyStore(storeName, item as any);
+                return String((item as any)?.id || '');
+            }
+            emitDataChange([String(storeName)]);
+            return cloudId;
+        }
 
         // Cloud-primary: write to Supabase first when online (skip if data is already from cloud)
         if (shouldUseCloud() && !isFromCloud && !LOCAL_ONLY_STORES.has(String(storeName))) {
@@ -987,6 +1028,11 @@ export const dbService = {
     },
 
     async getSetting<T>(key: string): Promise<T | undefined> {
+        if (isCloudOnlyMode()) {
+            const cloudValue = await cloudDb.getSetting<T>(key);
+            return cloudValue ?? undefined;
+        }
+
         // Cloud-primary: read settings from Supabase first when online
         if (shouldUseCloud()) {
             try {
@@ -1012,6 +1058,15 @@ export const dbService = {
     },
 
     async saveSetting<T>(key: string, value: T): Promise<void> {
+        if (isCloudOnlyMode()) {
+            const saved = await cloudDb.saveSetting<T>(key, value);
+            if (saved === null) {
+                throw new Error(requireCloudSessionMessage);
+            }
+            emitDataChange(['settings']);
+            return;
+        }
+
         // Cloud-primary: write settings to Supabase first when online
         if (shouldUseCloud()) {
             try {
@@ -1031,6 +1086,15 @@ export const dbService = {
     },
 
     async factoryReset() {
+        if (isCloudOnlyMode()) {
+            try {
+                sessionStorage.clear();
+            } catch {
+                // Ignore session storage cleanup failures.
+            }
+            return;
+        }
+
         const db = await initDB();
         db.close();
         dbPromise = null;
@@ -1070,6 +1134,15 @@ export const dbService = {
     },
 
     async delete(storeName: keyof NexusDB, id: string): Promise<void> {
+        if (isCloudOnlyMode() && String(storeName) !== 'syncOutbox') {
+            const cloudResult = await cloudDb.delete(String(storeName), id);
+            if (!cloudResult) {
+                throw new Error(requireCloudSessionMessage);
+            }
+            emitDataChange([String(storeName)]);
+            return;
+        }
+
         // Cloud-primary: delete from Supabase first when online
         if (shouldUseCloud() && !LOCAL_ONLY_STORES.has(String(storeName))) {
             try {
@@ -1124,6 +1197,12 @@ export const dbService = {
     },
 
     async saveFile(file: File): Promise<string> {
+        if (isCloudOnlyMode()) {
+            const fileId = await cloudDb.uploadFile(file);
+            if (!fileId) throw new Error(requireCloudSessionMessage);
+            return fileId;
+        }
+
         const id = `FILE-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         return withDbRecovery(async (db) => {
             await db.put('files', {
@@ -1138,6 +1217,10 @@ export const dbService = {
     },
 
     async getFile(id: string): Promise<string | null> {
+        if (isCloudOnlyMode()) {
+            return cloudDb.createSignedFileUrl(id);
+        }
+
         return withDbRecovery(async (db) => {
             const fileRecord = await db.get('files', id);
             if (!fileRecord) return null;
@@ -1146,6 +1229,10 @@ export const dbService = {
     },
 
     async getFileBlob(id: string): Promise<Blob | null> {
+        if (isCloudOnlyMode()) {
+            return cloudDb.downloadFile(id);
+        }
+
         return withDbRecovery(async (db) => {
             const fileRecord = await db.get('files', id);
             return fileRecord?.blob || null;
@@ -1153,6 +1240,10 @@ export const dbService = {
     },
 
     async downloadBackupManual() {
+        if (isCloudOnlyMode()) {
+            throw new Error('Manual local database backups are disabled in cloud-only mode. Use Supabase backups and exports.');
+        }
+
         const blob = await this.exportDatabase();
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -1181,6 +1272,10 @@ export const dbService = {
     },
 
     async exportDatabase(): Promise<Blob> {
+        if (isCloudOnlyMode()) {
+            throw new Error('Local database export is disabled in cloud-only mode.');
+        }
+
         const exportData: any = {
             meta: { version: DB_VERSION, date: new Date().toISOString(), app: 'Prime ERP' },
             data: {},
@@ -1206,6 +1301,10 @@ export const dbService = {
     },
 
     async importDatabase(jsonData: string): Promise<void> {
+        if (isCloudOnlyMode()) {
+            throw new Error('Local database restore is disabled in cloud-only mode. Import data through Supabase migration tools.');
+        }
+
         const db = await initDB();
         const parsed = JSON.parse(jsonData);
 
@@ -1247,6 +1346,10 @@ export const dbService = {
     },
 
     async checkIntegrity(): Promise<{ healthy: boolean; issues: string[] }> {
+        if (isCloudOnlyMode()) {
+            return { healthy: true, issues: [] };
+        }
+
         const db = await initDB();
         const issues: string[] = [];
 
@@ -1273,6 +1376,8 @@ export const dbService = {
     },
 
     async performAutoBackup() {
+        if (isCloudOnlyMode()) return;
+
         try {
             const blob = await this.exportDatabase();
             // In a real browser environment, we might save to IndexedDB or a specific "backups" store

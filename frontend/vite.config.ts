@@ -70,6 +70,9 @@ export default defineConfig(({ mode }) => {
         'process.env.VITE_OPENROUTER_API_KEY': JSON.stringify(env.VITE_OPENROUTER_API_KEY),
         'process.env.VITE_OPENROUTER_MODEL': JSON.stringify(env.VITE_OPENROUTER_MODEL),
       },
+      esbuild: {
+        drop: mode === 'production' ? ['console'] : [],
+      },
       resolve: {
         dedupe: ['react', 'react-dom', 'dexie'],
         alias: [

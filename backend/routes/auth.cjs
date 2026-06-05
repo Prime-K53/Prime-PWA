@@ -1,11 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const authService = require('../services/authService.cjs');
-const emailVerificationService = require('../services/emailVerificationService.cjs');
 const { generateToken, verifyToken } = require('../middleware/auth.cjs');
 const { validateBody, userSchemas } = require('../middleware/validation.cjs');
-
-const EMAIL_VERIFICATION_ENABLED = String(process.env.EMAIL_VERIFICATION_ENABLED || 'false').toLowerCase() === 'true';
 
 router.post('/register', validateBody(userSchemas.createUser), async (req, res) => {
   try {
@@ -41,32 +38,8 @@ router.post('/login', validateBody(userSchemas.login), async (req, res) => {
   }
 });
 
-if (!EMAIL_VERIFICATION_ENABLED) {
-  router.post('/request-verification', (req, res) => res.json({ success: true, disabled: true, message: 'Email verification is disabled' }));
-  router.post('/verify-code', (req, res) => res.json({ success: true, disabled: true, message: 'Email verification is disabled' }));
-} else {
-  router.post('/request-verification', validateBody(userSchemas.requestEmailVerification), async (req, res) => {
-    try {
-      const { email, purpose } = req.body;
-      const result = await emailVerificationService.requestVerification({ email, purpose });
-      res.json(result);
-    } catch (err) {
-      console.error('[Auth] Request verification error:', err);
-      res.status(429).json({ error: err.message || 'Failed to send verification code' });
-    }
-  });
-
-  router.post('/verify-code', validateBody(userSchemas.verifyEmailCode), async (req, res) => {
-    try {
-      const { email, code, purpose } = req.body;
-      const result = await emailVerificationService.verifyCode({ email, code, purpose });
-      res.json(result);
-    } catch (err) {
-      console.error('[Auth] Verify code error:', err);
-      res.status(400).json({ error: err.message || 'Verification failed' });
-    }
-  });
-}
+router.post('/request-verification', (req, res) => res.json({ success: true, disabled: true, message: 'Email verification is disabled for this ERP.' }));
+router.post('/verify-code', (req, res) => res.json({ success: true, disabled: true, message: 'Email verification is disabled for this ERP.' }));
 
 router.get('/me', verifyToken, async (req, res) => {
   try {

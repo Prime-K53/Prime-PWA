@@ -22,6 +22,9 @@ const canRegisterServiceWorker = () => {
   if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
     return false;
   }
+  if (import.meta.env.VITE_ENABLE_PWA_SW !== 'true') {
+    return false;
+  }
 
   if (window.location.protocol === 'file:') {
     return false;

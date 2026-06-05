@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient';
+import { isSupabaseConfigured } from './cloudMode';
 
-const STORE_TO_TABLE: Record<string, string> = {
+export const STORE_TO_TABLE: Record<string, string> = {
   inventory: 'products',
   ledger: 'ledger_entries',
   batches: 'production_batches',
@@ -75,15 +76,19 @@ const STORE_TO_TABLE: Record<string, string> = {
   payrollRuns: 'payroll_runs',
 };
 
-const SUPABASE_ENABLED = Boolean(
-  import.meta.env.VITE_SUPABASE_URL &&
-  import.meta.env.VITE_SUPABASE_ANON_KEY &&
-  import.meta.env.VITE_SUPABASE_URL !== 'https://placeholder.supabase.co'
-);
+const SUPABASE_ENABLED = isSupabaseConfigured();
+const FILE_BUCKET = 'prime-erp-files';
+const SIGNED_URL_TTL_SECONDS = 60 * 60;
 
 const getTable = (storeName: string): string => STORE_TO_TABLE[storeName] || storeName;
 
-const getCompanyId = (): string | null => {
+let activeCompanyId: string | null = null;
+
+export const setActiveCompanyId = (companyId: string | null | undefined) => {
+  activeCompanyId = companyId || null;
+};
+
+const getStoredCompanyId = (): string | null => {
   try {
     const raw = localStorage.getItem('nexus_company_config');
     if (!raw) return null;
@@ -93,7 +98,52 @@ const getCompanyId = (): string | null => {
   }
 };
 
-let authPromise: Promise<any> | null = null;
+const getCompanyId = async (): Promise<string | null> => {
+  if (activeCompanyId) return activeCompanyId;
+
+  const storedCompanyId = getStoredCompanyId();
+  if (storedCompanyId) {
+    activeCompanyId = storedCompanyId;
+    return activeCompanyId;
+  }
+
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    const metadataCompanyId = user?.user_metadata?.company_id;
+    if (metadataCompanyId) {
+      activeCompanyId = metadataCompanyId;
+      return activeCompanyId;
+    }
+
+    if (user?.id) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('company_id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (profile?.company_id) {
+        activeCompanyId = profile.company_id;
+        return activeCompanyId;
+      }
+
+      const { data: legacyProfile } = await supabase
+        .from('users')
+        .select('company_id')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (legacyProfile?.company_id) {
+        activeCompanyId = legacyProfile.company_id;
+        return activeCompanyId;
+      }
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+};
 
 async function ensureSession(signal?: AbortSignal) {
   if (!SUPABASE_ENABLED) return null;
@@ -101,7 +151,7 @@ async function ensureSession(signal?: AbortSignal) {
     const { data: { session } } = await supabase.auth.getSession();
     if (session) return session;
   } catch {
-    return null;
+    // getSession threw — don't return null yet, try refresh below
   }
   try {
     const { data: { session: refreshed } } = await supabase.auth.refreshSession();
@@ -112,26 +162,193 @@ async function ensureSession(signal?: AbortSignal) {
   return null;
 }
 
+const SESSION_TIMEOUT_MS = 20_000;
+
 async function withSession<T>(fn: () => Promise<T>): Promise<T | null> {
   const session = await Promise.race([
     ensureSession(),
-    new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000))
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), SESSION_TIMEOUT_MS))
   ]);
   if (!session) return null;
   const result = await Promise.race([
     fn(),
-    new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000))
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), SESSION_TIMEOUT_MS))
   ]);
   return result;
 }
 
 export const cloudDb = {
   isConfigured: () => SUPABASE_ENABLED,
+  setActiveCompanyId,
+
+  async getActiveCompanyId(): Promise<string | null> {
+    return getCompanyId();
+  },
+
+  getRealtimeTables(): string[] {
+    return Array.from(new Set([
+      ...Object.values(STORE_TO_TABLE),
+      'customers',
+      'products',
+      'sales',
+      'invoices',
+      'expenses',
+      'suppliers',
+      'purchase_orders',
+      'inventory_movements',
+      'companies',
+      'profiles',
+      'users',
+    ]));
+  },
+
+  async getCurrentProfile(): Promise<any | null> {
+    return withSession(async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.id) return null;
+
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (profile) {
+        setActiveCompanyId(profile.company_id);
+        return profile;
+      }
+
+      const { data: legacyProfile, error: legacyError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (legacyError) throw legacyError;
+      if (legacyProfile?.company_id) setActiveCompanyId(legacyProfile.company_id);
+      return legacyProfile;
+    });
+  },
+
+  async listCompanyProfiles(): Promise<any[] | null> {
+    return withSession(async () => {
+      const companyId = await getCompanyId();
+      if (!companyId) return [];
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('company_id', companyId)
+        .order('created_at', { ascending: true });
+
+      if (!error) return data || [];
+
+      const { data: legacyRows, error: legacyError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('company_id', companyId)
+        .order('created_at', { ascending: true });
+
+      if (legacyError) throw legacyError;
+      return legacyRows || [];
+    });
+  },
+
+  async getCompany(companyId?: string | null): Promise<any | null> {
+    return withSession(async () => {
+      const targetCompanyId = companyId || await getCompanyId();
+      if (!targetCompanyId) return null;
+
+      const { data, error } = await supabase
+        .from('companies')
+        .select('*')
+        .eq('id', targetCompanyId)
+        .maybeSingle();
+
+      if (!error && data) {
+        setActiveCompanyId(data.id);
+        return data;
+      }
+
+      const { data: legacyConfig, error: legacyError } = await supabase
+        .from('company_config')
+        .select('*')
+        .eq('id', targetCompanyId)
+        .maybeSingle();
+
+      if (legacyError) throw legacyError;
+      return legacyConfig;
+    });
+  },
+
+  async upsertCompany(config: Record<string, any>): Promise<string | null> {
+    return withSession(async () => {
+      const id = config.companyId || config.id || crypto.randomUUID();
+      const address = [
+        config.address,
+        config.addressLine1,
+        config.addressLine2,
+        config.city,
+        config.country,
+      ].filter(Boolean).join(', ');
+
+      const { data, error } = await supabase
+        .from('companies')
+        .upsert({
+          id,
+          company_name: config.companyName || config.company_name || 'Prime ERP Company',
+          registration_number: config.registrationNumber || config.registration_number || null,
+          email: config.email || null,
+          phone: config.phone || null,
+          address: address || null,
+          logo_url: config.logoUrl || config.logo_url || null,
+          data: { ...config, companyId: id },
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'id' })
+        .select('id')
+        .single();
+
+      if (error) throw error;
+      setActiveCompanyId(data.id);
+      return data.id;
+    });
+  },
+
+  async upsertProfile(profile: Record<string, any>): Promise<string | null> {
+    return withSession(async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = profile.user_id || profile.userId || profile.id || user?.id;
+      const companyId = profile.company_id || profile.companyId || await getCompanyId();
+      if (!userId || !companyId) return null;
+
+      const payload = {
+        id: profile.profile_id || profile.profileId || crypto.randomUUID(),
+        user_id: userId,
+        company_id: companyId,
+        full_name: profile.full_name || profile.fullName || profile.name || user?.email?.split('@')[0] || 'User',
+        role: profile.role || 'Sales Staff',
+        status: profile.status || 'Active',
+        data: profile,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .upsert(payload, { onConflict: 'user_id' })
+        .select('id')
+        .single();
+
+      if (error) throw error;
+      setActiveCompanyId(companyId);
+      return data.id;
+    });
+  },
 
   async getAll<T>(storeName: string): Promise<T[] | null> {
     return withSession(async () => {
       const table = getTable(storeName);
-      const companyId = getCompanyId();
+      const companyId = await getCompanyId();
       let query = supabase.from(table).select('*');
       if (companyId) {
         query = query.eq('company_id', companyId);
@@ -148,7 +365,7 @@ export const cloudDb = {
   async get<T>(storeName: string, id: string): Promise<T | null> {
     return withSession(async () => {
       const table = getTable(storeName);
-      const companyId = getCompanyId();
+      const companyId = await getCompanyId();
       let query = supabase.from(table).select('*').eq('id', id);
       if (companyId) {
         query = query.eq('company_id', companyId);
@@ -164,7 +381,7 @@ export const cloudDb = {
   async put<T>(storeName: string, item: T): Promise<string | null> {
     return withSession(async () => {
       const table = getTable(storeName);
-      const companyId = getCompanyId();
+      const companyId = await getCompanyId();
       const raw = { ...(item as any) };
       delete raw._updatedAt;
       delete raw._cloudSource;
@@ -191,7 +408,7 @@ export const cloudDb = {
   async delete(storeName: string, id: string): Promise<boolean | null> {
     return withSession(async () => {
       const table = getTable(storeName);
-      const companyId = getCompanyId();
+      const companyId = await getCompanyId();
       let query = supabase.from(table).delete().eq('id', id);
       if (companyId) {
         query = query.eq('company_id', companyId);
@@ -204,11 +421,13 @@ export const cloudDb = {
 
   async getSetting<T>(key: string): Promise<T | null> {
     return withSession(async () => {
-      const { data, error } = await supabase
+      const companyId = await getCompanyId();
+      let query = supabase
         .from('settings')
         .select('data')
-        .eq('id', key)
-        .maybeSingle();
+        .eq('id', key);
+      if (companyId) query = query.eq('company_id', companyId);
+      const { data, error } = await query.maybeSingle();
       if (error) throw error;
       return data?.data as T ?? null;
     });
@@ -216,10 +435,65 @@ export const cloudDb = {
 
   async saveSetting<T>(key: string, value: T): Promise<void | null> {
     return withSession(async () => {
+      const companyId = await getCompanyId();
+      const record: Record<string, unknown> = {
+        id: key,
+        data: value,
+        updated_at: new Date().toISOString(),
+      };
+      if (companyId) record.company_id = companyId;
       const { error } = await supabase
         .from('settings')
-        .upsert({ id: key, data: value, updated_at: new Date().toISOString() }, { onConflict: 'id' });
+        .upsert(record, { onConflict: 'id' });
       if (error) throw error;
+    });
+  },
+
+  async uploadFile(file: File, folder = 'documents'): Promise<string | null> {
+    return withSession(async () => {
+      const companyId = await getCompanyId();
+      if (!companyId) throw new Error('Cannot upload file without an active company.');
+
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const path = `${companyId}/${folder}/${crypto.randomUUID()}-${safeName}`;
+      const { error } = await supabase.storage
+        .from(FILE_BUCKET)
+        .upload(path, file, {
+          cacheControl: '3600',
+          contentType: file.type || 'application/octet-stream',
+          upsert: false,
+        });
+
+      if (error) throw error;
+      return `storage:${FILE_BUCKET}:${path}`;
+    });
+  },
+
+  async createSignedFileUrl(fileId: string, expiresIn = SIGNED_URL_TTL_SECONDS): Promise<string | null> {
+    return withSession(async () => {
+      const match = /^storage:([^:]+):(.+)$/.exec(fileId);
+      if (!match) return null;
+      const [, bucket, path] = match;
+      const { data, error } = await supabase.storage
+        .from(bucket)
+        .createSignedUrl(path, expiresIn);
+
+      if (error) throw error;
+      return data.signedUrl;
+    });
+  },
+
+  async downloadFile(fileId: string): Promise<Blob | null> {
+    return withSession(async () => {
+      const match = /^storage:([^:]+):(.+)$/.exec(fileId);
+      if (!match) return null;
+      const [, bucket, path] = match;
+      const { data, error } = await supabase.storage
+        .from(bucket)
+        .download(path);
+
+      if (error) throw error;
+      return data;
     });
   },
 };

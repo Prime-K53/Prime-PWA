@@ -57,11 +57,16 @@ interface ModalState {
 
 const OFFLINE_MARGIN_KEY = 'nexus_profit_margin_settings';
 
-const getHeaders = () => ({
-  'Content-Type': 'application/json',
-  'x-user-id': localStorage.getItem('prime_user_id') || 'unknown',
-  'x-user-role': localStorage.getItem('prime_user_role') || 'Admin',
-});
+const getHeaders = () => {
+  const rawConfig = localStorage.getItem('nexus_company_config');
+  const companyId = rawConfig ? JSON.parse(rawConfig)?.companyId : null;
+  return {
+    'Content-Type': 'application/json',
+    'x-user-id': localStorage.getItem('prime_user_id') || 'unknown',
+    'x-user-role': localStorage.getItem('prime_user_role') || 'Admin',
+    ...(companyId ? { 'x-company-id': String(companyId) } : {}),
+  };
+};
 
 const parseBody = (body?: BodyInit | null) => {
   if (typeof body !== 'string') return {};

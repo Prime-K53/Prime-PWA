@@ -935,15 +935,15 @@ export const CustomerWorkspace: React.FC<CustomerWorkspaceProps> = ({ customer, 
                   <div className="p-6 space-y-4">
                     <label className="flex items-center justify-between p-2 hover:bg-slate-50 rounded transition-colors cursor-pointer">
                       <span className="font-medium text-slate-700">Auto-attach Invoices to Statement</span>
-                      <input type="checkbox" className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" defaultChecked />
+                      <input type="checkbox" name="autoAttachInvoices" className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" defaultChecked />
                     </label>
                     <label className="flex items-center justify-between p-2 hover:bg-slate-50 rounded transition-colors cursor-pointer">
                       <span className="font-medium text-slate-700">Email Monthly Statement</span>
-                      <input type="checkbox" className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                      <input type="checkbox" name="emailMonthlyStatement" className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
                     </label>
                     <label className="flex items-center justify-between p-2 hover:bg-slate-50 rounded transition-colors cursor-pointer">
                       <span className="font-medium text-slate-700">Include Sub-accounts in Ledger</span>
-                      <input type="checkbox" className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" defaultChecked />
+                      <input type="checkbox" name="includeSubAccounts" className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" defaultChecked />
                     </label>
                   </div>
                 </div>
@@ -961,6 +961,7 @@ export const CustomerWorkspace: React.FC<CustomerWorkspaceProps> = ({ customer, 
                       <Calendar size={14} className="text-slate-400" />
                       <input
                         type="date"
+                        name="ledgerStartDate"
                         value={ledgerStartDate}
                         onChange={(e) => setLedgerStartDate(e.target.value)}
                         className="text-[11px] font-semibold text-slate-700 outline-none bg-transparent"
@@ -968,6 +969,7 @@ export const CustomerWorkspace: React.FC<CustomerWorkspaceProps> = ({ customer, 
                       <span className="text-slate-300">-</span>
                       <input
                         type="date"
+                        name="ledgerEndDate"
                         value={ledgerEndDate}
                         onChange={(e) => setLedgerEndDate(e.target.value)}
                         className="text-[11px] font-semibold text-slate-700 outline-none bg-transparent"
@@ -975,6 +977,7 @@ export const CustomerWorkspace: React.FC<CustomerWorkspaceProps> = ({ customer, 
                     </div>
 
                     <select
+                      name="ledgerTypeFilter"
                       value={ledgerTypeFilter}
                       onChange={(e) => setLedgerTypeFilter(e.target.value as any)}
                       className="px-3 py-1 bg-white border border-slate-200 rounded-lg text-[11px] font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500/20"
@@ -986,6 +989,7 @@ export const CustomerWorkspace: React.FC<CustomerWorkspaceProps> = ({ customer, 
 
                     {customer.subAccounts && customer.subAccounts.length > 0 && (
                       <select
+                        name="ledgerSubAccountFilter"
                         value={ledgerSubAccountFilter}
                         onChange={(e) => setLedgerSubAccountFilter(e.target.value)}
                         className="px-3 py-1 bg-white border border-slate-200 rounded-lg text-[11px] font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500/20"

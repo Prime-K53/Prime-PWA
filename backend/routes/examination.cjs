@@ -3,16 +3,11 @@ const router = express.Router();
 const examinationService = require('../services/examinationService.cjs');
 const batchWorkflow = require('../services/examinationBatchWorkflow.cjs');
 const { validateBody, examinationSchemas, classSchemas, subjectSchemas, notificationSchemas } = require('../middleware/validation.cjs');
+const { sendSafeError } = require('../utils/errors.cjs');
 
 const canOverrideSuggestedCost = (req) => {
-  const explicit = String(req.headers['x-can-override-exam-cost'] || '').toLowerCase();
-  if (explicit === '1' || explicit === 'true' || explicit === 'yes') return true;
-
-  const isSuperAdmin = String(req.headers['x-user-is-super-admin'] || '').toLowerCase();
-  if (isSuperAdmin === '1' || isSuperAdmin === 'true') return true;
-
-  const role = String(req.headers['x-user-role'] || '').toLowerCase();
-  return role === 'admin';
+  const role = String(req.user?.role || '').toLowerCase();
+  return role === 'admin' || req.user?.isSuperAdmin === true;
 };
 
 const createRequestAbortSignal = (req, res) => {
@@ -44,74 +39,79 @@ router.get('/', (req, res) => {
 // --- Batches ---
 router.get('/meta/adjustments', async (req, res) => {
   try {
-    const adjustments = await examinationService.getMarketAdjustmentMeta();
+    const adjustments = await examinationService.getMarketAdjustmentMeta(req.companyId || '');
     res.json({
       adjustments,
       fetched_at: new Date().toISOString()
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[Examination] meta/adjustments error:', err);
+    sendSafeError(res, 500, 'INTERNAL_ERROR');
   }
 });
 
 router.post('/sync/market-adjustments', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] || req.body?.user_id || req.body?.userId || 'System';
+    const userId = req.user?.id || req.body?.user_id || req.body?.userId || 'System';
     const signal = createRequestAbortSignal(req, res);
-    const result = await examinationService.syncMarketAdjustments(req.body || {}, { userId, signal });
+    const result = await examinationService.syncMarketAdjustments(req.body || {}, { userId, signal }, req.companyId || '');
     if (signal.aborted || res.headersSent) return;
     res.json(result);
   } catch (err) {
     if (res.headersSent) return;
-    res.status(500).json({ error: err.message });
+    console.error('[Examination] sync/market-adjustments error:', err);
+    sendSafeError(res, 500, 'INTERNAL_ERROR');
   }
 });
 
 router.post('/sync/inventory-items', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] || req.body?.user_id || req.body?.userId || 'System';
+    const userId = req.user?.id || req.body?.user_id || req.body?.userId || 'System';
     const signal = createRequestAbortSignal(req, res);
-    const result = await examinationService.syncInventoryItems(req.body || {}, { userId, signal });
+    const result = await examinationService.syncInventoryItems(req.body || {}, { userId, signal }, req.companyId || '');
     if (signal.aborted || res.headersSent) return;
     res.json(result);
   } catch (err) {
     if (res.headersSent) return;
-    console.error('[ERROR] sync/inventory-items failed:', err.message);
-    res.status(500).json({ error: 'Failed to sync inventory items' });
+    console.error('[Examination] sync/inventory-items error:', err);
+    sendSafeError(res, 500, 'INTERNAL_ERROR');
   }
 });
 
 router.get('/sync/health', async (req, res) => {
   try {
-    const result = await examinationService.getSyncHealth();
+    const result = await examinationService.getSyncHealth(req.companyId || '');
     res.json(result);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[Examination] sync/health error:', err);
+    sendSafeError(res, 500, 'INTERNAL_ERROR');
   }
 });
 
 router.post('/backfill/recalculate-non-invoiced', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] || req.body?.user_id || req.body?.userId || 'System';
+    const userId = req.user?.id || req.body?.user_id || req.body?.userId || 'System';
     const signal = createRequestAbortSignal(req, res);
     const result = await examinationService.recalculateNonInvoicedBatches({
       trigger: req.body?.trigger || 'BACKFILL_NON_INVOICED',
       userId,
       includeApproved: req.body?.includeApproved ?? req.body?.include_approved,
       limit: req.body?.limit,
-      signal
+      signal,
+      companyId: req.companyId || ''
     });
     if (signal.aborted || res.headersSent) return;
     res.json(result);
   } catch (err) {
     if (res.headersSent) return;
-    res.status(500).json({ error: err.message });
+    console.error('[Examination] backfill/recalculate-non-invoiced error:', err);
+    sendSafeError(res, 500, 'INTERNAL_ERROR');
   }
 });
 
 router.post('/recalculate-batch/:batchId', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] || req.body?.user_id || req.body?.userId || 'System';
+    const userId = req.user?.id || req.body?.user_id || req.body?.userId || 'System';
     const batchId = req.params.batchId;
     if (!batchId) {
       return res.status(400).json({ error: 'Batch ID is required' });
@@ -119,12 +119,13 @@ router.post('/recalculate-batch/:batchId', async (req, res) => {
     const result = await examinationService.calculateBatch(batchId, {
       trigger: 'MANUAL',
       userId
-    });
+    }, req.companyId || '');
     if (res.headersSent) return;
     res.json(result);
   } catch (err) {
     if (res.headersSent) return;
-    res.status(500).json({ error: err.message });
+    console.error('[Examination] recalculate-batch error:', err);
+    sendSafeError(res, 500, 'INTERNAL_ERROR');
   }
 });
 
@@ -156,36 +157,34 @@ router.get('/batches', async (req, res) => {
       includeSubjectPages = false;
     }
 
-    const batches = await examinationService.getAllBatches({ includeSubjectPages, includeClassStats });
+    const companyId = req.companyId || '';
+    const batches = await examinationService.getAllBatches({ includeSubjectPages, includeClassStats, companyId });
     res.json(batches);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[Examination] GET batches error:', err);
+    sendSafeError(res, 500, 'INTERNAL_ERROR');
   }
 });
 
 router.get('/batches/:id', async (req, res) => {
   try {
-    const batch = await examinationService.getBatchById(req.params.id);
+    const companyId = req.companyId || '';
+    const batch = await examinationService.getBatchById(req.params.id, companyId);
     if (!batch) return res.status(404).json({ error: 'Batch not found' });
     res.json(batch);
   } catch (err) {
-    console.error(JSON.stringify({
-      ts: new Date().toISOString(),
-      level: 'error',
-      event: 'route_batch_fetch_failed',
-      batchId: req.params.id,
-      error: err.message
-    }));
-    res.status(500).json({ error: err.message });
+    console.error('[Examination] GET batch by id error:', err);
+    sendSafeError(res, 500, 'INTERNAL_ERROR');
   }
 });
 
 router.get('/batches/:id/cost-breakdown', async (req, res) => {
   try {
-    const rows = await examinationService.getBOMCalculations(req.params.id);
+    const rows = await examinationService.getBOMCalculations(req.params.id, req.companyId || '');
     res.json(Array.isArray(rows) ? rows : []);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[Examination] cost-breakdown error:', err);
+    sendSafeError(res, 500, 'INTERNAL_ERROR');
   }
 });
 
@@ -193,47 +192,51 @@ router.get('/batches/:id/cost-breakdown', async (req, res) => {
 router.get('/audit-logs/:entityType/:id', async (req, res) => {
   try {
     const { entityType, id } = req.params;
-    const logs = await examinationService.getAuditLogs(entityType, id);
+    const logs = await examinationService.getAuditLogs(entityType, id, req.companyId || '');
     res.json(logs || []);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[Examination] audit-logs error:', err);
+    sendSafeError(res, 500, 'INTERNAL_ERROR');
   }
 });
 
 router.get('/audit-trail/:correlationId', async (req, res) => {
   try {
     const { correlationId } = req.params;
-    const trail = await examinationService.getAuditTrail(correlationId);
+    const trail = await examinationService.getAuditTrail(correlationId, req.companyId || '');
     res.json(trail || []);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[Examination] audit-trail error:', err);
+    sendSafeError(res, 500, 'INTERNAL_ERROR');
   }
 });
 
 router.get('/batches/:id/bom', async (req, res) => {
   try {
-    const rows = await examinationService.getBOMCalculations(req.params.id);
+    const rows = await examinationService.getBOMCalculations(req.params.id, req.companyId || '');
     res.set('X-Deprecated-Notice', 'GET /api/examination/batches/:id/bom is deprecated. Use /api/examination/batches/:id/cost-breakdown.');
     res.json(Array.isArray(rows) ? rows : []);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[Examination] BOM error:', err);
+    sendSafeError(res, 500, 'INTERNAL_ERROR');
   }
 });
 
 // --- Settings ---
 router.get('/settings/pricing', async (req, res) => {
   try {
-    const settings = await examinationService.getExamPricingSettings();
+    const settings = await examinationService.getExamPricingSettings(req.companyId || '');
     res.json(settings);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[Examination] settings/pricing error:', err);
+    sendSafeError(res, 500, 'INTERNAL_ERROR');
   }
 });
 
 router.put('/settings/pricing', validateBody(examinationSchemas.pricingSettings), async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] || 'System';
-    const result = await examinationService.updateExamPricingSettings(req.body || {}, { userId });
+    const userId = req.user?.id || 'System';
+    const result = await examinationService.updateExamPricingSettings(req.body || {}, { userId }, req.companyId || '');
     res.json(result);
   } catch (err) {
     console.error('[ERROR] settings/pricing failed:', err.message);
@@ -243,7 +246,7 @@ router.put('/settings/pricing', validateBody(examinationSchemas.pricingSettings)
 
 router.get('/notifications', async (req, res) => {
   try {
-    const userId = req.query.user_id || req.query.userId || req.headers['x-user-id'];
+    const userId = req.query.user_id || req.query.userId || req.user?.id;
     const limit = req.query.limit ? Number(req.query.limit) : 50;
 
     // Validate inputs
@@ -261,7 +264,7 @@ router.get('/notifications', async (req, res) => {
     const startTime = Date.now();
 
     // Set a timeout for the database query to prevent hanging
-    const fetchPromise = examinationService.getNotifications(userId, limit);
+    const fetchPromise = examinationService.getNotifications(userId, limit, req.companyId || '');
     let timeoutId;
     const timeoutPromise = new Promise((_, reject) => {
       timeoutId = setTimeout(() => reject(new Error('Database query timeout after 10 seconds')), 10000);
@@ -281,60 +284,64 @@ router.get('/notifications', async (req, res) => {
     const errorMessage = err instanceof Error ? err.message : String(err);
     const isTimeout = errorMessage.toLowerCase().includes('timeout');
     console.error(`[notifications] Error fetching notifications: ${errorMessage}`, {
-      userId: req.query.user_id || req.headers['x-user-id'],
+      userId: req.query.user_id || req.user?.id,
       limit: req.query.limit,
       stack: err instanceof Error ? err.stack : undefined
     });
 
     res.status(isTimeout ? 504 : 500).json({
-      error: 'Failed to fetch notifications',
-      details: errorMessage
+      error: 'Failed to fetch notifications'
     });
   }
 });
 
 router.post('/notifications', validateBody(notificationSchemas.create), async (req, res) => {
   try {
-    const notification = await examinationService.createNotification(req.body || {});
+    const notification = await examinationService.createNotification(req.body || {}, req.companyId || '');
     res.status(201).json(notification);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[Examination] create notification error:', err);
+    sendSafeError(res, 500, 'INTERNAL_ERROR');
   }
 });
 
 router.post('/notifications/:id/read', async (req, res) => {
   try {
-    const userId = req.body?.user_id || req.body?.userId || req.headers['x-user-id'];
-    const result = await examinationService.markNotificationRead(req.params.id, userId);
+    const userId = req.body?.user_id || req.body?.userId || req.user?.id;
+    const result = await examinationService.markNotificationRead(req.params.id, userId, req.companyId || '');
     res.json(result);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[Examination] mark notification read error:', err);
+    sendSafeError(res, 500, 'INTERNAL_ERROR');
   }
 });
 
 router.delete('/notifications/:id', async (req, res) => {
   try {
-    const userId = req.query.user_id || req.query.userId || req.headers['x-user-id'];
-    const result = await examinationService.deleteNotification(req.params.id, userId);
+    const userId = req.query.user_id || req.query.userId || req.user?.id;
+    const result = await examinationService.deleteNotification(req.params.id, userId, req.companyId || '');
     res.json(result);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[Examination] delete notification error:', err);
+    sendSafeError(res, 500, 'INTERNAL_ERROR');
   }
 });
 
 router.post('/audit/notifications', async (req, res) => {
   try {
-    const result = await examinationService.createNotificationAuditLog(req.body || {});
+    const result = await examinationService.createNotificationAuditLog(req.body || {}, req.companyId || '');
     res.json(result);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[Examination] audit notification error:', err);
+    sendSafeError(res, 500, 'INTERNAL_ERROR');
   }
 });
 
 router.post('/batches', validateBody(examinationSchemas.batch), async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'];
-    const batch = await examinationService.createBatch(req.body, userId);
+    const userId = req.user?.id;
+    const body = { ...req.body, company_id: req.companyId || '' };
+    const batch = await examinationService.createBatch(body, userId);
     res.status(201).json(batch);
   } catch (err) {
     const message = String(err?.message || 'Failed to create batch');
@@ -343,7 +350,7 @@ router.post('/batches', validateBody(examinationSchemas.batch), async (req, res)
       ts: new Date().toISOString(),
       level: 'error',
       event: 'route_batch_create_failed',
-      userId: req.headers['x-user-id'],
+      userId: req.user?.id,
       error: message
     }));
     if (
@@ -351,29 +358,33 @@ router.post('/batches', validateBody(examinationSchemas.batch), async (req, res)
       || normalized.includes('invalid')
       || normalized.includes('constraint')
     ) {
-      return res.status(400).json({ error: message });
+      return sendSafeError(res, 400, 'VALIDATION_ERROR');
     }
-    res.status(500).json({ error: message });
+    sendSafeError(res, 500, 'INTERNAL_ERROR');
   }
 });
 
 router.put('/batches/:id', validateBody(examinationSchemas.batchUpdate), async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'];
-    const batch = await examinationService.updateBatch(req.params.id, req.body, userId);
+    const userId = req.user?.id;
+    const companyId = req.companyId || '';
+    const batch = await examinationService.updateBatch(req.params.id, req.body, userId, companyId);
     res.json(batch);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[Examination] batch update error:', err);
+    sendSafeError(res, 500, 'UPDATE_FAILED');
   }
 });
 
 router.delete('/batches/:id', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'];
-    await examinationService.deleteBatch(req.params.id, userId);
+    const userId = req.user?.id;
+    const companyId = req.companyId || '';
+    await examinationService.deleteBatch(req.params.id, userId, companyId);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[Examination] batch delete error:', err);
+    sendSafeError(res, 500, 'DELETE_FAILED');
   }
 });
 
@@ -381,13 +392,12 @@ router.delete('/batches/:id', async (req, res) => {
 router.post('/classes', validateBody(classSchemas.create), async (req, res) => {
   try {
     const body = req.body || {};
-    // Accept batch_id or batchId
+
     const batch_id = body.batch_id || body.batchId || body.batch || req.query?.batch_id || req.query?.batchId;
-    // Accept class name variants
+
     const class_name = body.class_name || body.name || body.className;
     const number_of_learners = body.number_of_learners ?? body.numberOfLearners ?? body.learners ?? body.candidates;
 
-    // Validate required fields
     if (!batch_id) {
       return res.status(400).json({ error: 'batch_id is required', message: 'Please provide a valid batch_id to create a class' });
     }
@@ -396,16 +406,14 @@ router.post('/classes', validateBody(classSchemas.create), async (req, res) => {
     }
 
     const signal = createRequestAbortSignal(req, res);
-    const userId = req.headers['x-user-id'] || 'System';
+    const userId = req.user?.id || 'System';
 
-    // Normalize payload to include canonical field names expected by service
     const payload = { ...body, class_name, number_of_learners };
 
-    const newClass = await examinationService.createClass(batch_id, payload, { userId, signal, canOverride: canOverrideSuggestedCost(req) });
+    const newClass = await examinationService.createClass(batch_id, payload, { userId, signal, canOverride: canOverrideSuggestedCost(req) }, req.companyId || '');
     if (signal.aborted || res.headersSent) return;
     return res.status(201).json(newClass);
   } catch (err) {
-    // Log full error details for debugging (message + stack when available)
     try {
       console.error(JSON.stringify({
         ts: new Date().toISOString(),
@@ -426,70 +434,74 @@ router.post('/classes', validateBody(classSchemas.create), async (req, res) => {
       normalized.includes('batch not found')
       || (normalized.includes('batch') && normalized.includes('not found'))
     ) {
-      return res.status(404).json({ error: message, suggestion: 'Please create the batch first before creating classes' });
+      return res.status(404).json({ error: 'Batch not found.', suggestion: 'Please create the batch first before creating classes' });
     }
 
     if (normalized.includes('required') || normalized.includes('must') || normalized.includes('missing')) {
-      return res.status(400).json({ error: message });
+      return sendSafeError(res, 400, 'VALIDATION_ERROR');
     }
 
     if (normalized.includes('constraint') || normalized.includes('duplicate') || normalized.includes('unique')) {
-      return res.status(409).json({ error: message });
+      return sendSafeError(res, 409, 'CONFLICT');
     }
 
-    return res.status(500).json({ error: message });
+    return sendSafeError(res, 500, 'INTERNAL_ERROR');
   }
 });
 
 router.put('/classes/:id', async (req, res) => {
   try {
-    const updatedClass = await examinationService.updateClass(req.params.id, req.body);
+    const updatedClass = await examinationService.updateClass(req.params.id, req.body, req.companyId || '');
     res.json(updatedClass);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[Examination] class update error:', err);
+    sendSafeError(res, 500, 'UPDATE_FAILED');
   }
 });
 
 router.put('/classes/:id/pricing', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] || 'System';
+    const userId = req.user?.id || 'System';
     const batch = await examinationService.updateClassPricing(req.params.id, req.body, {
       userId,
       trigger: 'MANUAL_OVERRIDE',
       canOverrideSuggestedCost: canOverrideSuggestedCost(req)
-    });
+    }, req.companyId || '');
     res.json(batch);
   } catch (err) {
     const message = String(err?.message || '');
     if (message.toLowerCase().includes('permission')) {
-      return res.status(403).json({ error: message });
+      return res.status(403).json({ error: 'You do not have permission to override pricing.' });
     }
     if (message.toLowerCase().includes('batch status')) {
-      return res.status(409).json({ error: message });
+      return res.status(409).json({ error: 'Cannot change pricing due to batch status.' });
     }
     if (message.toLowerCase().includes('required') || message.toLowerCase().includes('must')) {
-      return res.status(400).json({ error: message });
+      return res.status(400).json({ error: 'Missing required fields for pricing update.' });
     }
-    res.status(500).json({ error: message || 'Failed to update class pricing.' });
+    console.error('[Examination] class pricing update error:', err);
+    sendSafeError(res, 500, 'UPDATE_FAILED');
   }
 });
 
 router.get('/classes/:id/pricing-history', async (req, res) => {
   try {
     const limit = req.query.limit ? Number(req.query.limit) : 100;
-    const history = await examinationService.getClassPricingHistory(req.params.id, limit);
+    const history = await examinationService.getClassPricingHistory(req.params.id, limit, req.companyId || '');
     res.json(history);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[Examination] class pricing history error:', err);
+    sendSafeError(res, 500, 'INTERNAL_ERROR');
   }
 });
 
 router.delete('/classes/:id', async (req, res) => {
   try {
-    await examinationService.deleteClass(req.params.id);
+    await examinationService.deleteClass(req.params.id, req.companyId || '');
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[Examination] class delete error:', err);
+    sendSafeError(res, 500, 'DELETE_FAILED');
   }
 });
 
@@ -497,129 +509,139 @@ router.delete('/classes/:id', async (req, res) => {
 router.post('/subjects', validateBody(subjectSchemas.create), async (req, res) => {
   try {
     const { class_id, ...data } = req.body;
-    const newSubject = await examinationService.createSubject(class_id, data);
+    const newSubject = await examinationService.createSubject(class_id, data, req.companyId || '');
     res.status(201).json(newSubject);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[Examination] subject create error:', err);
+    sendSafeError(res, 500, 'CREATE_FAILED');
   }
 });
 
 router.put('/subjects/:id', async (req, res) => {
   try {
-    const updatedSubject = await examinationService.updateSubject(req.params.id, req.body);
+    const updatedSubject = await examinationService.updateSubject(req.params.id, req.body, req.companyId || '');
     res.json(updatedSubject);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[Examination] subject update error:', err);
+    sendSafeError(res, 500, 'UPDATE_FAILED');
   }
 });
 
 router.delete('/subjects/:id', async (req, res) => {
   try {
-    await examinationService.deleteSubject(req.params.id);
+    await examinationService.deleteSubject(req.params.id, req.companyId || '');
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[Examination] subject delete error:', err);
+    sendSafeError(res, 500, 'DELETE_FAILED');
   }
 });
 
 // --- Classes (Additional Routes for Examination Pricing Redesign) ---
 router.get('/classes/:id', async (req, res) => {
   try {
-    const cls = await examinationService.getClassById(req.params.id);
+    const cls = await examinationService.getClassById(req.params.id, req.companyId || '');
     if (!cls) {
       return res.status(404).json({ error: 'Class not found' });
     }
     res.json(cls);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[Examination] GET class error:', err);
+    sendSafeError(res, 500, 'INTERNAL_ERROR');
   }
 });
 
 router.put('/classes/:id/financial-metrics', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] || 'System';
+    const userId = req.user?.id || 'System';
     const updatedClass = await examinationService.updateClassFinancialMetrics(
       req.params.id,
       req.body,
-      { userId }
+      { userId },
+      req.companyId || ''
     );
     res.json(updatedClass);
   } catch (err) {
-    const message = String(err?.message || 'Failed to update class financial metrics');
+    const message = String(err?.message || '');
     if (message.toLowerCase().includes('batch status')) {
-      return res.status(409).json({ error: message });
+      return res.status(409).json({ error: 'Cannot update metrics due to batch status.' });
     }
-    res.status(500).json({ error: message });
+    console.error('[Examination] financial metrics update error:', err);
+    sendSafeError(res, 500, 'INTERNAL_ERROR');
   }
 });
 
 // --- Batch Pricing Sync (Examination Pricing Redesign) ---
 router.post('/batches/:id/sync-pricing', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] || 'System';
+    const userId = req.user?.id || 'System';
     const { settings, adjustments, triggerSource } = req.body;
 
     const result = await examinationService.syncPricingToBatchClasses(
       req.params.id,
-      { settings, adjustments, triggerSource, userId }
+      { settings, adjustments, triggerSource, userId },
+      req.companyId || ''
     );
     res.json(result);
   } catch (err) {
-    const message = String(err?.message || 'Failed to sync pricing to batch');
+    const message = String(err?.message || '');
     if (message.toLowerCase().includes('batch status')) {
-      return res.status(409).json({ error: message });
+      return res.status(409).json({ error: 'Cannot sync pricing due to batch status.' });
     }
-    res.status(500).json({ error: message });
+    console.error('[Examination] sync-pricing error:', err);
+    sendSafeError(res, 500, 'INTERNAL_ERROR');
   }
 });
 
 // --- Actions ---
 router.post('/batches/:id/calculate', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] || 'System';
+    const userId = req.user?.id || 'System';
     const requestOptions = (req.body && typeof req.body === 'object') ? req.body : {};
     const result = await examinationService.calculateBatch(req.params.id, {
       ...requestOptions,
       trigger: requestOptions.trigger || 'MANUAL_TRIGGER',
       userId
-    });
+    }, req.companyId || '');
     res.json(result);
   } catch (error) {
     console.error('[Examination] Calculate batch error:', error);
-    res.status(500).json({ error: error.message || 'Failed to calculate batch' });
+    sendSafeError(res, 500, 'INTERNAL_ERROR');
   }
 });
 
 // Class preview endpoint - calculates without saving
 router.post('/classes/:id/preview', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] || 'System';
-    const result = await examinationService.calculateClassPreview(req.params.id, req.body);
+    const userId = req.user?.id || 'System';
+    const result = await examinationService.calculateClassPreview(req.params.id, req.body, req.companyId || '');
     res.json(result);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[Examination] class preview error:', err);
+    sendSafeError(res, 500, 'INTERNAL_ERROR');
   }
 });
 
 router.post('/batches/:id/approve', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'];
-    const result = await examinationService.approveBatch(req.params.id, userId);
+    const userId = req.user?.id;
+    const result = await examinationService.approveBatch(req.params.id, userId, req.companyId || '');
     res.json(result);
   } catch (err) {
-    res.status(resolveWorkflowErrorStatus(err)).json({ error: err.message });
+    console.error('[Examination] approve batch error:', err);
+    res.status(resolveWorkflowErrorStatus(err)).json({ error: 'Failed to approve batch.' });
   }
 });
 
 router.post('/batches/:id/invoice', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'];
+    const userId = req.user?.id;
     const idempotencyKey = req.headers['x-idempotency-key'] || req.body?.idempotency_key || req.body?.idempotencyKey;
     const invoiceNumber = req.body?.invoiceNumber || req.body?.invoice_number;
-    const result = await examinationService.generateInvoice(req.params.id, userId, { idempotencyKey, invoiceNumber });
+    const result = await examinationService.generateInvoice(req.params.id, userId, { idempotencyKey, invoiceNumber }, req.companyId || '');
     res.json(result);
   } catch (err) {
-    console.error('[ERROR] batches/:id/invoice failed:', err.message);
+    console.error('[Examination] generate invoice error:', err);
     res.status(resolveWorkflowErrorStatus(err)).json({ error: 'Failed to generate invoice' });
   }
 });

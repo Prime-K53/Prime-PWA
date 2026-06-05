@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { BankAccount, BankTransaction, BankStatement, ScheduledPayment, ExchangeRate, BankFee, Reconciliation, Adjustment, CashFlowForecast, BankAlert, BankCategory } from '../types/banking';
 import { bankingService } from '../services/bankingService';
+import { isSupabaseConfigured } from '../services/cloudMode';
 
 interface BankingState {
   accounts: BankAccount[];
@@ -78,7 +79,7 @@ export const useBankingStore = create<BankingState>((set, get) => ({
 
       // Create sample bank accounts if none exist
       let finalAccounts = accounts;
-      if (accounts.length === 0) {
+      if (accounts.length === 0 && !isSupabaseConfigured()) {
         const sampleAccounts = [
           {
             name: 'Cash Account',

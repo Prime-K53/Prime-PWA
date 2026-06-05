@@ -2,6 +2,8 @@ import { dbService } from './db';
 import { pricingService } from './pricingService';
 import { inventoryTransactionService } from './inventoryTransactionService';
 import { currencyService } from './currencyService';
+import { isCloudOnlyMode } from './cloudMode';
+import { cloudDb } from './cloudDb';
 import {
     Sale, CartItem, LedgerEntry, WalletTransaction, Customer, SalesExchange,
     ReprintJob, SalesExchangeItem, SalesExchangeApproval, Invoice, Expense,
@@ -2207,12 +2209,25 @@ export const transactionService = {
     },
 
     async postJournalEntry(entries: Omit<LedgerEntry, 'id' | 'date'>[]) {
+        const date = new Date().toISOString();
+
+        if (isCloudOnlyMode()) {
+            for (const entry of entries) {
+                const newEntry: LedgerEntry = {
+                    ...entry,
+                    id: generateId('LG'),
+                    date,
+                    reconciled: entry.reconciled || false
+                };
+                await cloudDb.put('ledger', newEntry as any);
+            }
+            return { success: true };
+        }
+
         return dbService.executeAtomicOperation(
             ['ledger'],
             async (tx) => {
                 const store = tx.objectStore('ledger');
-                const date = new Date().toISOString();
-
                 for (const entry of entries) {
                     const newEntry: LedgerEntry = {
                         ...entry,

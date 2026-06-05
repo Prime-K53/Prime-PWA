@@ -681,7 +681,7 @@ const SetupWizard: React.FC = () => {
                   <p className="text-xs text-indigo-300">Password is optional. Enable it later in settings if you skip now.</p>
                 </div>
 
-                <div className="space-y-4">
+                <form onSubmit={handleSetup} className="space-y-4">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className={labelClass}>Password</label>
@@ -737,14 +737,11 @@ const SetupWizard: React.FC = () => {
                       {admin.confirmPassword && admin.password !== admin.confirmPassword && (
                         <p className="text-xs text-rose-400 font-medium">Passwords don't match</p>
                       )}
-                    </div>
-                  )}
-                </div>
-
+                  </div>
+                )}
                 <div className="pt-4">
                   <button
-                    type="button"
-                    onClick={handleSetup}
+                    type="submit"
                     disabled={!canSubmitAdmin || submitting}
                     className="w-full py-2.5 bg-indigo-500 hover:bg-indigo-400 disabled:bg-indigo-500/30 disabled:cursor-not-allowed text-white rounded-xl font-semibold text-[13px] flex items-center justify-center gap-2 shadow-sm hover:shadow-md transition-all duration-200 active:scale-[0.99]"
                   >
@@ -761,6 +758,7 @@ const SetupWizard: React.FC = () => {
                     )}
                   </button>
                 </div>
+                </form>
               </div>
             )}
           </div>

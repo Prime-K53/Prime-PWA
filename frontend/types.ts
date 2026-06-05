@@ -551,8 +551,19 @@ export type Warehouse = any; // TIER 2: Added as any due to missing definitions
 export type WorkCenter = any; // TIER 2: Added as any due to missing definitions
 export type ProductionResource = any; // TIER 2: Added as any due to missing definitions
 export type PermissionNode = any; // TIER 2: Added as any due to missing definitions
-export type UserGroup = any; // TIER 2: Added as any due to missing definitions
-export type UserRole = any; // TIER 2: Added as any due to missing definitions
+export interface UserGroup {
+  id: string;
+  name: string;
+  description?: string;
+  permissions: string[];
+}
+export type UserRole = string;
+export interface PasswordPolicy {
+  minLength: number;
+  requireNumber: boolean;
+  requireSpecialChar: boolean;
+  expiryDays?: number;
+}
 export type PasswordPolicy = any; // TIER 2: Added as any due to missing definitions
 export type SystemAlert = any; // TIER 2: Added as any due to missing definitions
 export type Reminder = any; // TIER 2: Added as any due to missing definitions

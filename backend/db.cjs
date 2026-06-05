@@ -834,8 +834,59 @@ const initDb = () => {
         { table: 'examination_bom_calculations', column: 'adjustment_value', type: 'REAL DEFAULT 0' },
         { table: 'examination_bom_calculations', column: 'allocation_ratio', type: 'REAL DEFAULT 0' },
         { table: 'documents', column: 'logical_number', type: 'TEXT' },
-        { table: 'profit_margin_settings', column: 'apply_volume_margins', type: 'INTEGER DEFAULT 0' }
+        { table: 'profit_margin_settings', column: 'apply_volume_margins', type: 'INTEGER DEFAULT 0' },
+        // Multi-tenant isolation: add company_id column to all business tables
+        { table: 'sales', column: 'company_id', type: 'TEXT NOT NULL DEFAULT \'\'' },
+        { table: 'invoices', column: 'company_id', type: 'TEXT NOT NULL DEFAULT \'\'' },
+        { table: 'examinations', column: 'company_id', type: 'TEXT NOT NULL DEFAULT \'\'' },
+        { table: 'schools', column: 'company_id', type: 'TEXT NOT NULL DEFAULT \'\'' },
+        { table: 'customers', column: 'company_id', type: 'TEXT NOT NULL DEFAULT \'\'' },
+        { table: 'inventory', column: 'company_id', type: 'TEXT NOT NULL DEFAULT \'\'' },
+        { table: 'inventory_transactions', column: 'company_id', type: 'TEXT NOT NULL DEFAULT \'\'' },
+        { table: 'material_batches', column: 'company_id', type: 'TEXT NOT NULL DEFAULT \'\'' },
+        { table: 'warehouse_inventory', column: 'company_id', type: 'TEXT NOT NULL DEFAULT \'\'' },
+        { table: 'material_categories', column: 'company_id', type: 'TEXT NOT NULL DEFAULT \'\'' },
+        { table: 'sales_orders', column: 'company_id', type: 'TEXT NOT NULL DEFAULT \'\'' },
+        { table: 'sales_exchanges', column: 'company_id', type: 'TEXT NOT NULL DEFAULT \'\'' },
+        { table: 'sales_exchange_items', column: 'company_id', type: 'TEXT NOT NULL DEFAULT \'\'' },
+        { table: 'sales_exchange_approvals', column: 'company_id', type: 'TEXT NOT NULL DEFAULT \'\'' },
+        { table: 'reprint_jobs', column: 'company_id', type: 'TEXT NOT NULL DEFAULT \'\'' },
+        { table: 'market_adjustments', column: 'company_id', type: 'TEXT NOT NULL DEFAULT \'\'' },
+        { table: 'market_adjustment_transactions', column: 'company_id', type: 'TEXT NOT NULL DEFAULT \'\'' },
+        { table: 'transaction_adjustment_snapshots', column: 'company_id', type: 'TEXT NOT NULL DEFAULT \'\'' },
+        { table: 'audit_logs', column: 'company_id', type: 'TEXT NOT NULL DEFAULT \'\'' },
+        { table: 'documents', column: 'company_id', type: 'TEXT NOT NULL DEFAULT \'\'' },
+        { table: 'tasks', column: 'company_id', type: 'TEXT NOT NULL DEFAULT \'\'' },
+        { table: 'classes', column: 'company_id', type: 'TEXT NOT NULL DEFAULT \'\'' },
+        { table: 'subjects', column: 'company_id', type: 'TEXT NOT NULL DEFAULT \'\'' },
+        { table: 'examination_classes', column: 'company_id', type: 'TEXT NOT NULL DEFAULT \'\'' },
+        { table: 'examination_batches', column: 'company_id', type: 'TEXT NOT NULL DEFAULT \'\'' },
+        { table: 'examination_subjects', column: 'company_id', type: 'TEXT NOT NULL DEFAULT \'\'' },
+        { table: 'examination_bom_calculations', column: 'company_id', type: 'TEXT NOT NULL DEFAULT \'\'' },
+        { table: 'examination_class_adjustments', column: 'company_id', type: 'TEXT NOT NULL DEFAULT \'\'' },
+        { table: 'examination_pricing_audit', column: 'company_id', type: 'TEXT NOT NULL DEFAULT \'\'' },
+        { table: 'examination_batch_notifications', column: 'company_id', type: 'TEXT NOT NULL DEFAULT \'\'' },
+        { table: 'notification_audit_logs', column: 'company_id', type: 'TEXT NOT NULL DEFAULT \'\'' },
+        { table: 'bom_default_materials', column: 'company_id', type: 'TEXT NOT NULL DEFAULT \'\'' },
+        { table: 'profit_margin_settings', column: 'company_id', type: 'TEXT NOT NULL DEFAULT \'\'' },
+        { table: 'profit_margin_audit_logs', column: 'company_id', type: 'TEXT NOT NULL DEFAULT \'\'' },
+        { table: 'work_centers', column: 'company_id', type: 'TEXT NOT NULL DEFAULT \'\'' },
+        { table: 'production_resources', column: 'company_id', type: 'TEXT NOT NULL DEFAULT \'\'' }
       ];
+
+      // User-company membership table for multi-tenant validation
+      db.run(`CREATE TABLE IF NOT EXISTS user_companies (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        company_id TEXT NOT NULL,
+        role TEXT DEFAULT 'member',
+        is_default INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, company_id)
+      )`);
+
+      db.run(`CREATE INDEX IF NOT EXISTS idx_user_companies_user ON user_companies(user_id)`);
+      db.run(`CREATE INDEX IF NOT EXISTS idx_user_companies_company ON user_companies(company_id)`);
 
       // Production resources (work centers and resources) — must be queued
       // BEFORE migration ALTER TABLEs so they exist when initDb() resolves.

@@ -25,8 +25,6 @@ import { useDocumentStore } from './stores/documentStore.ts';
 import { PreviewModal } from './views/shared/components/PDF/PreviewModal.tsx';
 import { PdfWorker } from './views/shared/components/PDF/PdfWorker.tsx';
 import { Bell, Loader2, Coins, X, Calculator, Menu } from 'lucide-react';
-import { dbService } from './services/db';
-import { PrimeDatabaseBootstrap } from './services/dexie/PrimeDatabaseBootstrap';
 import Login from './views/auth/Login';
 import SetupWizard from './views/auth/SetupWizard';
 import ForgotPassword from './views/auth/ForgotPassword';
@@ -307,18 +305,6 @@ const AppLayout: React.FC = () => {
   }, [companyConfig?.appearance]);
 
   useEffect(() => {
-    const handleBeforeUnload = () => {
-      dbService.triggerSync(true);
-    };
-
-    // Seed pricing templates on startup
-
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, []);
-
-  useEffect(() => {
     // Table responsiveness is now handled via CSS in index.css
     // avoid manual DOM manipulation that interferes with React
   }, []);
@@ -348,7 +334,6 @@ const AppLayout: React.FC = () => {
         toggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
       <div className="app-content-shell flex-1 flex flex-col h-full min-w-0 transition-all duration-300">
-        {/* Offline banner removed - this is an offline desktop app with embedded backend */}
         <div className="px-3 sm:px-6 pb-2 pt-3 sm:pt-6 shrink-0">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <button
@@ -597,31 +582,8 @@ const AppLayout: React.FC = () => {
 
 const RootNavigator: React.FC = () => {
   const { user, isInitialized, requiresSetup } = useAuth();
-  const [isResetting, setIsResetting] = useState(false);
-  const [dbError, setDbError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const handleDbBlocked = () => {
-      setDbError("Database access blocked by another tab. Please close other instances of Prime ERP and refresh this page.");
-    };
-    window.addEventListener('nexus-db-blocked', handleDbBlocked);
-    return () => window.removeEventListener('nexus-db-blocked', handleDbBlocked);
-  }, []);
-
-  const handleFactoryReset = async () => {
-    if (window.confirm("CRITICAL: This will delete ALL local data and reset the system. Continue?")) {
-      setIsResetting(true);
-      try {
-        await dbService.factoryReset();
-        window.location.reload();
-      } catch (err) {
-        alert("Reset failed: " + (err instanceof Error ? err.message : "Unknown error"));
-        setIsResetting(false);
-      }
-    }
-  };
-
-  if (!isInitialized || isResetting) {
+  if (!isInitialized) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-[#F5F7F9] overflow-hidden">
         {/* Decorative Background Accents */}
@@ -642,7 +604,7 @@ const RootNavigator: React.FC = () => {
               Prime <span className="text-blue-600">ERP</span> System
             </h1>
             <p className="text-slate-400 font-bold uppercase tracking-[0.2em] text-[10px] animate-pulse">
-              {isResetting ? "Resetting System Data..." : dbError || "Initializing Secure Environment..."}
+              Connecting To Supabase Cloud...
             </p>
           </div>
 
@@ -650,24 +612,6 @@ const RootNavigator: React.FC = () => {
           <div className="w-64 h-1.5 bg-slate-200 rounded-full overflow-hidden">
             <div className="h-full bg-blue-600 rounded-full animate-progress-indeterminate"></div>
           </div>
-
-          {dbError && (
-            <button
-              onClick={() => window.location.reload()}
-              className="mt-4 px-6 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-bold uppercase tracking-widest shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all active:scale-95"
-            >
-              Refresh Page
-            </button>
-          )}
-
-          {!isResetting && !dbError && (
-            <button
-              onClick={handleFactoryReset}
-              className="mt-8 px-4 py-2 text-[10px] font-black text-slate-300 hover:text-red-500 uppercase tracking-[0.2em] transition-all border border-transparent hover:border-red-100 hover:bg-red-50 rounded-lg"
-            >
-              System Maintenance
-            </button>
-          )}
         </div>
       </div>
     );
@@ -703,6 +647,7 @@ const RootNavigator: React.FC = () => {
         <Suspense fallback={<PageLoader />}>
           <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/setup" element={<SetupWizard />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/install" element={<PwaInstallPage />} />
@@ -734,29 +679,27 @@ const App: React.FC = () => {
   return (
     <HashRouter>
       <ErrorBoundary>
-        <PrimeDatabaseBootstrap>
-          <NotificationProvider>
-            <AuthProvider>
-              <FinanceProvider>
-                <InventoryProvider>
-                  <ProductionProvider>
-                    <ExaminationProvider>
-                      <ProcurementProvider>
-                        <SalesProvider>
-                          <OrdersProvider>
-                            <DataProvider>
-                                <RootNavigator />
-                              </DataProvider>
-                          </OrdersProvider>
-                        </SalesProvider>
-                      </ProcurementProvider>
-                    </ExaminationProvider>
-                  </ProductionProvider>
-                </InventoryProvider>
-              </FinanceProvider>
-            </AuthProvider>
-          </NotificationProvider>
-        </PrimeDatabaseBootstrap>
+        <NotificationProvider>
+          <AuthProvider>
+            <FinanceProvider>
+              <InventoryProvider>
+                <ProductionProvider>
+                  <ExaminationProvider>
+                    <ProcurementProvider>
+                      <SalesProvider>
+                        <OrdersProvider>
+                          <DataProvider>
+                            <RootNavigator />
+                          </DataProvider>
+                        </OrdersProvider>
+                      </SalesProvider>
+                    </ProcurementProvider>
+                  </ExaminationProvider>
+                </ProductionProvider>
+              </InventoryProvider>
+            </FinanceProvider>
+          </AuthProvider>
+        </NotificationProvider>
       </ErrorBoundary>
     </HashRouter>
   );

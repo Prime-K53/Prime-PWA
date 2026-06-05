@@ -14,52 +14,55 @@ const profitMarginService = {
    * @param {string} categoryId - Category ID
    * @returns {Promise<Object>} Effective margin setting
    */
-  getEffectiveMargin: async (lineItemId, categoryId) => {
+  getEffectiveMargin: async (lineItemId, categoryId, companyId) => {
+    const cid = (typeof companyId === 'string' && companyId.trim()) ? companyId.trim() : '';
     return new Promise((resolve, reject) => {
       // 1. Check line_item level
       if (lineItemId) {
         getDb().get(
-          "SELECT margin_value, margin_type, scope, apply_volume_margins FROM profit_margin_settings WHERE scope = 'line_item' AND scope_ref_id = ? AND is_active = 1 AND deleted_at IS NULL",
-          [lineItemId],
+          "SELECT margin_value, margin_type, scope, apply_volume_margins FROM profit_margin_settings WHERE scope = 'line_item' AND scope_ref_id = ? AND is_active = 1 AND deleted_at IS NULL" + (cid ? " AND company_id = ?" : ""),
+          cid ? [lineItemId, cid] : [lineItemId],
           (err, row) => {
             if (err) return reject(err);
             if (row) return resolve({ ...row, source: 'line_item' });
             
             // If no line override, proceed to category
-            resolve(profitMarginService._checkCategory(categoryId));
+            resolve(profitMarginService._checkCategory(categoryId, cid));
           }
         );
       } else {
-        resolve(profitMarginService._checkCategory(categoryId));
+        resolve(profitMarginService._checkCategory(categoryId, cid));
       }
     });
   },
 
-  _checkCategory: (categoryId) => {
+  _checkCategory: (categoryId, companyId) => {
+    const cid = (typeof companyId === 'string' && companyId.trim()) ? companyId.trim() : '';
     return new Promise((resolve, reject) => {
       if (categoryId) {
         getDb().get(
-          "SELECT margin_value, margin_type, scope, apply_volume_margins FROM profit_margin_settings WHERE scope = 'category' AND scope_ref_id = ? AND is_active = 1 AND deleted_at IS NULL",
-          [categoryId],
+          "SELECT margin_value, margin_type, scope, apply_volume_margins FROM profit_margin_settings WHERE scope = 'category' AND scope_ref_id = ? AND is_active = 1 AND deleted_at IS NULL" + (cid ? " AND company_id = ?" : ""),
+          cid ? [categoryId, cid] : [categoryId],
           (err, row) => {
             if (err) return reject(err);
             if (row) return resolve({ ...row, source: 'category' });
             
             // If no category override, proceed to global
-            resolve(profitMarginService._checkGlobal());
+            resolve(profitMarginService._checkGlobal(cid));
           }
         );
       } else {
-        resolve(profitMarginService._checkGlobal());
+        resolve(profitMarginService._checkGlobal(cid));
       }
     });
   },
 
-  _checkGlobal: () => {
+  _checkGlobal: (companyId) => {
+    const cid = (typeof companyId === 'string' && companyId.trim()) ? companyId.trim() : '';
     return new Promise((resolve, reject) => {
       getDb().get(
-        "SELECT margin_value, margin_type, scope, apply_volume_margins FROM profit_margin_settings WHERE scope = 'global' AND is_active = 1 AND deleted_at IS NULL",
-        [],
+        "SELECT margin_value, margin_type, scope, apply_volume_margins FROM profit_margin_settings WHERE scope = 'global' AND is_active = 1 AND deleted_at IS NULL" + (cid ? " AND company_id = ?" : ""),
+        cid ? [cid] : [],
         (err, row) => {
           if (err) return reject(err);
           if (row) return resolve({ ...row, source: 'global' });
@@ -74,13 +77,18 @@ const profitMarginService = {
   /**
    * List all settings, optionally filtered by scope.
    */
-  listSettings: (scope = null) => {
+  listSettings: (scope = null, companyId) => {
+    const cid = (typeof companyId === 'string' && companyId.trim()) ? companyId.trim() : '';
     return new Promise((resolve, reject) => {
       let query = "SELECT * FROM profit_margin_settings WHERE deleted_at IS NULL";
       const params = [];
       if (scope) {
         query += " AND scope = ?";
         params.push(scope);
+      }
+      if (cid) {
+        query += " AND company_id = ?";
+        params.push(cid);
       }
       query += " ORDER BY created_at DESC";
       getDb().all(query, params, (err, rows) => {
@@ -93,9 +101,10 @@ const profitMarginService = {
   /**
    * Get a single setting by ID.
    */
-  getById: (id) => {
+  getById: (id, companyId) => {
+    const cid = (typeof companyId === 'string' && companyId.trim()) ? companyId.trim() : '';
     return new Promise((resolve, reject) => {
-      getDb().get("SELECT * FROM profit_margin_settings WHERE id = ? AND deleted_at IS NULL", [id], (err, row) => {
+      getDb().get("SELECT * FROM profit_margin_settings WHERE id = ? AND deleted_at IS NULL" + (cid ? " AND company_id = ?" : ""), cid ? [id, cid] : [id], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
@@ -105,8 +114,9 @@ const profitMarginService = {
   /**
    * Create a new override setting with audit trail.
    */
-  createSetting: async (data, userId) => {
+  createSetting: async (data, userId, companyId) => {
     const { scope, scope_ref_id, margin_type, margin_value, reason } = data;
+    const cid = (typeof companyId === 'string' && companyId.trim()) ? companyId.trim() : '';
     
     // Bounds check
     if (margin_type === 'percentage' && (margin_value < 0 || margin_value > 100)) {
@@ -119,8 +129,8 @@ const profitMarginService = {
     // Conflict check: only one active override per specific ref
     const existing = await new Promise((res) => {
       getDb().get(
-        "SELECT id FROM profit_margin_settings WHERE scope = ? AND (scope_ref_id = ? OR (scope_ref_id IS NULL AND ? IS NULL)) AND is_active = 1 AND deleted_at IS NULL",
-        [scope, scope_ref_id, scope_ref_id],
+        "SELECT id FROM profit_margin_settings WHERE scope = ? AND (scope_ref_id = ? OR (scope_ref_id IS NULL AND ? IS NULL)) AND is_active = 1 AND deleted_at IS NULL" + (cid ? " AND company_id = ?" : ""),
+        cid ? [scope, scope_ref_id, scope_ref_id, cid] : [scope, scope_ref_id, scope_ref_id],
         (err, row) => res(row)
       );
     });
@@ -134,9 +144,9 @@ const profitMarginService = {
       getDb().serialize(() => {
         getDb().run("BEGIN TRANSACTION");
         getDb().run(
-          `INSERT INTO profit_margin_settings (id, scope, scope_ref_id, margin_type, margin_value, reason, created_by, apply_volume_margins)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [id, scope, scope_ref_id, margin_type, margin_value, reason, userId, data.apply_volume_margins || 0],
+          `INSERT INTO profit_margin_settings (id, scope, scope_ref_id, margin_type, margin_value, reason, created_by, apply_volume_margins${cid ? ', company_id' : ''})
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?${cid ? ', ?' : ''})`,
+          cid ? [id, scope, scope_ref_id, margin_type, margin_value, reason, userId, data.apply_volume_margins || 0, cid] : [id, scope, scope_ref_id, margin_type, margin_value, reason, userId, data.apply_volume_margins || 0],
           function(err) {
             if (err) {
               getDb().run("ROLLBACK");
@@ -146,9 +156,9 @@ const profitMarginService = {
             // Log audit
             const auditId = randomUUID();
             getDb().run(
-              `INSERT INTO profit_margin_audit_logs (id, setting_id, action, scope, new_value, reason, performed_by)
-               VALUES (?, ?, ?, ?, ?, ?, ?)`,
-              [auditId, id, 'CREATE', scope, JSON.stringify(data), reason, userId],
+              `INSERT INTO profit_margin_audit_logs (id, setting_id, action, scope, new_value, reason, performed_by${cid ? ', company_id' : ''})
+               VALUES (?, ?, ?, ?, ?, ?, ?${cid ? ', ?' : ''})`,
+              cid ? [auditId, id, 'CREATE', scope, JSON.stringify(data), reason, userId, cid] : [auditId, id, 'CREATE', scope, JSON.stringify(data), reason, userId],
               (err) => {
                 if (err) {
                   getDb().run("ROLLBACK");
@@ -167,9 +177,10 @@ const profitMarginService = {
   /**
    * Update an existing setting.
    */
-  updateSetting: async (id, data, userId) => {
-    const old = await profitMarginService.getById(id);
+  updateSetting: async (id, data, userId, companyId) => {
+    const old = await profitMarginService.getById(id, companyId);
     if (!old) throw new Error("Setting not found");
+    const cid = (typeof companyId === 'string' && companyId.trim()) ? companyId.trim() : '';
 
     const { margin_value, margin_type, is_active, reason } = data;
     
@@ -192,9 +203,10 @@ const profitMarginService = {
         updates.push("updated_at = CURRENT_TIMESTAMP");
         
         params.push(id);
+        if (cid) params.push(cid);
         
         getDb().run(
-          `UPDATE profit_margin_settings SET ${updates.join(', ')} WHERE id = ?`,
+          `UPDATE profit_margin_settings SET ${updates.join(', ')} WHERE id = ?` + (cid ? " AND company_id = ?" : ""),
           params,
           function(err) {
             if (err) {
@@ -205,9 +217,9 @@ const profitMarginService = {
             // Log audit
             const auditId = randomUUID();
             getDb().run(
-              `INSERT INTO profit_margin_audit_logs (id, setting_id, action, scope, old_value, new_value, reason, performed_by)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-              [auditId, id, 'UPDATE', old.scope, JSON.stringify(old), JSON.stringify({ ...old, ...data }), reason || data.reason, userId],
+              `INSERT INTO profit_margin_audit_logs (id, setting_id, action, scope, old_value, new_value, reason, performed_by${cid ? ', company_id' : ''})
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?${cid ? ', ?' : ''})`,
+              cid ? [auditId, id, 'UPDATE', old.scope, JSON.stringify(old), JSON.stringify({ ...old, ...data }), reason || data.reason, userId, cid] : [auditId, id, 'UPDATE', old.scope, JSON.stringify(old), JSON.stringify({ ...old, ...data }), reason || data.reason, userId],
               (err) => {
                 if (err) {
                   getDb().run("ROLLBACK");
@@ -226,16 +238,17 @@ const profitMarginService = {
   /**
    * Soft delete a setting.
    */
-  deleteSetting: async (id, userId, reason) => {
-    const old = await profitMarginService.getById(id);
+  deleteSetting: async (id, userId, reason, companyId) => {
+    const old = await profitMarginService.getById(id, companyId);
     if (!old) throw new Error("Setting not found");
+    const cid = (typeof companyId === 'string' && companyId.trim()) ? companyId.trim() : '';
 
     return new Promise((resolve, reject) => {
       getDb().serialize(() => {
         getDb().run("BEGIN TRANSACTION");
         getDb().run(
-          "UPDATE profit_margin_settings SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?",
-          [id],
+          "UPDATE profit_margin_settings SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?" + (cid ? " AND company_id = ?" : ""),
+          cid ? [id, cid] : [id],
           (err) => {
             if (err) {
               getDb().run("ROLLBACK");
@@ -245,9 +258,9 @@ const profitMarginService = {
             // Log audit
             const auditId = randomUUID();
             getDb().run(
-              `INSERT INTO profit_margin_audit_logs (id, setting_id, action, scope, old_value, reason, performed_by)
-               VALUES (?, ?, ?, ?, ?, ?, ?)`,
-              [auditId, id, 'DELETE', old.scope, JSON.stringify(old), reason, userId],
+              `INSERT INTO profit_margin_audit_logs (id, setting_id, action, scope, old_value, reason, performed_by${cid ? ', company_id' : ''})
+               VALUES (?, ?, ?, ?, ?, ?, ?${cid ? ', ?' : ''})`,
+              cid ? [auditId, id, 'DELETE', old.scope, JSON.stringify(old), reason, userId, cid] : [auditId, id, 'DELETE', old.scope, JSON.stringify(old), reason, userId],
               (err) => {
                 if (err) {
                   getDb().run("ROLLBACK");
@@ -266,7 +279,7 @@ const profitMarginService = {
   /**
    * Bulk upload via CSV data.
    */
-  bulkUpload: async (rows, userId) => {
+  bulkUpload: async (rows, userId, companyId) => {
     // rows: array of { sku, margin_type, margin_value, reason }
     const results = { success: 0, failed: 0, errors: [] };
     
@@ -278,7 +291,7 @@ const profitMarginService = {
           margin_type: row.margin_type,
           margin_value: parseFloat(row.margin_value),
           reason: row.reason || 'Bulk upload'
-        }, userId);
+        }, userId, companyId);
         results.success++;
       } catch (err) {
         results.failed++;
@@ -291,7 +304,8 @@ const profitMarginService = {
   /**
    * Get audit log.
    */
-  getAuditLog: (filters = {}) => {
+  getAuditLog: (filters = {}, companyId) => {
+    const cid = (typeof companyId === 'string' && companyId.trim()) ? companyId.trim() : '';
     let query = `
       SELECT a.*, p.id as setting_id, p.scope, p.scope_ref_id 
       FROM profit_margin_audit_logs a
@@ -315,6 +329,10 @@ const profitMarginService = {
     if (filters.endDate) {
       query += " AND a.timestamp <= ?";
       params.push(filters.endDate);
+    }
+    if (cid) {
+      query += " AND a.company_id = ?";
+      params.push(cid);
     }
     
     query += " ORDER BY a.timestamp DESC LIMIT ? OFFSET ?";

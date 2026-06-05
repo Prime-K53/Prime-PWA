@@ -460,6 +460,7 @@ const applyCalculatedBatchState = async (
       final_fee_per_learner: finalFee,
       price_per_learner: finalFee,
       live_total_preview: liveTotal,
+      manual_override_amount: hasManualOverride ? Number(((finalFee - expectedFee) * learners).toFixed(2)) : 0,
       material_total_cost: Number(pricingRow?.totalBomCost ?? entry?.material_total_cost ?? 0) || 0,
       adjustment_total_cost: Number(pricingRow?.totalAdjustments ?? entry?.adjustment_total_cost ?? 0) || 0,
       market_adjustment_total: Number(pricingRow?.marketAdjustmentTotal ?? entry?.market_adjustment_total ?? pricingRow?.totalAdjustments ?? 0) || 0,

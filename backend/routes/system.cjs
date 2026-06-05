@@ -1,54 +1,39 @@
 const express = require('express');
 const router = express.Router();
 const workspaceService = require('../services/workspaceService.cjs');
+const { sendSafeError } = require('../utils/errors.cjs');
+const { validateBody, workspaceSchemas } = require('../middleware/validation.cjs');
 
-/**
- * Initialize the company workspace on the Desktop.
- * Creates folders for Documents, Invoices, Receipts, Backups, and Sync.
- */
-router.post('/workspace/initialize', async (req, res) => {
+router.post('/workspace/initialize', validateBody(workspaceSchemas.initialize), async (req, res) => {
   try {
     const { companyName } = req.body;
-    if (!companyName) {
-      return res.status(400).json({ error: 'Company name is required' });
-    }
     const config = await workspaceService.initializeWorkspace(companyName);
     res.json(config);
   } catch (err) {
     console.error('[System] Workspace initialization failed:', err);
-    res.status(500).json({ error: err.message });
+    sendSafeError(res, 500, 'INTERNAL_ERROR');
   }
 });
 
-/**
- * Sync data to the workspace.
- */
-router.post('/workspace/sync', async (req, res) => {
+router.post('/workspace/sync', validateBody(workspaceSchemas.sync), async (req, res) => {
   try {
     const { filename, data } = req.body;
-    if (!filename || !data) {
-      return res.status(400).json({ error: 'Filename and data are required' });
-    }
     const path = await workspaceService.saveToWorkspace('Sync', filename, data);
     res.json({ success: true, path });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[System] Workspace sync failed:', err);
+    sendSafeError(res, 500, 'INTERNAL_ERROR');
   }
 });
 
-/**
- * Save a document (PDF, Receipt, etc.) to the workspace.
- */
-router.post('/workspace/save-document', async (req, res) => {
+router.post('/workspace/save-document', validateBody(workspaceSchemas.saveDocument), async (req, res) => {
   try {
     const { folder, filename, data } = req.body; 
-    if (!filename || !data) {
-      return res.status(400).json({ error: 'Filename and data are required' });
-    }
     const path = await workspaceService.saveToWorkspace(folder || 'Documents', filename, data);
     res.json({ success: true, path });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[System] Save document failed:', err);
+    sendSafeError(res, 500, 'INTERNAL_ERROR');
   }
 });
 

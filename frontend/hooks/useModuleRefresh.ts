@@ -25,9 +25,8 @@ export const useModuleRefresh = (
   const handleFocus = useCallback(() => {
     if (!focusRefresh) return;
     
-    // Throttle focus refresh to once every 10 seconds to prevent spam
     const now = Date.now();
-    if (now - lastRefreshRef.current > 10_000) {
+    if (now - lastRefreshRef.current > 30_000) {
       lastRefreshRef.current = now;
       targetRefreshFn().catch(() => undefined);
     }

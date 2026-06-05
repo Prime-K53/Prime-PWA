@@ -41,6 +41,8 @@ export const VatSettings: React.FC = () => {
                     <div>
                         <label className="block text-[12px] font-bold text-slate-500 tracking-wide mb-1">Standard rate (%)</label>
                         <input
+                            id="standard-rate"
+                            name="standard_rate"
                             type="number"
                             value={localConfig.rate}
                             onChange={(e) => handleChange('rate', parseFloat(e.target.value))}
@@ -52,6 +54,8 @@ export const VatSettings: React.FC = () => {
                     <div>
                         <label className="block text-[12px] font-bold text-slate-500 tracking-wide mb-1">Registration number (TPIN)</label>
                         <input
+                            id="registration-number"
+                            name="registration_number"
                             type="text"
                             value={localConfig.registrationNumber || ''}
                             onChange={(e) => handleChange('registrationNumber', e.target.value)}
@@ -63,6 +67,8 @@ export const VatSettings: React.FC = () => {
                     <div>
                         <label className="block text-[12px] font-bold text-slate-500 tracking-wide mb-1">Filing frequency</label>
                         <select
+                            id="filing-frequency"
+                            name="filing_frequency"
                             value={localConfig.filingFrequency}
                             onChange={(e) => handleChange('filingFrequency', e.target.value)}
                             className="w-full border border-slate-200 rounded-xl p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -76,6 +82,8 @@ export const VatSettings: React.FC = () => {
                     <div>
                         <label className="block text-[12px] font-bold text-slate-500 tracking-wide mb-1">Default tax category</label>
                         <select
+                            id="default-tax-category"
+                            name="default_tax_category"
                             value={localConfig.defaultTaxCategory || 'Standard'}
                             onChange={(e) => handleChange('defaultTaxCategory', e.target.value)}
                             className="w-full border border-slate-200 rounded-xl p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -92,6 +100,8 @@ export const VatSettings: React.FC = () => {
                     <div>
                         <label className="block text-[12px] font-bold text-slate-500 tracking-wide mb-1">Output tax account (collected)</label>
                         <select
+                            id="output-tax-account"
+                            name="output_tax_account"
                             value={localConfig.outputTaxAccount || ''}
                             onChange={(e) => handleChange('outputTaxAccount', e.target.value)}
                             className="w-full border border-slate-200 rounded-xl p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -107,6 +117,8 @@ export const VatSettings: React.FC = () => {
                     <div>
                         <label className="block text-[12px] font-bold text-slate-500 tracking-wide mb-1">Input tax account (paid)</label>
                         <select
+                            id="input-tax-account"
+                            name="input_tax_account"
                             value={localConfig.inputTaxAccount || ''}
                             onChange={(e) => handleChange('inputTaxAccount', e.target.value)}
                             className="w-full border border-slate-200 rounded-xl p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -122,6 +134,8 @@ export const VatSettings: React.FC = () => {
                     <div>
                         <label className="block text-[12px] font-bold text-slate-500 tracking-wide mb-1">Market adjustment account</label>
                         <select
+                            id="market-adjustment-account"
+                            name="market_adjustment_account"
                             value={localConfig.marketAdjustmentAccount || ''}
                             onChange={(e) => handleChange('marketAdjustmentAccount', e.target.value)}
                             className="w-full border border-slate-200 rounded-xl p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"

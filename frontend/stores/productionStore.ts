@@ -6,6 +6,7 @@ import { api } from '../services/api';
 import { productionDb } from '../services/productionDb';
 import { generateNextId } from '../utils/helpers';
 import { MOCK_WORK_CENTERS, MOCK_RESOURCES } from '../constants';
+import { isSupabaseConfigured } from '../services/cloudMode';
 
 const isProd = Boolean(import.meta.env?.PROD);
 
@@ -90,7 +91,7 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
       } catch {}
 
       // In non-production environments, seed mock data ONLY if still empty
-      if (workCenters.length === 0 && !isProd) {
+      if (workCenters.length === 0 && !isProd && !isSupabaseConfigured()) {
         workCenters = MOCK_WORK_CENTERS;
         resources = MOCK_RESOURCES;
         for (const wc of MOCK_WORK_CENTERS) {

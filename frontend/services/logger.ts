@@ -85,9 +85,16 @@ class Logger {
 
     try {
       const { getUrl } = await import('../config/api.js');
+      const rawConfig = localStorage.getItem('nexus_company_config');
+      const companyId = rawConfig ? JSON.parse(rawConfig)?.companyId : null;
       await fetch(getUrl('logs'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': localStorage.getItem('prime_user_id') || 'unknown',
+          'x-user-role': localStorage.getItem('prime_user_role') || 'Admin',
+          ...(companyId ? { 'x-company-id': String(companyId) } : {}),
+        },
         body: JSON.stringify({
           ...entry,
           error: entry.error ? {

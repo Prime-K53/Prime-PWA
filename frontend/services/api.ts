@@ -50,6 +50,13 @@ apiClient.interceptors.request.use((config) => {
       if (user?.email) config.headers['x-user-email'] = user.email;
     }
   } catch { /* non-fatal */ }
+  try {
+    const companyConfig = localStorage.getItem('nexus_company_config');
+    if (companyConfig) {
+      const parsed = JSON.parse(companyConfig);
+      if (parsed?.companyId) config.headers['x-company-id'] = parsed.companyId;
+    }
+  } catch { /* non-fatal */ }
   return config;
 });
 
@@ -268,12 +275,21 @@ apiClient.interceptors.request.use((config) => {
       config.headers['x-user-role'] = config.headers['x-user-role'] || 'Admin';
       config.headers['x-user-is-super-admin'] = config.headers['x-user-is-super-admin'] || 'true';
     }
-    config.headers['x-dev-bypass'] = 'true';
+    const companyConfig = localStorage.getItem('nexus_company_config');
+    if (companyConfig) {
+      const parsed = JSON.parse(companyConfig);
+      if (parsed?.companyId) config.headers['x-company-id'] = parsed.companyId;
+    }
+    if (typeof import.meta !== 'undefined' && import.meta.env?.DEV) {
+      config.headers['x-dev-bypass'] = 'true';
+    }
   } catch (e) {
     (config as any).headers = config.headers || {};
-    config.headers['x-user-id'] = config.headers['x-user-id'] || 'USR-0001';
-    config.headers['x-user-role'] = config.headers['x-user-role'] || 'Admin';
-    config.headers['x-user-is-super-admin'] = config.headers['x-user-is-super-admin'] || 'true';
+    if (typeof import.meta !== 'undefined' && import.meta.env?.DEV) {
+      config.headers['x-user-id'] = config.headers['x-user-id'] || 'USR-0001';
+      config.headers['x-user-role'] = config.headers['x-user-role'] || 'Admin';
+      config.headers['x-user-is-super-admin'] = config.headers['x-user-is-super-admin'] || 'true';
+    }
   }
   return config;
 }, (err) => Promise.reject(err));
@@ -595,16 +611,16 @@ export const api = {
           const persistedSale = mergeSalePayload(sale, response.data);
           await dbService.put('sales', persistedSale);
           if (typeof window !== 'undefined') {
-            console.log('Sale created successfully');
             window.dispatchEvent(new Event('primeerp:dashboard-refresh'));
           }
           return persistedSale;
         }
-        await dbService.put('sales', sale);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('primeerp:dashboard-refresh'));
+        }
         return sale;
       } catch (err) {
         ensureBackendInProd('Sales.Create', err);
-        await dbService.put('sales', sale);
         return sale;
       }
     }, 'Sales.Create'),

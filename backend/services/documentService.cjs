@@ -22,10 +22,11 @@ class DocumentService {
    * Resolves a document from either the persistent store or the in-memory repository.
    * Supports both internal UUIDs and display IDs with context-aware rules.
    */
-  async resolveDocument(id, options = {}) {
+  async resolveDocument(id, companyId, options = {}) {
     const defaultOptions = { includeInMemory: true, allowLogicalFallback: true, purpose: 'general' };
     const mergedOptions = { ...defaultOptions, ...options };
     const identifierType = detectIdentifierType(id);
+    const cid = (typeof companyId === 'string' && companyId.trim()) ? companyId.trim() : '';
     console.log(`[DocumentService] Resolving document ${id}...`, { identifierType, options: mergedOptions });
 
     // 1. Check in-memory repository first (if it's a UUID or if we want to support logical in-memory)
@@ -48,11 +49,11 @@ class DocumentService {
       let params;
 
       if (identifierType === 'internalId') {
-        query = "SELECT * FROM documents WHERE id = ?";
-        params = [id];
+        query = "SELECT * FROM documents WHERE id = ?" + (cid ? " AND company_id = ?" : "");
+        params = cid ? [id, cid] : [id];
       } else if (identifierType === 'logicalNumber' && mergedOptions.allowLogicalFallback) {
-        query = "SELECT * FROM documents WHERE logical_number = ?";
-        params = [id];
+        query = "SELECT * FROM documents WHERE logical_number = ?" + (cid ? " AND company_id = ?" : "");
+        params = cid ? [id, cid] : [id];
       } else {
         console.warn(`[DocumentService] Invalid identifier format or fallback disabled: ${id}`);
         return resolve(null);
@@ -111,25 +112,25 @@ class DocumentService {
    * Register or Upsert a document.
    * Ensures the document exists in the repository before further operations (like preview).
    */
-  async registerDocument(type, payload, userId, existingId = null) {
+  async registerDocument(type, payload, userId, companyId, existingId = null) {
     if (existingId) {
       const identifierType = detectIdentifierType(existingId);
       
       // If it's a logical number, we need to find the internal ID first
       let internalId = existingId;
       if (identifierType === 'logicalNumber') {
-        const doc = await this.resolveDocument(existingId, { allowLogicalFallback: true, purpose: 'general' });
+        const doc = await this.resolveDocument(existingId, companyId, { allowLogicalFallback: true, purpose: 'general' });
         if (doc) {
           internalId = doc.id;
         } else {
           // If logical number doesn't exist, treat as new creation with that type
-          return this.createDocument(type, payload, userId);
+          return this.createDocument(type, payload, userId, companyId);
         }
       }
 
       try {
-        await this.updateDocument(internalId, payload, userId);
-        const doc = await this.resolveDocument(internalId);
+        await this.updateDocument(internalId, payload, userId, companyId);
+        const doc = await this.resolveDocument(internalId, companyId);
         return { 
           id: doc.id, 
           logicalNumber: doc.logical_number, 
@@ -139,12 +140,12 @@ class DocumentService {
         };
       } catch (err) {
         if (err.message === 'Document not found') {
-          return this.createDocument(type, payload, userId);
+          return this.createDocument(type, payload, userId, companyId);
         }
         throw err;
       }
     } else {
-      const result = await this.createDocument(type, payload, userId);
+      const result = await this.createDocument(type, payload, userId, companyId);
       return { ...result, isNew: true };
     }
   }
@@ -152,18 +153,20 @@ class DocumentService {
   /**
    * Create a new document in draft status.
    */
-  async createDocument(type, payload, userId) {
+  async createDocument(type, payload, userId, companyId) {
     // Generate a proper UUID for internal tracking, alongside the display ID
     const uuid = require('crypto').randomUUID();
     const displayId = `${type.toUpperCase()}-${Date.now()}`;
+    const cid = (typeof companyId === 'string' && companyId.trim()) ? companyId.trim() : '';
     
     const query = `
-      INSERT INTO documents (id, logical_number, type, status, payload, created_by)
-      VALUES (?, ?, ?, 'draft', ?, ?)
+      INSERT INTO documents (id, logical_number, type, status, payload, created_by${cid ? ', company_id' : ''})
+      VALUES (?, ?, ?, 'draft', ?, ?${cid ? ', ?' : ''})
     `;
     
     return new Promise((resolve, reject) => {
-      getDb().run(query, [uuid, displayId, type, JSON.stringify(payload), userId], function(err) {
+      const params = cid ? [uuid, displayId, type, JSON.stringify(payload), userId, cid] : [uuid, displayId, type, JSON.stringify(payload), userId];
+      getDb().run(query, params, function(err) {
         if (err) return reject(err);
         resolve({ id: uuid, logicalNumber: displayId, type, status: 'draft' });
       });
@@ -173,10 +176,11 @@ class DocumentService {
   /**
    * Update an existing draft document.
    */
-  async updateDocument(id, payload, userId) {
+  async updateDocument(id, payload, userId, companyId) {
+    const cid = (typeof companyId === 'string' && companyId.trim()) ? companyId.trim() : '';
     return new Promise((resolve, reject) => {
       // 1. Check if document exists and is in draft status
-      getDb().get("SELECT status FROM documents WHERE id = ?", [id], (err, doc) => {
+      getDb().get("SELECT status FROM documents WHERE id = ?" + (cid ? " AND company_id = ?" : ""), cid ? [id, cid] : [id], (err, doc) => {
         if (err) return reject(err);
         if (!doc) return reject(new Error('Document not found'));
         if (doc.status !== 'draft') {
@@ -187,9 +191,8 @@ class DocumentService {
         const query = `
           UPDATE documents 
           SET payload = ?, updated_at = CURRENT_TIMESTAMP 
-          WHERE id = ?
-        `;
-        getDb().run(query, [JSON.stringify(payload), id], (err) => {
+          WHERE id = ?` + (cid ? " AND company_id = ?" : "");
+        getDb().run(query, cid ? [JSON.stringify(payload), id, cid] : [JSON.stringify(payload), id], (err) => {
           if (err) return reject(err);
           resolve({ id, success: true });
         });
@@ -200,9 +203,10 @@ class DocumentService {
   /**
    * Finalize a document: Generate layout, lock it, and transition to 'finalized'.
    */
-  async finalizeDocument(id, layoutBlueprint, userId) {
+  async finalizeDocument(id, layoutBlueprint, userId, companyId) {
+    const cid = (typeof companyId === 'string' && companyId.trim()) ? companyId.trim() : '';
     return new Promise((resolve, reject) => {
-      getDb().get("SELECT * FROM documents WHERE id = ?", [id], async (err, doc) => {
+      getDb().get("SELECT * FROM documents WHERE id = ?" + (cid ? " AND company_id = ?" : ""), cid ? [id, cid] : [id], async (err, doc) => {
         if (err) return reject(err);
         if (!doc) return reject(new Error('Document not found'));
         if (doc.status !== 'draft') {
@@ -240,9 +244,8 @@ class DocumentService {
                 render_model = ?, 
                 fingerprint = ?, 
                 finalized_at = CURRENT_TIMESTAMP 
-            WHERE id = ?
-          `;
-          getDb().run(query, [JSON.stringify(renderModel), validation.fingerprint, id], (err) => {
+            WHERE id = ?` + (cid ? " AND company_id = ?" : "");
+          getDb().run(query, cid ? [JSON.stringify(renderModel), validation.fingerprint, id, cid] : [JSON.stringify(renderModel), validation.fingerprint, id], (err) => {
             if (err) return reject(err);
             resolve({ id, status: 'finalized', fingerprint: validation.fingerprint });
           });
@@ -256,11 +259,11 @@ class DocumentService {
   /**
    * Batch Process: Finalize multiple documents at once.
    */
-  async batchFinalize(ids, blueprint, userId) {
+  async batchFinalize(ids, blueprint, userId, companyId) {
     const results = [];
     for (const id of ids) {
       try {
-        const result = await this.finalizeDocument(id, blueprint, userId);
+        const result = await this.finalizeDocument(id, blueprint, userId, companyId);
         results.push({ id, success: true, fingerprint: result.fingerprint });
       } catch (err) {
         results.push({ id, success: false, error: err.message });
@@ -280,9 +283,10 @@ class DocumentService {
   /**
    * Verify the digital signature of a document.
    */
-  async verifySignature(id) {
+  async verifySignature(id, companyId) {
+    const cid = (typeof companyId === 'string' && companyId.trim()) ? companyId.trim() : '';
     return new Promise((resolve, reject) => {
-      getDb().get("SELECT render_model, fingerprint FROM documents WHERE id = ?", [id], (err, doc) => {
+      getDb().get("SELECT render_model, fingerprint FROM documents WHERE id = ?" + (cid ? " AND company_id = ?" : ""), cid ? [id, cid] : [id], (err, doc) => {
         if (err) return reject(err);
         if (!doc) return reject(new Error('Document not found'));
         if (!doc.fingerprint) return reject(new Error('Document is not finalized/signed'));
@@ -306,9 +310,10 @@ class DocumentService {
       });
     });
   }
-  async voidDocument(id, userId) {
+  async voidDocument(id, userId, companyId) {
+    const cid = (typeof companyId === 'string' && companyId.trim()) ? companyId.trim() : '';
     return new Promise((resolve, reject) => {
-      getDb().run("UPDATE documents SET status = 'voided' WHERE id = ?", [id], (err) => {
+      getDb().run("UPDATE documents SET status = 'voided' WHERE id = ?" + (cid ? " AND company_id = ?" : ""), cid ? [id, cid] : [id], (err) => {
         if (err) return reject(err);
         resolve({ id, status: 'voided' });
       });
@@ -318,11 +323,11 @@ class DocumentService {
   /**
    * Get the render model for preview with a guarded flow.
    */
-  async getPreview(id, options = { purpose: 'preview', templateId: null }) {
+  async getPreview(id, options = { purpose: 'preview', templateId: null }, companyId) {
     const identifierType = detectIdentifierType(id);
     try {
       // 0. Resolve the document using the shared resolution logic with purpose
-      const doc = await this.resolveDocument(id, { 
+      const doc = await this.resolveDocument(id, companyId, { 
         includeInMemory: true, 
         allowLogicalFallback: true,
         purpose: options.purpose 
@@ -493,13 +498,15 @@ class DocumentService {
   /**
    * Log an audit action.
    */
-  async logAudit(userId, action, entityType, entityId, details) {
+  async logAudit(userId, action, entityType, entityId, details, companyId) {
+    const cid = (typeof companyId === 'string' && companyId.trim()) ? companyId.trim() : '';
     const query = `
-      INSERT INTO audit_logs (user_id, action, entity_type, entity_id, details)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO audit_logs (user_id, action, entity_type, entity_id, details${cid ? ', company_id' : ''})
+      VALUES (?, ?, ?, ?, ?${cid ? ', ?' : ''})
     `;
     return new Promise((resolve, reject) => {
-      getDb().run(query, [userId, action, entityType, entityId, JSON.stringify(details)], function(err) {
+      const params = cid ? [userId, action, entityType, entityId, JSON.stringify(details), cid] : [userId, action, entityType, entityId, JSON.stringify(details)];
+      getDb().run(query, params, function(err) {
         if (err) {
           console.error('[DocumentService] Audit log insert failed:', err);
           return reject(err);

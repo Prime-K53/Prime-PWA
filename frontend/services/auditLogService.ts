@@ -30,6 +30,13 @@ const getHeaders = () => {
         console.warn('Failed to parse user from session storage', e);
       }
     }
+    const companyConfig = localStorage.getItem('nexus_company_config');
+    if (companyConfig) {
+      try {
+        const parsed = JSON.parse(companyConfig);
+        if (parsed?.companyId) headers['x-company-id'] = parsed.companyId;
+      } catch { /* ignore */ }
+    }
     return headers;
 };
 

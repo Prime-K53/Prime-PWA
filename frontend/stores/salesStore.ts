@@ -47,7 +47,7 @@ interface SalesState {
   updateSalesOrder: (order: SalesOrder) => Promise<void>;
   deleteSalesOrder: (id: string) => Promise<void>;
 
-  fetchSalesData: () => Promise<void>;
+  fetchSalesData: (silent?: boolean) => Promise<void>;
   fetchExchanges: () => Promise<void>;
   
   addSale: (sale: Sale) => Promise<void>;
@@ -98,8 +98,8 @@ export const useSalesStore = create<SalesState>((set, get) => ({
   reprintJobs: [],
   isLoading: false,
 
-  fetchSalesData: async () => {
-    set({ isLoading: true });
+  fetchSalesData: async (silent = false) => {
+    if (!silent) set({ isLoading: true });
     try {
       const [sales, quotations, jobOrders, customerPayments, shipments, customers, salesExchanges, reprintJobs, salesOrders] = await Promise.all([
         api.sales.getAllSales(),
@@ -117,7 +117,7 @@ export const useSalesStore = create<SalesState>((set, get) => ({
     } catch (error) {
       console.error("Failed to load sales data", error);
     } finally {
-      set({ isLoading: false });
+      if (!silent) set({ isLoading: false });
     }
   },
 
