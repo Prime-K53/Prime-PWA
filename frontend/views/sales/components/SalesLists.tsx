@@ -165,8 +165,7 @@ export const SalesOrderList: React.FC<ListProps<JobOrder>> = (props) => {
     const location = useLocation();
     useHighlight();
 
-    const itemsPerPage = props.viewMode === 'Card' ? CARD_ITEMS_PER_PAGE : LIST_ITEMS_PER_PAGE;
-    const { currentItems, currentPage, maxPage, totalItems, next, prev } = usePagination(props.data, itemsPerPage);
+    const { currentItems, currentPage, maxPage, totalItems, next, prev, first, last, setItemsPerPage, itemsPerPage } = usePagination(props.data, props.viewMode === 'Card' ? CARD_ITEMS_PER_PAGE : LIST_ITEMS_PER_PAGE);
 
     const currentOrder = (props.data || []).find((d: any) => d.id === openMenuId);
     const hoveredOrder = (props.data || []).find((d: any) => d.id === hoveredId);
@@ -234,7 +233,7 @@ export const SalesOrderList: React.FC<ListProps<JobOrder>> = (props) => {
                         ))}
                     </div>
                     <div className="mt-3">
-                        <Pagination currentPage={currentPage} maxPage={maxPage} totalItems={totalItems} itemsPerPage={itemsPerPage} onNext={next} onPrev={prev} />
+                        <Pagination currentPage={currentPage} maxPage={maxPage} totalItems={totalItems} itemsPerPage={itemsPerPage} onNext={next} onPrev={prev} onFirst={first} onLast={last} onItemsPerPageChange={setItemsPerPage} />
                     </div>
                 </div>
             ) : (
@@ -299,7 +298,7 @@ export const SalesOrderList: React.FC<ListProps<JobOrder>> = (props) => {
                             </tbody>
                         </table>
                     </div>
-                    <Pagination currentPage={currentPage} maxPage={maxPage} totalItems={totalItems} itemsPerPage={itemsPerPage} onNext={next} onPrev={prev} />
+                    <Pagination currentPage={currentPage} maxPage={maxPage} totalItems={totalItems} itemsPerPage={itemsPerPage} onNext={next} onPrev={prev} onFirst={first} onLast={last} onItemsPerPageChange={setItemsPerPage} />
                 </div>
             )}
         </div>
@@ -314,8 +313,7 @@ export const OrdersList: React.FC<ListProps<Order>> = (props) => {
     const location = useLocation();
     useHighlight();
 
-    const itemsPerPage = props.viewMode === 'Card' ? 12 : 10;
-    const { currentItems, currentPage, maxPage, totalItems, next, prev } = usePagination(props.data, itemsPerPage);
+    const { currentItems, currentPage, maxPage, totalItems, next, prev, first, last, setItemsPerPage, itemsPerPage } = usePagination(props.data, props.viewMode === 'Card' ? 12 : 10);
 
     const currentOrder = (props.data || []).find((d: any) => d.id === openMenuId);
 
@@ -400,7 +398,7 @@ export const OrdersList: React.FC<ListProps<Order>> = (props) => {
                             </div>
                         ))}
                     </div>
-                    <Pagination currentPage={currentPage} maxPage={maxPage} totalItems={totalItems} itemsPerPage={itemsPerPage} onNext={next} onPrev={prev} />
+                    <Pagination currentPage={currentPage} maxPage={maxPage} totalItems={totalItems} itemsPerPage={itemsPerPage} onNext={next} onPrev={prev} onFirst={first} onLast={last} onItemsPerPageChange={setItemsPerPage} />
                 </div>
             ) : (
                 <div className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-sm border border-white/60 overflow-hidden flex-1 flex flex-col">
@@ -459,7 +457,7 @@ export const OrdersList: React.FC<ListProps<Order>> = (props) => {
                             </tbody>
                         </table>
                     </div>
-                    <Pagination currentPage={currentPage} maxPage={maxPage} totalItems={totalItems} itemsPerPage={itemsPerPage} onNext={next} onPrev={prev} />
+                    <Pagination currentPage={currentPage} maxPage={maxPage} totalItems={totalItems} itemsPerPage={itemsPerPage} onNext={next} onPrev={prev} onFirst={first} onLast={last} onItemsPerPageChange={setItemsPerPage} />
                 </div>
             )}
         </div>
@@ -636,8 +634,7 @@ export const SalesExchangeList: React.FC<ListProps<SalesExchange>> = (props) => 
     const location = useLocation();
     useHighlight();
 
-    const itemsPerPage = props.viewMode === 'Card' ? CARD_ITEMS_PER_PAGE : LIST_ITEMS_PER_PAGE;
-    const { currentItems, currentPage, maxPage, totalItems, next, prev } = usePagination(props.data, itemsPerPage);
+    const { currentItems, currentPage, maxPage, totalItems, next, prev, first, last, setItemsPerPage, itemsPerPage } = usePagination(props.data, props.viewMode === 'Card' ? CARD_ITEMS_PER_PAGE : LIST_ITEMS_PER_PAGE);
 
     const currentExchange = (props.data || []).find((d: any) => d.id === openMenuId);
     const hoveredExchange = (props.data || []).find((d: any) => d.id === hoveredId);
@@ -783,7 +780,7 @@ export const SalesExchangeList: React.FC<ListProps<SalesExchange>> = (props) => 
                         </tbody>
                     </table>
                 </div>
-                <Pagination currentPage={currentPage} maxPage={maxPage} totalItems={totalItems} itemsPerPage={itemsPerPage} onNext={next} onPrev={prev} />
+                <Pagination currentPage={currentPage} maxPage={maxPage} totalItems={totalItems} itemsPerPage={itemsPerPage} onNext={next} onPrev={prev} onFirst={first} onLast={last} onItemsPerPageChange={setItemsPerPage} />
             </div>
         </div>
     );
@@ -831,8 +828,7 @@ export const InvoiceList: React.FC<ListProps<Invoice>> = (props) => {
     const location = useLocation();
     useHighlight();
 
-    const itemsPerPage = props.viewMode === 'Card' ? CARD_ITEMS_PER_PAGE : LIST_ITEMS_PER_PAGE;
-    const { currentItems, currentPage, maxPage, totalItems, next, prev } = usePagination(props.data, itemsPerPage);
+    const { currentItems, currentPage, maxPage, totalItems, next, prev, first, last, setItemsPerPage, itemsPerPage } = usePagination(props.data, props.viewMode === 'Card' ? CARD_ITEMS_PER_PAGE : LIST_ITEMS_PER_PAGE);
 
     const handleOpenPortal = (id: string) => {
         const url = window.location.origin + window.location.pathname + '#/portal/invoice/' + id;
@@ -1011,7 +1007,7 @@ export const InvoiceList: React.FC<ListProps<Invoice>> = (props) => {
                         ))}
                     </div>
                     <div className="mt-3">
-                        <Pagination currentPage={currentPage} maxPage={maxPage} totalItems={totalItems} itemsPerPage={itemsPerPage} onNext={next} onPrev={prev} />
+                        <Pagination currentPage={currentPage} maxPage={maxPage} totalItems={totalItems} itemsPerPage={itemsPerPage} onNext={next} onPrev={prev} onFirst={first} onLast={last} onItemsPerPageChange={setItemsPerPage} />
                     </div>
                 </div>
             ) : (
@@ -1130,7 +1126,7 @@ export const InvoiceList: React.FC<ListProps<Invoice>> = (props) => {
                             </tbody>
                         </table>
                     </div>
-                    <Pagination currentPage={currentPage} maxPage={maxPage} totalItems={totalItems} itemsPerPage={itemsPerPage} onNext={next} onPrev={prev} />
+                    <Pagination currentPage={currentPage} maxPage={maxPage} totalItems={totalItems} itemsPerPage={itemsPerPage} onNext={next} onPrev={prev} onFirst={first} onLast={last} onItemsPerPageChange={setItemsPerPage} />
                 </div>
             )}
         </div>
@@ -1145,8 +1141,7 @@ export const QuotationList: React.FC<ListProps<Quotation>> = (props) => {
     const location = useLocation();
     useHighlight();
 
-    const itemsPerPage = props.viewMode === 'Card' ? CARD_ITEMS_PER_PAGE : LIST_ITEMS_PER_PAGE;
-    const { currentItems, currentPage, maxPage, totalItems, next, prev } = usePagination(props.data, itemsPerPage);
+    const { currentItems, currentPage, maxPage, totalItems, next, prev, first, last, setItemsPerPage, itemsPerPage } = usePagination(props.data, props.viewMode === 'Card' ? CARD_ITEMS_PER_PAGE : LIST_ITEMS_PER_PAGE);
 
     const currentQuote = (props.data || []).find((d: any) => d.id === openMenuId);
     const hoveredQuote = (props.data || []).find((d: any) => d.id === hoveredId);
@@ -1243,7 +1238,7 @@ export const QuotationList: React.FC<ListProps<Quotation>> = (props) => {
                         ))}
                     </div>
                     <div className="mt-3">
-                        <Pagination currentPage={currentPage} maxPage={maxPage} totalItems={totalItems} itemsPerPage={itemsPerPage} onNext={next} onPrev={prev} />
+                        <Pagination currentPage={currentPage} maxPage={maxPage} totalItems={totalItems} itemsPerPage={itemsPerPage} onNext={next} onPrev={prev} onFirst={first} onLast={last} onItemsPerPageChange={setItemsPerPage} />
                     </div>
                 </div>
             ) : (
@@ -1307,7 +1302,7 @@ export const QuotationList: React.FC<ListProps<Quotation>> = (props) => {
                             </tbody>
                         </table>
                     </div>
-                    <Pagination currentPage={currentPage} maxPage={maxPage} totalItems={totalItems} itemsPerPage={itemsPerPage} onNext={next} onPrev={prev} />
+                    <Pagination currentPage={currentPage} maxPage={maxPage} totalItems={totalItems} itemsPerPage={itemsPerPage} onNext={next} onPrev={prev} onFirst={first} onLast={last} onItemsPerPageChange={setItemsPerPage} />
                 </div>
             )}
         </div>
@@ -1322,8 +1317,7 @@ export const RecurringList: React.FC<ListProps<RecurringInvoice>> = (props) => {
     const location = useLocation();
     useHighlight();
 
-    const itemsPerPage = props.viewMode === 'Card' ? CARD_ITEMS_PER_PAGE : LIST_ITEMS_PER_PAGE;
-    const { currentItems, currentPage, maxPage, totalItems, next, prev } = usePagination(props.data, itemsPerPage);
+    const { currentItems, currentPage, maxPage, totalItems, next, prev, first, last, setItemsPerPage, itemsPerPage } = usePagination(props.data, props.viewMode === 'Card' ? CARD_ITEMS_PER_PAGE : LIST_ITEMS_PER_PAGE);
 
     const currentSub = (props.data || []).find((d: any) => d.id === openMenuId);
     const hoveredSub = (props.data || []).find((d: any) => d.id === hoveredId);
@@ -1479,7 +1473,7 @@ export const RecurringList: React.FC<ListProps<RecurringInvoice>> = (props) => {
                         </tbody>
                     </table>
                 </div>
-                <Pagination currentPage={currentPage} maxPage={maxPage} totalItems={totalItems} itemsPerPage={itemsPerPage} onNext={next} onPrev={prev} />
+                <Pagination currentPage={currentPage} maxPage={maxPage} totalItems={totalItems} itemsPerPage={itemsPerPage} onNext={next} onPrev={prev} onFirst={first} onLast={last} onItemsPerPageChange={setItemsPerPage} />
             </div>
         </div>
     );

@@ -102,8 +102,7 @@ export const PurchaseHistory: React.FC<PurchaseHistoryProps> = ({ purchases, sup
     const { openMenuId, menuPos, activeSubmenu, setActiveSubmenu, menuRef, handleContextMenu, handleRowClick, setOpenMenuId } = useContextMenu();
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-    const itemsPerPage = 15;
-    const { currentItems, currentPage, maxPage, totalItems, next, prev } = usePagination(purchases, itemsPerPage);
+    const { currentItems, currentPage, maxPage, totalItems, next, prev, first, last, setItemsPerPage, itemsPerPage } = usePagination(purchases, 15);
 
     const enrichPO = (po: Purchase) => {
         const supplier = (suppliers || []).find(s => s.id === po.supplierId) ||
@@ -420,7 +419,7 @@ export const PurchaseHistory: React.FC<PurchaseHistoryProps> = ({ purchases, sup
                     </tbody>
                 </table>
             </div>
-            <Pagination currentPage={currentPage} maxPage={maxPage} totalItems={totalItems} itemsPerPage={itemsPerPage} onNext={next} onPrev={prev} />
+            <Pagination currentPage={currentPage} maxPage={maxPage} totalItems={totalItems} itemsPerPage={itemsPerPage} onNext={next} onPrev={prev} onFirst={first} onLast={last} onItemsPerPageChange={setItemsPerPage} />
         </div>
     );
 };

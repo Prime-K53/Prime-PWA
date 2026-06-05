@@ -319,8 +319,7 @@ const showStockColumn = filterType === 'Material' || filterType === 'Stationery'
         return 0;
     });
 
-    const itemsPerPage = 50;
-    const { currentItems, currentPage, maxPage, totalItems, next, prev } = usePagination(filteredItems, itemsPerPage);
+    const { currentItems, currentPage, maxPage, totalItems, next, prev, first, last, setItemsPerPage, itemsPerPage } = usePagination(filteredItems, 50);
 
     const renderSortIcon = (field: keyof Item | 'category') => {
         if (sortField !== field) return null;
@@ -698,7 +697,7 @@ const showStockColumn = filterType === 'Material' || filterType === 'Stationery'
                     </tbody>
                 </table>
             </div>
-            <Pagination currentPage={currentPage} maxPage={maxPage} totalItems={totalItems} itemsPerPage={itemsPerPage} onNext={next} onPrev={prev} />
+            <Pagination currentPage={currentPage} maxPage={maxPage} totalItems={totalItems} itemsPerPage={itemsPerPage} onNext={next} onPrev={prev} onFirst={first} onLast={last} onItemsPerPageChange={setItemsPerPage} />
         </div>
     );
 };

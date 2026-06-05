@@ -9,6 +9,8 @@ import { useSales } from '../../context/SalesContext';
 import { useAuth } from '../../context/AuthContext';
 import { useFinance } from '../../context/FinanceContext';
 import { Customer, Invoice, CustomerPayment } from '../../types';
+import { usePagination } from '../../hooks/usePagination';
+import Pagination from '../../components/Pagination';
 import { ClientModal } from './components/ClientModal';
 import { CustomerWorkspace } from './components/CustomerWorkspace';
 import { isAfter, parseISO, subDays, format } from 'date-fns';
@@ -103,6 +105,8 @@ export const Clients: React.FC = () => {
       return matchesSearch && matchesStatus && matchesMetric && matchesSegment && matchesBalance && matchesPipelineStage;
     });
   }, [customers, searchQuery, filterStatus, selectedMetric, invoices, customerPayments, balanceRange, customerSegment, pipelineStageFilter]);
+
+  const { currentItems, currentPage, maxPage, totalItems, next, prev, first, last, setItemsPerPage, itemsPerPage } = usePagination(filteredCustomers, 25);
 
   const stats = useMemo(() => {
     const today = new Date();
@@ -460,7 +464,7 @@ export const Clients: React.FC = () => {
                     <td colSpan={7} className="px-4 py-10 text-center text-slate-400 italic text-[13px]">No clients found matching your criteria.</td>
                   </tr>
                 ) : (
-                  filteredCustomers.map((customer) => (
+                  currentItems.map((customer) => (
                     <React.Fragment key={customer.id}>
                       <tr
                         onClick={(e) => handleRowMenuClick(e, customer.id)}
@@ -664,6 +668,7 @@ export const Clients: React.FC = () => {
               </tbody>
             </table>
           </div>
+          <Pagination currentPage={currentPage} maxPage={maxPage} totalItems={totalItems} itemsPerPage={itemsPerPage} onNext={next} onPrev={prev} onFirst={first} onLast={last} onItemsPerPageChange={setItemsPerPage} />
         </div>
       </div>
 

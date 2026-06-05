@@ -138,8 +138,7 @@ const SubscriptionView: React.FC<SubscriptionViewProps> = ({ data, onEdit, onVie
         setCurrentMonth(newDate);
     };
 
-    const itemsPerPage = 12;
-    const { currentItems, currentPage, maxPage, totalItems, next, prev } = usePagination(data || [], itemsPerPage);
+    const { currentItems, currentPage, maxPage, totalItems, next, prev, first, last, setItemsPerPage, itemsPerPage } = usePagination(data || [], 12);
     const currentSub = (data || []).find(s => s.id === openMenuId);
     const hoveredSub = (data || []).find(s => s.id === hoveredId);
 
@@ -401,7 +400,7 @@ const SubscriptionView: React.FC<SubscriptionViewProps> = ({ data, onEdit, onVie
                                     )
                                 })}
                             </div>
-                            <Pagination currentPage={currentPage} maxPage={maxPage} totalItems={totalItems} itemsPerPage={itemsPerPage} onNext={next} onPrev={prev} />
+                            <Pagination currentPage={currentPage} maxPage={maxPage} totalItems={totalItems} itemsPerPage={itemsPerPage} onNext={next} onPrev={prev} onFirst={first} onLast={last} onItemsPerPageChange={setItemsPerPage} />
                         </div>
                     ) : (
                         <div className="grid grid-cols-7 gap-px bg-slate-200 border border-slate-200 rounded-3xl overflow-hidden shadow-sm h-full print:border-slate-300 font-normal">
