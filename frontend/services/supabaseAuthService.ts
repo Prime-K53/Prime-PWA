@@ -65,7 +65,11 @@ export async function signUp(email: string, password: string, metadata?: Record<
         const status = (error as any)?.status || (error as any)?.statusCode;
         return { success: false, error: `Supabase signup failed (server error). This is usually caused by a database trigger on the auth.users table. Please check: 1) Go to your Supabase Dashboard → Database → Triggers and remove any "on_auth_user_created" triggers. 2) If using a "profiles" table, ensure it exists and has proper RLS policies. 3) Check the Supabase Dashboard → Logs for the exact PostgreSQL error.` };
       }
-      return { success: false, error: error.message };
+      const status = (error as any)?.status || (error as any)?.statusCode;
+      if (status === 422) {
+        return { success: false, error: 'Supabase rejected the signup (422). Common causes: user signups are disabled in your Supabase Dashboard under Authentication > Settings, or email confirmation is required. If the issue persists, check your Supabase Auth logs.' };
+      }
+      return { success: false, error: error.message || `Request failed with status ${status || 'unknown'}` };
     }
     if (data.session?.user) {
       return {

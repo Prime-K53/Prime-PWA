@@ -688,6 +688,7 @@ const SetupWizard: React.FC = () => {
                       <div className="relative">
                         <input
                           type={showPassword ? 'text' : 'password'}
+                          autoComplete="new-password"
                           value={admin.password}
                           onChange={e => setAdmin(prev => ({ ...prev, password: e.target.value }))}
                           className={`${inputClass} pr-10`}
@@ -706,6 +707,7 @@ const SetupWizard: React.FC = () => {
                       <label className={labelClass}>Confirm</label>
                       <input
                         type="password"
+                        autoComplete="new-password"
                         value={admin.confirmPassword}
                         onChange={e => setAdmin(prev => ({ ...prev, confirmPassword: e.target.value }))}
                         className={inputClass}
