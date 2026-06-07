@@ -4,14 +4,17 @@ import {
   ArrowLeft, Archive, Star, Trash2, Download, Settings, Zap, Tag, MessageSquare,
   BarChart3, UserPlus, Volume2, Calendar, Repeat, ChevronRight, PhoneCall, Bot, GitBranch, 
   Play, Pause, Save, Copy, ExternalLink, Link, FileText, Image, Video, Phone, Check,
-  CheckCheck, MoreVertical, Smile, MapPin, Mic, QrCode, GripVertical, X, RefreshCw,
+  CheckCheck, MoreVertical, Smile, MapPin, Mic, GripVertical, X, RefreshCw,
   AlertCircle, TrendingUp, DollarSign, Package, Ticket, FileCheck, Truck, CreditCard,
-  Info, Globe
+  Info, Globe, Sparkles
 } from 'lucide-react';
 import { dbService } from '../../services/db';
 import { useAuth } from '../../context/AuthContext';
 import { useSales } from '../../context/SalesContext';
 import { whatsAppMarketingService, WhatsAppTemplate, WhatsAppCampaign, AutomationFlow, WhatsAppChat } from '../../services/whatsAppMarketingService';
+import { aiService, SmartReplySuggestion } from '../../services/aiService';
+import { whatsappClient, WhatsAppAccount } from '../../services/whatsappClientService';
+import { supabase } from '../../services/supabaseClient';
 
 interface CampaignFormData {
   name: string;
@@ -27,7 +30,7 @@ const MarketingMessages: React.FC = () => {
   const { customers } = useSales();
   const currency = companyConfig?.currencySymbol || 'K';
   
-  const [activeView, setActiveView] = useState<'inbox' | 'campaigns' | 'templates' | 'automation' | 'settings'>('inbox');
+  const [activeView, setActiveView] = useState<'inbox' | 'campaigns' | 'templates' | 'automation' | 'accounts' | 'activity'>('inbox');
   const [chats, setChats] = useState<WhatsAppChat[]>([]);
   const [templates, setTemplates] = useState<WhatsAppTemplate[]>([]);
   const [campaigns, setCampaigns] = useState<WhatsAppCampaign[]>([]);
@@ -50,6 +53,31 @@ const MarketingMessages: React.FC = () => {
   const [broadcastLink, setBroadcastLink] = useState('');
   const [customerSearch, setCustomerSearch] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const [smartReplies, setSmartReplies] = useState<SmartReplySuggestion[]>([]);
+  const [loadingReplies, setLoadingReplies] = useState(false);
+  const [showAISettings, setShowAISettings] = useState(false);
+  const [aiConfig, setAIConfig] = useState<{ provider: string; apiKey: string; endpoint: string; model: string; enabled: boolean }>({
+    provider: 'openai',
+    apiKey: '',
+    endpoint: 'https://api.openai.com/v1',
+    model: 'gpt-4o-mini',
+    enabled: false,
+  });
+  const [waConfigured, setWAConfigured] = useState(false);
+  const [showWASettings, setShowWASettings] = useState(false);
+  const [configuringWA, setConfiguringWA] = useState(false);
+  const [waAccount, setWAAccount] = useState<WhatsAppAccount | null>(null);
+  const [waPhoneNumberId, setWAPhoneNumberId] = useState('');
+  const [waAccessToken, setWAAccessToken] = useState('');
+  const [showBulkSend, setShowBulkSend] = useState(false);
+  const [bulkRecipients, setBulkRecipients] = useState<string>('');
+  const [bulkMessage, setBulkMessage] = useState('');
+  const [bulkSending, setBulkSending] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState({ total: 0, sent: 0, failed: 0 });
+  const [activityLog, setActivityLog] = useState<any[]>([]);
+  const [activityFilters, setActivityFilters] = useState<{ status?: string; dateRange?: string }>({});
+  const [queueStats, setQueueStats] = useState<{ status: string; count: number }[]>([]);
 
   const replaceVars = (text: string): string => {
     return text.split('{{name}}').join('Customer Name')
@@ -87,19 +115,53 @@ const MarketingMessages: React.FC = () => {
   });
 
   useEffect(() => {
-    loadData();
-  }, []);
-
-  useEffect(() => {
     if (selectedChat && messagesEndRef.current) {
       setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     }
   }, [selectedChat?.id]);
 
+  useEffect(() => {
+    if (selectedChat && selectedChat.messages?.length > 0) {
+      generateSmartReplies();
+    } else {
+      setSmartReplies([]);
+    }
+  }, [selectedChat?.id, selectedChat?.messages?.length]);
+
+  const generateSmartReplies = async () => {
+    if (!selectedChat) return;
+    setLoadingReplies(true);
+    try {
+      const replies = await aiService.generateSmartReplies(selectedChat);
+      setSmartReplies(replies);
+    } finally {
+      setLoadingReplies(false);
+    }
+  };
+
+  const applySmartReply = async (reply: SmartReplySuggestion) => {
+    if (!selectedChat) return;
+    let message = reply.text;
+    message = message.replace(/{{name}}/g, selectedChat.customerName || 'Customer');
+    message = message.replace(/{{company}}/g, companyConfig?.companyName || 'Our Company');
+
+    await whatsAppMarketingService.sendMessage(selectedChat.id, message);
+    const updatedChats = await whatsAppMarketingService.getChats();
+    setChats(updatedChats);
+    const updated = updatedChats.find(c => c.id === selectedChat.id);
+    if (updated) setSelectedChat(updated);
+    setSmartReplies([]);
+    notify('Reply sent!', 'success');
+  };
+
+  const _loadingRef = useRef(false);
+
   const loadData = async () => {
+    if (_loadingRef.current) return;
+    _loadingRef.current = true;
     setLoading(true);
     try {
-      await whatsAppMarketingService.initializeTemplates();
+      await whatsAppMarketingService.ensureInitialized();
       const [chatsData, templatesData, campaignsData, automationsData] = await Promise.all([
         whatsAppMarketingService.getChats(),
         whatsAppMarketingService.getTemplates(),
@@ -112,13 +174,197 @@ const MarketingMessages: React.FC = () => {
       setAutomations(automationsData);
     } catch (error) {
       console.error('Error loading marketing data:', error);
+      notify('Failed to load WhatsApp data. Please try again.', 'error');
     } finally {
       setLoading(false);
+      _loadingRef.current = false;
     }
+    loadActivityLog();
+    loadQueueStats();
+  };
+
+  const loadAIConfig = async () => {
+    const config = await aiService.getConfig();
+    setAIConfig(config);
+  };
+
+  const initWhatsApp = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const account = await whatsappClient.getAccount(user.id);
+        setWAAccount(account);
+        setWAConfigured(!!(account?.phone_number_id && account?.access_token));
+      }
+    } catch {}
+
+    whatsappClient.onStatus((status) => {
+      setWAConfigured(status.ready);
+    });
+    whatsappClient.onMessage((msg) => {
+      handleIncomingMessage(msg);
+    });
+  };
+
+  const handleIncomingMessage = async (msg: { from: string; body: string; contactName: string; contactNumber: string; chatId: string }) => {
+    const existing = await whatsAppMarketingService.getChats();
+    const chatId = msg.chatId || `chat-${msg.contactNumber}`;
+    let chat = existing.find(c => c.id === chatId);
+
+    if (!chat) {
+      chat = {
+        id: chatId,
+        customerId: msg.contactNumber,
+        customerName: msg.contactName || msg.contactNumber,
+        customerPhone: msg.contactNumber,
+        lastMessage: msg.body,
+        lastMessageAt: new Date().toISOString(),
+        status: 'unread' as const,
+        priority: 'normal' as const,
+        tags: [],
+        messages: [],
+        unreadCount: 1,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      await dbService.put('whatsappChats', chat);
+    } else {
+      chat.lastMessage = msg.body;
+      chat.lastMessageAt = new Date().toISOString();
+      chat.status = 'unread';
+      chat.unreadCount = (chat.unreadCount || 0) + 1;
+      chat.messages = chat.messages || [];
+      chat.messages.push({
+        id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        chatId: chat.id,
+        content: msg.body,
+        type: 'text',
+        direction: 'inbound',
+        status: 'delivered',
+        timestamp: new Date().toISOString(),
+      });
+      chat.updatedAt = new Date().toISOString();
+      await dbService.put('whatsappChats', chat);
+    }
+    const updatedChats = await whatsAppMarketingService.getChats();
+    setChats(updatedChats);
+  };
+
+  const handleSaveConfig = async () => {
+    if (!waPhoneNumberId.trim() || !waAccessToken.trim()) {
+      notify('Please enter both Phone Number ID and Access Token', 'error');
+      return;
+    }
+    setConfiguringWA(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { notify('Please sign in first', 'error'); return; }
+      const account = await whatsappClient.saveConfig(user.id, waPhoneNumberId.trim(), waAccessToken.trim());
+      setWAAccount(account);
+      setWAConfigured(true);
+      setShowWASettings(false);
+      setWAPhoneNumberId('');
+      setWAAccessToken('');
+      notify('WhatsApp API configured successfully', 'success');
+    } catch (err) {
+      notify('Failed to save config: ' + (err as Error).message, 'error');
+    } finally {
+      setConfiguringWA(false);
+    }
+  };
+
+  const handleDisconnectWhatsApp = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await whatsappClient.disconnect(user.id);
+      }
+      setWAAccount(null);
+      setWAConfigured(false);
+      notify('WhatsApp disconnected', 'success');
+    } catch (err) {
+      notify('Failed to disconnect', 'error');
+    }
+  };
+
+  const handleBulkSend = async () => {
+    if (!bulkMessage.trim()) {
+      notify('Please enter a message', 'error');
+      return;
+    }
+    const recipients = bulkRecipients
+      .split('\n')
+      .map((r) => r.trim())
+      .filter(Boolean)
+      .map((r) => ({ phone: r.replace(/[^0-9]/g, '') }));
+    if (recipients.length === 0) {
+      notify('Please enter at least one recipient phone number', 'error');
+      return;
+    }
+    setBulkSending(true);
+    setBulkProgress({ total: recipients.length, sent: 0, failed: 0 });
+    const account = whatsappClient.getAccountInfo();
+    if (!account?.phone_number_id || !account?.access_token) {
+      notify('WhatsApp API not configured', 'error');
+      setBulkSending(false);
+      return;
+    }
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { notify('Please sign in first', 'error'); return; }
+      const result = await whatsappClient.queueMessages(account.id, user.id, recipients, bulkMessage);
+      setBulkProgress({ total: result.queued, sent: 0, failed: 0 });
+      notify(`${result.queued} messages queued`, 'success');
+
+      const processed = await whatsappClient.processQueue(account.id, user.id, account.phone_number_id, account.access_token);
+      setBulkProgress({ total: result.queued, sent: processed, failed: 0 });
+      setShowBulkSend(false);
+      setBulkRecipients('');
+      setBulkMessage('');
+      loadActivityLog();
+    } catch (err) {
+      notify('Bulk send failed: ' + (err as Error).message, 'error');
+    } finally {
+      setBulkSending(false);
+    }
+  };
+
+  const loadActivityLog = async () => {
+    const account = whatsappClient.getAccountInfo();
+    if (!account) return;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const logs = await whatsappClient.getMessageLogs(account.id, user.id, activityFilters);
+        setActivityLog(logs);
+      }
+    } catch {}
+  };
+
+  const loadQueueStats = async () => {
+    const account = whatsappClient.getAccountInfo();
+    if (!account) return;
+    try {
+      const stats = await whatsappClient.getQueueStatus(account.id);
+      setQueueStats(stats);
+    } catch {}
   };
 
   const sendMessage = useCallback(async () => {
     if (!newMessage.trim() || !selectedChat) return;
+    
+    const account = whatsappClient.getAccountInfo();
+    if (account?.phone_number_id && account?.access_token) {
+      try {
+        const result = await whatsappClient.sendMessage(account.phone_number_id, account.access_token, selectedChat.customerPhone, newMessage);
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await whatsappClient.logMessage(account.id, user.id, selectedChat.customerPhone, newMessage, 'sent', 'outbound', result.messageId);
+        }
+      } catch {
+        // Fallback to local simulation
+      }
+    }
     
     await whatsAppMarketingService.sendMessage(selectedChat.id, newMessage);
     
@@ -129,6 +375,12 @@ const MarketingMessages: React.FC = () => {
     setNewMessage('');
     notify('Message sent successfully', 'success');
   }, [newMessage, selectedChat, notify]);
+
+  useEffect(() => {
+    loadData();
+    loadAIConfig();
+    initWhatsApp();
+  }, []);
 
   const quickReply = useCallback(async (template: WhatsAppTemplate) => {
     if (!selectedChat) return;
@@ -182,16 +434,16 @@ const MarketingMessages: React.FC = () => {
       return;
     }
 
-    const campaign = await whatsAppMarketingService.createCampaign({
+    const campaignId = await whatsAppMarketingService.createCampaign({
       ...campaignForm,
       recipients: finalRecipients,
       status: 'sent',
       sentAt: new Date().toISOString()
-    }) as unknown as WhatsAppCampaign;
+    });
 
-    setCampaigns(prev => [campaign, ...prev]);
-
-    setCampaigns(prev => [campaign, ...prev]);
+    // Reload campaigns to get the full object from the store
+    const updatedCampaigns = await whatsAppMarketingService.getCampaigns();
+    setCampaigns(updatedCampaigns);
     setShowNewCampaign(false);
     
     // Reset targeting state
@@ -417,10 +669,31 @@ const MarketingMessages: React.FC = () => {
             </div>
             <div>
               <h1 className="font-bold text-slate-800">WhatsApp Hub</h1>
-              <p className="text-xs text-green-600 flex items-center gap-1">
-                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                Connected
-              </p>
+              <div className="flex items-center gap-2">
+                <p className={`text-xs flex items-center gap-1 ${
+                  waConfigured ? 'text-green-600' : 'text-slate-400'
+                }`}>
+                  <span className={`w-2 h-2 rounded-full ${
+                    waConfigured ? 'bg-green-500' : 'bg-slate-300'
+                  }`}></span>
+                  {waConfigured ? 'Connected' : 'Disconnected'}
+                </p>
+                {waConfigured ? (
+                  <button
+                    onClick={handleDisconnectWhatsApp}
+                    className="text-[10px] font-bold text-red-500 hover:text-red-600 underline"
+                  >
+                    Disconnect
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setShowWASettings(true)}
+                    className="text-[10px] font-bold text-green-600 hover:text-green-700 underline"
+                  >
+                    Connect
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
@@ -451,17 +724,19 @@ const MarketingMessages: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex border-b border-slate-200">
+        <div className="flex border-b border-slate-200 flex-wrap">
           {[
             { id: 'inbox', label: 'Inbox', badge: unreadCount },
             { id: 'campaigns', label: 'Campaigns' },
             { id: 'templates', label: 'Templates' },
-            { id: 'automation', label: 'Automation' }
+            { id: 'automation', label: 'Auto' },
+            { id: 'accounts', label: 'Accounts' },
+            { id: 'activity', label: 'Activity' },
           ].map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveView(tab.id as any)}
-              className={`flex-1 px-2 py-3 text-xs font-medium border-b-2 transition-colors ${
+              className={`flex-1 px-1 py-3 text-xs font-medium border-b-2 transition-colors ${
                 activeView === tab.id 
                   ? 'border-green-600 text-green-600' 
                   : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -575,7 +850,7 @@ const MarketingMessages: React.FC = () => {
           <>
             <div className="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <button onClick={() => setSelectedChat(null)} className="lg:hidden text-slate-500"><ArrowLeft size={20} /></button>
+                <button onClick={() => setSelectedChat(null)} className="lg:hidden text-slate-500" title="Back" aria-label="Back to chat list"><ArrowLeft size={20} /></button>
                 <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center text-green-600 font-bold">
                   {selectedChat.customerName?.charAt(0).toUpperCase()}
                 </div>
@@ -587,9 +862,9 @@ const MarketingMessages: React.FC = () => {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <button className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg"><PhoneCall size={18} /></button>
-                <button className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg"><Video size={18} /></button>
-                <button className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg"><MoreVertical size={18} /></button>
+                <button className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg" title="Call" aria-label="Call customer"><PhoneCall size={18} /></button>
+                <button className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg" title="Video call" aria-label="Video call"><Video size={18} /></button>
+                <button className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg" title="More options" aria-label="More options"><MoreVertical size={18} /></button>
               </div>
             </div>
 
@@ -602,7 +877,7 @@ const MarketingMessages: React.FC = () => {
               <div className="bg-amber-50 border-t border-amber-200 p-3">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium text-amber-800">Quick Reply: {showTemplatePreview.name}</span>
-                  <button onClick={() => setShowTemplatePreview(null)} className="text-amber-600"><X size={16} /></button>
+                  <button onClick={() => setShowTemplatePreview(null)} className="text-amber-600" title="Close" aria-label="Close template preview"><X size={16} /></button>
                 </div>
                 <p className="text-xs text-amber-700 mb-2 line-clamp-2">{showTemplatePreview.content}</p>
                 <div className="flex gap-2">
@@ -626,12 +901,49 @@ const MarketingMessages: React.FC = () => {
             )}
 
             <div className="bg-white border-t border-slate-200 p-3">
+              {smartReplies.length > 0 && (
+                <div className="mb-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-1.5">
+                      <Sparkles size={14} className="text-indigo-500" />
+                      <span className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider">AI Suggested Replies</span>
+                    </div>
+                    <button
+                      onClick={generateSmartReplies}
+                      className="text-[10px] text-indigo-400 hover:text-indigo-600 font-bold uppercase tracking-wider"
+                      disabled={loadingReplies}
+                    >
+                      {loadingReplies ? '...' : 'Refresh'}
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {smartReplies.map((reply, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => applySmartReply(reply)}
+                        className="px-2 py-2 text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg border border-indigo-100 transition-colors text-left leading-tight"
+                      >
+                        <span className="block text-[10px] font-bold text-indigo-400 uppercase mb-0.5">{reply.label}</span>
+                        <span className="line-clamp-2">{reply.text.replace(/{{name}}/g, selectedChat?.customerName || 'Customer')}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="flex items-center gap-2 mb-2">
                 <button onClick={() => setShowTemplatePreview(templates[0] || null)} className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg" title="Templates">
                   <FileText size={20} />
                 </button>
-                <button className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg"><Image size={20} /></button>
-                <button className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg"><Smile size={20} /></button>
+                <button className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg" title="Attach image" aria-label="Attach image"><Image size={20} /></button>
+                <button className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg" title="Emoji picker" aria-label="Open emoji picker"><Smile size={20} /></button>
+                <div className="flex-1" />
+                <button
+                  onClick={() => setShowAISettings(true)}
+                  className={`p-2 rounded-lg transition-colors ${aiConfig.enabled ? 'text-indigo-500 hover:bg-indigo-50' : 'text-slate-400 hover:bg-slate-100'}`}
+                  title={aiConfig.enabled ? 'AI Settings' : 'AI Not Configured'}
+                >
+                  <Sparkles size={18} className={aiConfig.enabled ? '' : 'opacity-50'} />
+                </button>
               </div>
               <div className="flex gap-2">
                 <input
@@ -888,6 +1200,222 @@ const MarketingMessages: React.FC = () => {
             )}
           </div>
         )}
+
+        {/* ACCOUNTS VIEW */}
+        {activeView === 'accounts' && (
+          <div className="flex-1 overflow-auto p-6 bg-slate-50">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-xl font-bold text-slate-800">WhatsApp Accounts</h2>
+                <p className="text-sm text-slate-500">Manage your connected WhatsApp accounts</p>
+              </div>
+              <div className="flex gap-2">
+                {waAccount && (
+                  <button
+                    onClick={() => { setWAPhoneNumberId(waAccount.phone_number_id || ''); setWAAccessToken(waAccount.access_token || ''); setShowWASettings(true); }}
+                    className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg font-medium hover:bg-slate-200"
+                  >
+                    <RefreshCw size={18} />Configure
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowBulkSend(true)}
+                  disabled={!waConfigured}
+                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Send size={18} />Bulk Send
+                </button>
+              </div>
+            </div>
+
+            {!waAccount ? (
+              <div className="text-center py-16 bg-white rounded-xl border border-slate-200">
+                <MessageCircle className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                <p className="text-slate-500 font-medium mb-4">No WhatsApp API configured</p>
+                <button
+                  onClick={() => setShowWASettings(true)}
+                  className="px-6 py-3 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700"
+                >
+                  Configure WhatsApp
+                </button>
+              </div>
+            ) : (
+              <div className="max-w-2xl">
+                <div className="bg-white rounded-xl border border-slate-200 p-6">
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-4">
+                      <div className={`p-3 rounded-xl ${
+                        waConfigured ? 'bg-green-100' : 'bg-slate-100'
+                      }`}>
+                        <MessageCircle size={28} className={waConfigured ? 'text-green-600' : 'text-slate-400'} />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-bold text-slate-800">{waAccount.display_name || 'Meta WhatsApp API'}</h3>
+                        <p className="text-sm text-slate-500">{waAccount.phone_number_id ? `Phone Number ID: ${waAccount.phone_number_id}` : 'Not configured'}</p>
+                      </div>
+                    </div>
+                    <span className={`px-3 py-1 text-xs font-bold rounded-full ${
+                      waConfigured ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'
+                    }`}>
+                      {waConfigured ? 'Connected' : 'Disconnected'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 mb-6">
+                    <div className="bg-slate-50 rounded-lg p-3">
+                      <p className="text-xs text-slate-500 mb-1">Status</p>
+                      <p className="text-sm font-semibold text-slate-800">{waConfigured ? 'Connected' : 'Disconnected'}</p>
+                    </div>
+                    <div className="bg-slate-50 rounded-lg p-3">
+                      <p className="text-xs text-slate-500 mb-1">Last Connected</p>
+                      <p className="text-sm font-semibold text-slate-800">
+                        {waAccount.last_connected_at 
+                          ? new Date(waAccount.last_connected_at).toLocaleString()
+                          : 'Never'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3">
+                    {waConfigured ? (
+                      <button
+                        onClick={handleDisconnectWhatsApp}
+                        className="px-6 py-2.5 bg-red-50 text-red-600 rounded-xl font-medium hover:bg-red-100"
+                      >
+                        Disconnect
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setShowWASettings(true)}
+                        className="px-6 py-2.5 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700"
+                      >
+                        Configure
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Queue Stats */}
+                {queueStats.length > 0 && (
+                  <div className="bg-white rounded-xl border border-slate-200 p-6 mt-4">
+                    <h3 className="font-bold text-slate-800 mb-4">Message Queue</h3>
+                    <div className="grid grid-cols-4 gap-3">
+                      {queueStats.map((s) => (
+                        <div key={s.status} className="bg-slate-50 rounded-lg p-3 text-center">
+                          <p className="text-lg font-bold text-slate-800">{s.count}</p>
+                          <p className="text-xs text-slate-500 capitalize">{s.status}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ACTIVITY LOG VIEW */}
+        {activeView === 'activity' && (
+          <div className="flex-1 overflow-auto p-6 bg-slate-50">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-xl font-bold text-slate-800">WhatsApp Activity Log</h2>
+                <p className="text-sm text-slate-500">{activityLog.length} recorded messages</p>
+              </div>
+              <div className="flex gap-2">
+                <select
+                  value={activityFilters.dateRange || 'all'}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setActivityFilters(prev => ({ ...prev, dateRange: val === 'all' ? undefined : val }));
+                    setTimeout(loadActivityLog, 100);
+                  }}
+                  className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
+                >
+                  <option value="all">All Time</option>
+                  <option value="today">Today</option>
+                  <option value="week">This Week</option>
+                  <option value="month">This Month</option>
+                </select>
+                <select
+                  value={activityFilters.status || 'all'}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setActivityFilters(prev => ({ ...prev, status: val === 'all' ? undefined : val }));
+                    setTimeout(loadActivityLog, 100);
+                  }}
+                  className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
+                >
+                  <option value="all">All Status</option>
+                  <option value="sent">Sent</option>
+                  <option value="delivered">Delivered</option>
+                  <option value="failed">Failed</option>
+                  <option value="received">Received</option>
+                </select>
+                <button onClick={loadActivityLog} className="p-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50">
+                  <RefreshCw size={18} className="text-slate-600" />
+                </button>
+              </div>
+            </div>
+
+            {activityLog.length === 0 ? (
+              <div className="text-center py-16 bg-white rounded-xl border border-slate-200">
+                <MessageCircle className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                <p className="text-slate-500 font-medium">No messages yet</p>
+                <p className="text-xs text-slate-400 mt-1">Messages sent through connected accounts will appear here</p>
+              </div>
+            ) : (
+              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                      <th className="text-left px-4 py-3 font-semibold text-slate-600">Recipient</th>
+                      <th className="text-left px-4 py-3 font-semibold text-slate-600">Message</th>
+                      <th className="text-left px-4 py-3 font-semibold text-slate-600">Status</th>
+                      <th className="text-left px-4 py-3 font-semibold text-slate-600">Direction</th>
+                      <th className="text-left px-4 py-3 font-semibold text-slate-600">Date</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {activityLog.map((msg) => (
+                      <tr key={msg.id} className="hover:bg-slate-50">
+                        <td className="px-4 py-3">
+                          <p className="font-medium text-slate-800">{msg.recipient_name || msg.recipient}</p>
+                          <p className="text-xs text-slate-400">{msg.recipient}</p>
+                        </td>
+                        <td className="px-4 py-3 max-w-xs">
+                          <p className="truncate text-slate-600">{msg.message_content}</p>
+                          {msg.template_id && <p className="text-xs text-indigo-500">Template: {msg.template_id}</p>}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+                            msg.status === 'sent' ? 'bg-green-100 text-green-700' :
+                            msg.status === 'delivered' ? 'bg-blue-100 text-blue-700' :
+                            msg.status === 'failed' ? 'bg-red-100 text-red-700' :
+                            msg.status === 'received' ? 'bg-purple-100 text-purple-700' :
+                            'bg-slate-100 text-slate-600'
+                          }`}>
+                            {msg.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`text-xs font-medium ${
+                            msg.direction === 'outbound' ? 'text-green-600' : 'text-purple-600'
+                          }`}>
+                            {msg.direction === 'outbound' ? 'Outgoing' : 'Incoming'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-slate-500">
+                          {new Date(msg.created_at).toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* New Campaign Modal */}
@@ -905,7 +1433,7 @@ const MarketingMessages: React.FC = () => {
                   <p className="text-[11px] text-slate-500 font-medium">Create a marketing message</p>
                 </div>
               </div>
-              <button onClick={() => setShowNewCampaign(false)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+              <button onClick={() => setShowNewCampaign(false)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors" title="Close" aria-label="Close campaign dialog">
                 <X size={20} className="text-slate-400" />
               </button>
             </div>
@@ -1132,13 +1660,298 @@ const MarketingMessages: React.FC = () => {
         </div>
       )}
 
+      {/* AI Settings Modal */}
+      {showAISettings && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
+            <div className="flex items-center justify-between p-6 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-indigo-100 rounded-lg">
+                  <Sparkles size={20} className="text-indigo-600" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-800">AI Settings</h2>
+                  <p className="text-xs text-slate-500">Configure AI for smart replies & templates</p>
+                </div>
+              </div>
+              <button onClick={() => setShowAISettings(false)} className="p-2 hover:bg-slate-100 rounded-lg" title="Close" aria-label="Close AI settings">
+                <X size={20} className="text-slate-400" />
+              </button>
+            </div>
+            <div className="p-6 space-y-5">
+              <div className="flex items-center justify-between p-4 bg-indigo-50 rounded-xl border border-indigo-100">
+                <div className="flex items-center gap-3">
+                  <div className={`w-3 h-3 rounded-full ${aiConfig.enabled ? 'bg-green-500' : 'bg-slate-300'}`} />
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">AI Features</p>
+                    <p className="text-xs text-slate-500">{aiConfig.enabled ? 'Smart replies & template generation active' : 'AI is currently disabled'}</p>
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={aiConfig.enabled}
+                    onChange={(e) => setAIConfig(prev => ({ ...prev, enabled: e.target.checked }))}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                </label>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-2">AI Provider</label>
+                <select
+                  value={aiConfig.provider}
+                  onChange={(e) => {
+                    const provider = e.target.value;
+                    const defaults: Record<string, { endpoint: string; model: string }> = {
+                      openai: { endpoint: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
+                      anthropic: { endpoint: 'https://api.anthropic.com/v1', model: 'claude-3-haiku-20240307' },
+                      ollama: { endpoint: 'http://localhost:11434/v1', model: 'llama3' },
+                      openrouter: { endpoint: 'https://openrouter.ai/api/v1', model: 'openai/gpt-4o-mini' },
+                    };
+                    const def = defaults[provider] || defaults.openai;
+                    setAIConfig(prev => ({ ...prev, provider, endpoint: def.endpoint, model: def.model }));
+                  }}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                >
+                  <option value="openai">OpenAI</option>
+                  <option value="anthropic">Anthropic</option>
+                  <option value="openrouter">OpenRouter</option>
+                  <option value="ollama">Ollama (Local)</option>
+                </select>
+              </div>
+
+              {aiConfig.provider !== 'ollama' && (
+                <div>
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-2">API Key</label>
+                  <input
+                    type="password"
+                    value={aiConfig.apiKey}
+                    onChange={(e) => setAIConfig(prev => ({ ...prev, apiKey: e.target.value }))}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                    placeholder="sk-..."
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1.5">Your key is stored locally and never sent anywhere except the selected provider</p>
+                </div>
+              )}
+
+              <div>
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-2">API Endpoint</label>
+                <input
+                  type="text"
+                  value={aiConfig.endpoint}
+                  onChange={(e) => setAIConfig(prev => ({ ...prev, endpoint: e.target.value }))}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-2">Model</label>
+                <input
+                  type="text"
+                  value={aiConfig.model}
+                  onChange={(e) => setAIConfig(prev => ({ ...prev, model: e.target.value }))}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+            </div>
+            <div className="p-6 border-t border-slate-100 flex gap-3">
+              <button
+                onClick={() => setShowAISettings(false)}
+                className="flex-1 py-3 border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  await aiService.saveConfig(aiConfig);
+                  setShowAISettings(false);
+                  notify('AI settings saved!', 'success');
+                }}
+                className="flex-1 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors"
+              >
+                Save Settings
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* WhatsApp API Config Modal */}
+      {showWASettings && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
+            <div className="flex items-center justify-between p-6 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-green-100 rounded-lg">
+                  <MessageCircle size={20} className="text-green-600" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-800">WhatsApp API Configuration</h2>
+                  <p className="text-xs text-slate-500">{waConfigured ? 'Update your Meta WhatsApp API credentials' : 'Enter your Meta WhatsApp API credentials'}</p>
+                </div>
+              </div>
+              <button onClick={() => { setShowWASettings(false); setWAPhoneNumberId(''); setWAAccessToken(''); }} className="p-2 hover:bg-slate-100 rounded-lg" title="Close" aria-label="Close WhatsApp settings">
+                <X size={20} className="text-slate-400" />
+              </button>
+            </div>
+            <div className="p-6 space-y-5">
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
+                <p className="font-medium mb-1">WhatsApp Business Cloud API</p>
+                <p className="text-xs text-blue-600">Configure your Meta WhatsApp Business API credentials to send messages. Get these from the Meta Developer Portal.</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Phone Number ID</label>
+                <input
+                  type="text"
+                  value={waPhoneNumberId}
+                  onChange={(e) => setWAPhoneNumberId(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="Enter your WhatsApp Phone Number ID"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Access Token</label>
+                <input
+                  type="password"
+                  value={waAccessToken}
+                  onChange={(e) => setWAAccessToken(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="Enter your Permanent Access Token"
+                />
+              </div>
+
+              {waConfigured && (
+                <div className="flex gap-3">
+                  <button
+                    onClick={async () => {
+                      const { data: { user } } = await supabase.auth.getUser();
+                      if (user) await whatsappClient.disconnect(user.id);
+                      setWAAccount(null);
+                      setWAConfigured(false);
+                      setShowWASettings(false);
+                      notify('Disconnected', 'success');
+                    }}
+                    className="flex-1 py-2.5 bg-red-50 text-red-600 rounded-xl font-medium hover:bg-red-100"
+                  >
+                    Disconnect
+                  </button>
+                  <button
+                    onClick={handleSaveConfig}
+                    disabled={configuringWA}
+                    className="flex-1 py-2.5 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 disabled:opacity-50"
+                  >
+                    {configuringWA ? 'Saving...' : 'Update'}
+                  </button>
+                </div>
+              )}
+
+              {!waConfigured && (
+                <button
+                  onClick={handleSaveConfig}
+                  disabled={configuringWA}
+                  className="w-full py-2.5 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 disabled:opacity-50"
+                >
+                  {configuringWA ? 'Saving...' : 'Save Configuration'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Send Modal */}
+      {showBulkSend && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-indigo-100 rounded-lg">
+                  <Send size={20} className="text-indigo-600" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-800">Bulk Send Messages</h2>
+                  <p className="text-xs text-slate-500">Send to multiple recipients at once</p>
+                </div>
+              </div>
+              <button onClick={() => setShowBulkSend(false)} className="p-2 hover:bg-slate-100 rounded-lg">
+                <X size={20} className="text-slate-400" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Message *</label>
+                <textarea
+                  value={bulkMessage}
+                  onChange={(e) => setBulkMessage(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm min-h-[100px] focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  placeholder="Enter your message..."
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Recipients * <span className="text-xs text-slate-400 font-normal">(one per line)</span>
+                </label>
+                <textarea
+                  value={bulkRecipients}
+                  onChange={(e) => setBulkRecipients(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm min-h-[120px] focus:ring-2 focus:ring-indigo-500 focus:border-transparent font-mono"
+                  placeholder="+260971234567&#10;+260977654321&#10;+260955555555"
+                />
+                <p className="text-xs text-slate-400 mt-1">
+                  {bulkRecipients.split('\n').filter((r) => r.trim()).length} recipients
+                </p>
+              </div>
+
+              {bulkSending && (
+                <div className="bg-slate-50 rounded-xl p-4 space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-600">Sending...</span>
+                    <span className="font-medium text-slate-800">{bulkProgress.sent + bulkProgress.failed}/{bulkProgress.total}</span>
+                  </div>
+                  <div className="w-full bg-slate-200 rounded-full h-2">
+                    <div
+                      className="bg-indigo-600 rounded-full h-2 transition-all"
+                      style={{ width: `${((bulkProgress.sent + bulkProgress.failed) / Math.max(bulkProgress.total, 1)) * 100}%` }}
+                    />
+                  </div>
+                  <div className="flex gap-4 text-xs">
+                    <span className="text-green-600">{bulkProgress.sent} sent</span>
+                    <span className="text-red-600">{bulkProgress.failed} failed</span>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => setShowBulkSend(false)}
+                  className="flex-1 py-3 text-sm font-medium text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleBulkSend}
+                  disabled={bulkSending || !bulkMessage.trim() || !bulkRecipients.trim()}
+                  className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {bulkSending ? 'Sending...' : `Send to ${bulkRecipients.split('\n').filter((r) => r.trim()).length} recipients`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Campaign Preview Modal */}
       {showCampaignPreview && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-auto">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-slate-800">Campaign Preview</h2>
-              <button onClick={() => setShowCampaignPreview(false)} className="text-slate-500 hover:text-slate-700">
+              <button onClick={() => setShowCampaignPreview(false)} className="text-slate-500 hover:text-slate-700" title="Close" aria-label="Close campaign preview">
                 <X size={24} />
               </button>
             </div>
@@ -1226,7 +2039,7 @@ const MarketingMessages: React.FC = () => {
                 <h2 className="text-xl font-bold text-slate-800">Template Preview</h2>
                 <p className="text-sm text-green-600">{showTemplatePreview.category}</p>
               </div>
-              <button onClick={() => setShowTemplatePreviewModal(false)} className="text-slate-500 hover:text-slate-700">
+              <button onClick={() => setShowTemplatePreviewModal(false)} className="text-slate-500 hover:text-slate-700" title="Close" aria-label="Close template preview">
                 <X size={24} />
               </button>
             </div>
@@ -1305,7 +2118,7 @@ const MarketingMessages: React.FC = () => {
                   <p className="text-sm text-slate-500">Design automated responses to customer triggers</p>
                 </div>
               </div>
-              <button onClick={() => { setShowNewAutomation(false); setEditingFlow(null); }} className="text-slate-500 hover:text-slate-700 p-2 hover:bg-slate-100 rounded-lg transition-colors">
+              <button onClick={() => { setShowNewAutomation(false); setEditingFlow(null); }} className="text-slate-500 hover:text-slate-700 p-2 hover:bg-slate-100 rounded-lg transition-colors" title="Close" aria-label="Close automation dialog">
                 <X size={24} />
               </button>
             </div>
@@ -1630,7 +2443,7 @@ const MarketingMessages: React.FC = () => {
                     >
                       <Copy size={18} /> Duplicate
                     </button>
-                    <button className="p-3 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-all">
+                    <button className="p-3 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-all" title="Delete" aria-label="Delete campaign">
                       <Trash2 size={18} />
                     </button>
                   </div>
