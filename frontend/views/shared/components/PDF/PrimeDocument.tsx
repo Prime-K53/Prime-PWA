@@ -8,7 +8,43 @@ import {
   getDefaultPaymentTermsLabel,
   getStoredCompanyConfig,
   resolvePrimeTemplateSettings,
+  PrimeTemplateSettings,
 } from './templateSettings.ts';
+import { generateAccountSummary } from '../../../../utils/pdfMapper.ts';
+
+const InvoiceInfoPanel = ({
+  type,
+  settings,
+  data,
+  config,
+  fontScale,
+  customers = [],
+}: {
+  type: 'payment_terms' | 'account_summary';
+  settings: PrimeTemplateSettings;
+  data: any;
+  config: CompanyConfig | null;
+  fontScale: number;
+  customers?: any[];
+}) => {
+  if (type === 'account_summary') {
+    const summary = generateAccountSummary(data, config, customers);
+    return (
+      <View style={{ marginBottom: 15 }}>
+        <Text style={{ fontSize: 8 * fontScale, fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', marginBottom: 4, letterSpacing: 1 }}>ACCOUNT SUMMARY</Text>
+        <Text style={{ fontSize: 10 * fontScale, color: '#475569', lineHeight: 1.4 }}>{summary.statement}</Text>
+      </View>
+    );
+  }
+
+  const paymentTermsLabel = String(data?.paymentTerms || '').trim() || getDefaultPaymentTermsLabel(config);
+  return (
+    <View style={{ marginBottom: 15 }}>
+      <Text style={{ fontSize: 8 * fontScale, fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', marginBottom: 4, letterSpacing: 1 }}>Payment Terms</Text>
+      <Text style={{ fontSize: 10 * fontScale, color: '#475569', lineHeight: 1.4 }}>{paymentTermsLabel}</Text>
+    </View>
+  );
+};
 
 const hexToRgb = (hex: string) => {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -235,10 +271,10 @@ const CleanInvoiceTemplate = ({
   const paymentTermsLabel = String(dataAny?.paymentTerms || '').trim() || getDefaultPaymentTermsLabel(config);
    
   const companyEnquiryLine = [companyName, companyAddress].filter(Boolean).join(', ');
-  const companyFlatContact1 = `${companyEnquiryLine}, ${companyPhone}`;
+  const companyFlatContact1 = `${companyEnquiryLine}, Phone ${companyPhone}`;
   const legalFooterLine1 = showPaymentTerms
-    ? `This is a computer-generated document. Payment terms: ${paymentTermsLabel}.`
-    : 'This is a computer-generated document. For enquiries contact:';
+    ? `This is a computer-generated document. No signature required. Payment terms: ${paymentTermsLabel}.`
+    : 'This is a computer-generated document. No signature required, For enquiries contact:';
   const legalFooterLine2 = `${companyFlatContact1}`;
 
   const renderRow = (item: any, i: number) => {
@@ -389,13 +425,13 @@ const CleanInvoiceTemplate = ({
           </View>
         </View>
 
-        {/* Outstanding Balance Statement - shown on INVOICE only when totalCustomerOutstanding is available */}
-        {type === 'INVOICE' && showInvoiceBalances && (dataAny?.totalCustomerOutstanding ?? null) !== null && (() => {
+        {/* Outstanding Balance Statement */}
+        {type === 'INVOICE' && showInvoiceBalances && Number(dataAny?.totalCustomerOutstanding || 0) > 0 && (() => {
           const totalOutstanding = Number(dataAny.totalCustomerOutstanding || 0);
           const todayStr = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
           return (
             <View style={{ marginTop: 15, padding: 8, backgroundColor: '#f0f9ff', borderRadius: 4, borderLeftWidth: 3, borderLeftColor: '#0ea5e9' }} wrap={false}>
-              <Text style={{ fontSize: 9 * fontScale, color: '#0369a1', lineHeight: 1.4 }}>
+              <Text style={{ fontSize: 10 * fontScale, color: '#0369a1', lineHeight: 1.4 }}>
                 {'Your overall outstanding balance is '}
                 <Text style={{ fontWeight: 'bold' }}>{currency} {totalOutstanding.toLocaleString('en-US', { minimumFractionDigits: 2 })}</Text>
                 {` as of ${todayStr}`}
@@ -406,12 +442,15 @@ const CleanInvoiceTemplate = ({
 
         {/* Footer info (Notes etc) */}
         <View style={{ marginTop: 40, flex: 1 }}>
-          {Boolean(showPaymentTerms) && !!paymentTermsLabel && (
-            <View style={{ marginBottom: 15 }}>
-              <Text style={{ fontSize: 8 * fontScale, fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', marginBottom: 4, letterSpacing: 1 }}>Payment Terms</Text>
-              <Text style={{ fontSize: 10 * fontScale, color: '#475569', lineHeight: 1.4 }}>{paymentTermsLabel}</Text>
-            </View>
-          )}
+          {templateSettings.showPaymentTerms ? (
+            <InvoiceInfoPanel 
+              type="payment_terms" 
+              settings={templateSettings} 
+              data={dataAny} 
+              config={config} 
+              fontScale={fontScale} 
+            />
+          ) : null}
           {(!config?.vat?.enabled) && (
             <View>
                <Text style={{ fontSize: 9 * fontScale, color: '#94a3b8', fontStyle: 'italic' }}>* Not VAT registered</Text>
@@ -493,6 +532,7 @@ const ModernInvoiceTemplate = ({
   const tax = dataAny.tax || 0;
   const discount = dataAny.discount || 0;
   
+  const showDueDate = templateSettings.showDueDate;
   const showInvoiceBalances = templateSettings.showOutstandingAndWalletBalances;
   const resolvedOutstandingBalance = Math.max(0, Number(dataAny?.totalAmount || 0) - Number(dataAny?.amountPaid || 0));
   const outstandingDisplay = showInvoiceBalances && type === 'INVOICE' ? resolvedOutstandingBalance : (totalAmount - amountPaid);
@@ -643,13 +683,13 @@ const ModernInvoiceTemplate = ({
           </View>
         </View>
 
-        {/* Outstanding Balance Statement - variant 2 */}
-        {type === 'INVOICE' && showInvoiceBalances && (dataAny?.totalCustomerOutstanding ?? null) !== null && (() => {
+        {/* Outstanding Balance Statement */}
+        {type === 'INVOICE' && showInvoiceBalances && Number(dataAny?.totalCustomerOutstanding || 0) > 0 && (() => {
           const totalOutstanding = Number(dataAny.totalCustomerOutstanding || 0);
           const todayStr = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
           return (
             <View style={{ marginTop: 15, padding: 8, backgroundColor: '#f0f9ff', borderRadius: 4, borderLeftWidth: 3, borderLeftColor: '#0ea5e9' }} wrap={false}>
-              <Text style={{ fontSize: 9 * fontScale, color: '#0369a1', lineHeight: 1.4 }}>
+              <Text style={{ fontSize: 10 * fontScale, color: '#0369a1', lineHeight: 1.4 }}>
                 {'Your overall outstanding balance is '}
                 <Text style={{ fontWeight: 'bold' }}>{currency} {totalOutstanding.toLocaleString('en-US', { minimumFractionDigits: 2 })}</Text>
                 {` as of ${todayStr}`}
@@ -660,19 +700,31 @@ const ModernInvoiceTemplate = ({
 
         {/* Footer info (QR and Signature) */}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 40, flex: 1 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <View style={{ marginRight: 15 }}>
-               {renderQrImage(qrCodeDataUrl, 64) || <View style={{ width: 64, height: 64, backgroundColor: '#eeeeee' }} />}
-            </View>
-            <View style={{ justifyContent: 'center' }}>
-              <Text style={{ fontWeight: 'bold', fontSize: 11 * fontScale, color: '#111111', marginBottom: 4 }}>More Info:</Text>
-              {companyPhone !== 'N/A' && <Text style={{ fontSize: 10 * fontScale, color: '#333333', marginBottom: 2 }}>{companyPhone}</Text>}
-              {companyEmail !== 'N/A' && <Text style={{ fontSize: 10 * fontScale, color: '#333333' }}>{companyEmail}</Text>}
+          <View style={{ flexDirection: 'column', flex: 1 }}>
+            {templateSettings.showPaymentTerms ? (
+              <InvoiceInfoPanel 
+                type="payment_terms" 
+                settings={templateSettings} 
+                data={dataAny} 
+                config={config} 
+                fontScale={fontScale} 
+              />
+            ) : null}
+            
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 'auto' }}>
+              <View style={{ marginRight: 15 }}>
+                {renderQrImage(qrCodeDataUrl, 64) || <View style={{ width: 64, height: 64, backgroundColor: '#eeeeee' }} />}
+              </View>
+              <View style={{ justifyContent: 'center' }}>
+                <Text style={{ fontWeight: 'bold', fontSize: 11 * fontScale, color: '#111111', marginBottom: 4 }}>More Info:</Text>
+                {companyPhone !== 'N/A' && <Text style={{ fontSize: 10 * fontScale, color: '#333333', marginBottom: 2 }}>{companyPhone}</Text>}
+                {companyEmail !== 'N/A' && <Text style={{ fontSize: 10 * fontScale, color: '#333333' }}>{companyEmail}</Text>}
+              </View>
             </View>
           </View>
 
           <View style={{ alignItems: 'center', minWidth: 160 }}>
-            <Text style={{ fontSize: 11 * fontScale, color: '#222222', marginBottom: 10 }}>{dueDate ? `Due Date: ${dueDate}` : `Date: ${invoiceDate}`}</Text>
+            <Text style={{ fontSize: 11 * fontScale, color: '#222222', marginBottom: 10 }}>{showDueDate && dueDate ? `Due Date: ${formatDateOnly(dueDate)}` : `Date: ${invoiceDate}`}</Text>
             <View style={{ width: '100%', height: 40, alignItems: 'center', justifyContent: 'center' }}>
               <Text style={{fontFamily: templateSettings.fontFamily, fontStyle: 'italic', fontSize: 26, color: '#111111'}}>{companyName.split(' ')[0]}</Text>
             </View>
@@ -740,6 +792,7 @@ const ProfessionalInvoiceTemplate = ({
   const tax = dataAny.tax || 0;
   const discount = dataAny.discount || 0;
   
+  const showDueDate = templateSettings.showDueDate;
   const showInvoiceBalances = templateSettings.showOutstandingAndWalletBalances;
   const resolvedOutstandingBalance = Math.max(0, Number(dataAny?.totalAmount || 0) - Number(dataAny?.amountPaid || 0));
   const outstandingDisplay = showInvoiceBalances && type === 'INVOICE' ? resolvedOutstandingBalance : (totalAmount - amountPaid);
@@ -820,10 +873,10 @@ const ProfessionalInvoiceTemplate = ({
               <Text style={{ color: '#999999', fontSize: 10 * fontScale }}>Ref #</Text>
               <Text style={{ fontSize: 10 * fontScale, color: '#444444' }}>{invoiceNumber}</Text>
             </View>
-            {!!dueDate && (
+            {Boolean(showDueDate) && !!dueDate && (
                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
                  <Text style={{ color: '#999999', fontSize: 10 * fontScale }}>Due</Text>
-                 <Text style={{ fontSize: 10 * fontScale, color: '#444444' }}>{dueDate}</Text>
+                 <Text style={{ fontSize: 10 * fontScale, color: '#444444' }}>{formatDateOnly(dueDate)}</Text>
                </View>
             )}
           </View>
@@ -879,6 +932,7 @@ const ProfessionalInvoiceTemplate = ({
                 <Text style={{ fontSize: 10 * fontScale, color: '#444444', lineHeight: 1.4 }}>{dataAny.notes}</Text>
               </View>
             )}
+
             <View style={{ marginTop: 'auto' }}>
               <Text style={{ fontStyle: 'italic', fontSize: 15 * fontScale, color: '#555555', marginBottom: 4, fontFamily: templateSettings.fontFamily }}>{companyName}</Text>
               <Text style={{ fontWeight: 'bold', fontSize: 10 * fontScale, color: '#111111' }}>{companyName}</Text>
@@ -886,21 +940,21 @@ const ProfessionalInvoiceTemplate = ({
             </View>
           </View>
 
-          <View style={{ flex: 1, alignItems: 'flex-end', textAlign: 'right' }}>
-             {templateSettings.showPaymentTerms && config?.transactionSettings?.defaultPaymentTermsDays !== undefined && (
-               <View style={{ marginBottom: 12 }}>
-                 <Text style={{ fontSize: 9 * fontScale, fontWeight: 'bold', color: '#999999', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 3 }}>Payment Method / Terms</Text>
-                 <Text style={{ fontSize: 9 * fontScale, color: '#666666', lineHeight: 1.6 }}>{getDefaultPaymentTermsLabel(config)}</Text>
-               </View>
-             )}
-             
-             <View>
+           <View style={{ flex: 1, alignItems: 'flex-end', textAlign: 'right' }}>
+              {templateSettings.showPaymentTerms && config?.transactionSettings?.defaultPaymentTermsDays !== undefined && (
+                <View style={{ marginBottom: 12 }}>
+                  <Text style={{ fontSize: 9 * fontScale, fontWeight: 'bold', color: '#999999', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 3 }}>Payment Method / Terms</Text>
+                  <Text style={{ fontSize: 9 * fontScale, color: '#666666', lineHeight: 1.6 }}>{getDefaultPaymentTermsLabel(config)}</Text>
+                </View>
+              )}
+              
+              <View>
                <Text style={{ fontSize: 9 * fontScale, color: '#aaaaaa', lineHeight: 1.5, maxWidth: 200, marginTop: 6 }}>
-                 This is a computer-generated document. For enquiries contact:
-               </Text>
-               <Text style={{ fontSize: 9 * fontScale, color: '#aaaaaa', lineHeight: 1.5, maxWidth: 200, marginTop: 2 }}>
-                 {`${companyName}, ${companyAddress}, ${companyPhone}`}
-               </Text>
+                   This is a computer-generated document. No signature required, For enquiries contact:
+                 </Text>
+                 <Text style={{ fontSize: 9 * fontScale, color: '#aaaaaa', lineHeight: 1.5, maxWidth: 200, marginTop: 2 }}>
+                   {`${companyName}, ${companyAddress}, Phone ${companyPhone}`}
+                </Text>
              </View>
           </View>
         </View>
@@ -909,7 +963,7 @@ const ProfessionalInvoiceTemplate = ({
   );
 };
 
-export const PrimeDocument = ({ type, data, configOverride = null }: DocProps) => {
+export const PrimeDocument = ({ type, data, configOverride = null, customers = [] }: DocProps & { customers?: any[] }) => {
   const isFinancial = type === 'INVOICE' || type === 'PO' || type === 'QUOTATION' || type === 'ORDER' || (type as string) === 'SALES_ORDER' || type === 'SUBSCRIPTION';
   const dataAny = data as any;
   const config = configOverride || getStoredCompanyConfig();
@@ -942,10 +996,10 @@ export const PrimeDocument = ({ type, data, configOverride = null }: DocProps) =
 
   const companyContact = `${formattedPhone} | ${config?.email || ''}`;
   const companyEnquiryLine = [companyName, companyAddress].filter(Boolean).join(', ');
-  const companyFlatContact2 = `${companyEnquiryLine}, ${companyPhone}`;
+  const companyFlatContact2 = `${companyEnquiryLine}, Phone ${companyPhone}`;
   const legalFooterLine1 = showPaymentTerms
-    ? `This is a computer-generated document. Payment terms: ${paymentTermsLabel}.`
-    : 'This is a computer-generated document. For enquiries contact:';
+    ? `This is a computer-generated document. No signature required. Payment terms: ${paymentTermsLabel}.`
+    : 'This is a computer-generated document. No signature required, For enquiries contact:';
   const legalFooterLine2 = `${companyFlatContact2}`;
   const currency = config?.currencySymbol || 'K';
   const logo = resolvePdfLogoSource(config, templateSettings.showCompanyLogo);
@@ -1261,7 +1315,7 @@ export const PrimeDocument = ({ type, data, configOverride = null }: DocProps) =
             data={rc}
             companyName={companyName}
             legalFooterLine1="This is a computer-generated payment receipt. No signature required if digitally authorized."
-            legalFooterLine2=""
+            legalFooterLine2={`${companyName}, ${companyAddress}, Phone ${companyPhone}`}
             fontScale={fontScale}
           />
         </Page>
@@ -1514,7 +1568,7 @@ if (type === 'POS_RECEIPT') {
                     <>
                       <Text>Invoice No. {(('invoiceNumber' in data && (data as any).invoiceNumber) || ('number' in data ? (data as any).number : 'INV'))}</Text>
                       <Text>Invoice Date: {'date' in data ? (data as any).date : 'N/A'}</Text>
-                      {Boolean(showDueDate) && 'dueDate' in data && !!data.dueDate && <Text>Due Date: {data.dueDate}</Text>}
+                      {Boolean(showDueDate) && 'dueDate' in data && !!data.dueDate && <Text>Due Date: {formatDateOnly(data.dueDate)}</Text>}
                       {isFromQuotation && <Text style={{ fontSize: 8, color: '#64748b', marginTop: 2 }}>Order Ref: {conversionDetails?.sourceNumber || 'N/A'}</Text>}
                       {isFromOrder && <Text style={{ fontSize: 8, color: '#64748b', marginTop: 2 }}>Original Order: {conversionDetails?.sourceNumber || 'N/A'}</Text>}
                     </>
@@ -1523,19 +1577,19 @@ if (type === 'POS_RECEIPT') {
                       <Text>Invoice No. INV-{('orderNumber' in data && (data as any).orderNumber) || ('number' in data ? (data as any).number : 'ORD')}</Text>
                       <Text>Invoice Date: {'date' in data ? (data as any).date : 'N/A'}</Text>
                       <Text style={{ fontSize: 8, color: '#64748b', marginTop: 2 }}>Order Ref: {('orderNumber' in data && (data as any).orderNumber) || 'N/A'}</Text>
-                      {Boolean(showDueDate) && 'dueDate' in data && !!data.dueDate && <Text>Due Date: {data.dueDate}</Text>}
+                      {Boolean(showDueDate) && 'dueDate' in data && !!data.dueDate && <Text>Due Date: {formatDateOnly(data.dueDate)}</Text>}
                     </>
                   ) : (type as string) === 'SALES_ORDER' ? (
                     <>
                       <Text>Sales Order No. {('orderNumber' in data && (data as any).orderNumber) || ('number' in data ? (data as any).number : 'SO')}</Text>
                       <Text>Sales Order Date: {'date' in data ? (data as any).date : 'N/A'}</Text>
-                      {Boolean(showDueDate) && 'dueDate' in data && !!data.dueDate && <Text>Due Date: {data.dueDate}</Text>}
+                      {Boolean(showDueDate) && 'dueDate' in data && !!data.dueDate && <Text>Due Date: {formatDateOnly(data.dueDate)}</Text>}
                     </>
                   ) : type === 'EXAMINATION_INVOICE' ? (
                     <>
                       <Text>Service Invoice No. {'number' in data ? (data as any).number : 'INV'}</Text>
                       <Text>Service Invoice Date: {'date' in data ? (data as any).date : 'N/A'}</Text>
-                      {Boolean(showDueDate) && 'dueDate' in data && !!data.dueDate && <Text>Due Date: {data.dueDate}</Text>}
+                      {Boolean(showDueDate) && 'dueDate' in data && !!data.dueDate && <Text>Due Date: {formatDateOnly(data.dueDate)}</Text>}
                     </>
                   ) : type === 'SUBSCRIPTION' ? (
                     <>
@@ -1555,7 +1609,7 @@ if (type === 'POS_RECEIPT') {
                     <>
                       <Text>{toTitleCase(type)} No. {'number' in data ? (data as any).number : ('receiptNumber' in data ? (data as any).receiptNumber : 'STATEMENT')}</Text>
                       <Text>{toTitleCase(type)} Date: {'date' in data ? (data as any).date : 'N/A'}</Text>
-                      {type === 'QUOTATION' && Boolean(showDueDate) && 'dueDate' in data && !!data.dueDate && <Text>Valid Until: {data.dueDate}</Text>}
+                      {type === 'QUOTATION' && Boolean(showDueDate) && 'dueDate' in data && !!data.dueDate && <Text>Valid Until: {formatDateOnly(data.dueDate)}</Text>}
                     </>
                   )}
                 </View>
@@ -1726,13 +1780,13 @@ if (type === 'POS_RECEIPT') {
                   </View>
                 </View>
 
-                {/* Outstanding Balance Statement - variant 3 */}
-                {type === 'INVOICE' && showInvoiceBalances && (dataAny?.totalCustomerOutstanding ?? null) !== null && (() => {
+                {/* Outstanding Balance Statement */}
+                {type === 'INVOICE' && showInvoiceBalances && Number(dataAny?.totalCustomerOutstanding || 0) > 0 && (() => {
                   const totalOutstanding = Number(dataAny.totalCustomerOutstanding || 0);
                   const todayStr = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
                   return (
                     <View style={{ marginTop: 15, padding: 8, backgroundColor: '#f0f9ff', borderRadius: 4, borderLeftWidth: 3, borderLeftColor: '#0ea5e9' }} wrap={false}>
-                      <Text style={{ fontSize: 9 * fontScale, color: '#0369a1', lineHeight: 1.4 }}>
+                      <Text style={{ fontSize: scaledFont(10), color: '#0369a1', lineHeight: 1.4 }}>
                         {'Your overall outstanding balance is '}
                         <Text style={{ fontWeight: 'bold' }}>{currency} {totalOutstanding.toLocaleString('en-US', { minimumFractionDigits: 2 })}</Text>
                         {` as of ${todayStr}`}

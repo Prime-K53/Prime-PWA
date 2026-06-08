@@ -188,7 +188,7 @@ const BudgetRow: React.FC<{ data: any, month: string, onSave: (b: Budget) => voi
                             onChange={e => setLimit(e.target.value)}
                             autoFocus
                         />
-                        <button onClick={handleSave} className="p-1 bg-emerald-100 text-emerald-700 rounded"><Save size={14}/></button>
+                        <button onClick={handleSave} className="p-1 bg-emerald-100 text-emerald-700 rounded" title="Save" aria-label="Save budget limit"><Save size={14}/></button>
                     </div>
                 ) : (
                     <button onClick={() => setIsEditing(true)} className="hover:bg-blue-50 px-2 py-1 rounded text-slate-600 hover:text-blue-600 font-mono">

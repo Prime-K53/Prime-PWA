@@ -163,6 +163,11 @@ export const customerNotificationService = {
       return;
     }
 
+    if (typeof window !== 'undefined' && !window.confirm(`Send notification to ${data.customerName} about this ${ACTIVITY_LABELS[type] || type}?`)) {
+      console.log(`[Notification] User cancelled notification for ${type} ${data.id}`);
+      return;
+    }
+
     const online = isOnline();
     let message = generateMessageFromTemplate(type, data, config);
 

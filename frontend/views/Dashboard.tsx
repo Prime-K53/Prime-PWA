@@ -1478,6 +1478,8 @@ const DashboardContent: React.FC = () => {
             <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 6 : 8 }}>
               <button
                 onClick={() => navigate('/smart-operations/pricing')}
+                title="Calculator"
+                aria-label="Open calculator"
                 style={{
                   padding: isMobile ? '8px' : '8px 16px',
                   borderRadius: 999,
@@ -1502,6 +1504,8 @@ const DashboardContent: React.FC = () => {
 
               <button
                 onClick={() => setIsWhatsAppModalOpen(true)}
+                title="Messages"
+                aria-label="Open messages"
                 style={{
                   padding: isMobile ? '8px' : '8px 16px',
                   borderRadius: 999,
@@ -1580,7 +1584,7 @@ const DashboardContent: React.FC = () => {
               </div>
               {!isMobile && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: '#2e2a5d' }}>{user?.role || 'User'}</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#2e2a5d' }}>{(user?.role === 'Company Admin' ? 'Admin' : user?.role) || 'User'}</div>
                   <ChevronDown size={14} color="#5b578c" style={{ transform: showUserMenu ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                 </div>
               )}
@@ -1600,7 +1604,7 @@ const DashboardContent: React.FC = () => {
                   minWidth: 160,
                 }}>
                   <div 
-                    onClick={() => navigate('/settings', { state: { tab: 'Security' } })}
+                    onClick={() => navigate('/profile')}
                     style={{ padding: '12px 16px', fontSize: 13, fontWeight: 500, color: '#1e293b', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: 8 }}
                     onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f8fafc'}
                     onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
@@ -2239,6 +2243,7 @@ const DashboardContent: React.FC = () => {
                   style={{ border: 'none', background: 'none', color: '#94a3b8', cursor: 'pointer', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8 }}
                   onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
                   onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                  title="Close" aria-label="Close notifications"
                 ><X size={20} /></button>
               </div>
             </div>
@@ -2288,6 +2293,7 @@ const DashboardContent: React.FC = () => {
                         style={{ border: 'none', background: 'none', color: '#cbd5e1', cursor: 'pointer', padding: 4, borderRadius: 6 }}
                         onMouseEnter={e => e.currentTarget.style.color = '#ef4444'}
                         onMouseLeave={e => e.currentTarget.style.color = '#cbd5e1'}
+                        title="Dismiss" aria-label="Dismiss notification"
                       ><Trash2 size={14} /></button>
                     </div>
                     <h4 style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{notif.title}</h4>

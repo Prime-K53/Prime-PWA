@@ -132,12 +132,16 @@ export const DashboardCalendar: React.FC = () => {
           <button 
             onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
             className="p-1 hover:bg-slate-50 rounded-lg text-slate-400 transition-colors"
+            title="Previous month"
+            aria-label="Previous month"
           >
             <ChevronLeft size={12} />
           </button>
           <button 
             onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
             className="p-1 hover:bg-slate-50 rounded-lg text-slate-400 transition-colors"
+            title="Next month"
+            aria-label="Next month"
           >
             <ChevronRight size={12} />
           </button>

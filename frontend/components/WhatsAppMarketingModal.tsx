@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { 
   MessageSquare, Send, X, Users, MessageCircle, 
-  Sparkles, Check, ChevronRight, Copy 
+  Sparkles, Check, ChevronRight, Copy, Wand2, Loader2
 } from 'lucide-react';
 import { getPlaceholder } from '../constants/placeholders';
+import { aiService } from '../services/aiService';
 
 const AI_TEMPLATES = [
   {
@@ -162,12 +163,33 @@ const WhatsAppMarketingModal: React.FC<WhatsAppMarketingModalProps> = ({
   const [sendToGroup, setSendToGroup] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<'templates' | 'message'>('templates');
+  const [aiDescription, setAiDescription] = useState('');
+  const [generating, setGenerating] = useState(false);
 
   const handleApplyTemplate = (template: typeof AI_TEMPLATES[0]) => {
     let content = template.content.replace(/\[Company Name\]/g, companyName || 'Prime ERP');
     setMessage(content);
     setSelectedTemplate(template.id);
     setActiveSection('message');
+  };
+
+  const handleGenerateWithAI = async () => {
+    if (!aiDescription.trim()) return;
+    setGenerating(true);
+    try {
+      const result = await aiService.generateTemplate(aiDescription);
+      if (result) {
+        setMessage(result.content.replace(/{{company}}/g, companyName || 'Prime ERP'));
+        setSelectedTemplate('ai-generated');
+        setActiveSection('message');
+      } else {
+        alert('AI generation failed. Please check your AI settings in Marketing Messages.');
+      }
+    } catch {
+      alert('Failed to generate template. Ensure AI is configured.');
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const handleSend = () => {
@@ -270,6 +292,28 @@ const WhatsAppMarketingModal: React.FC<WhatsAppMarketingModalProps> = ({
             <div className="p-6">
               {activeSection === 'templates' && (
                 <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-4 custom-scrollbar">
+                  {/* AI Generator */}
+                  <div className="p-4 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl border border-indigo-100">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Wand2 size={16} className="text-indigo-600" />
+                      <span className="text-sm font-bold text-indigo-700">Generate with AI</span>
+                    </div>
+                    <textarea
+                      value={aiDescription}
+                      onChange={(e) => setAiDescription(e.target.value)}
+                      placeholder="Describe the message you want...&#10;e.g. A friendly reminder for customers with overdue invoices"
+                      className="w-full px-3 py-2.5 bg-white border border-indigo-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none resize-none h-20 mb-2"
+                    />
+                    <button
+                      onClick={handleGenerateWithAI}
+                      disabled={generating || !aiDescription.trim()}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                    >
+                      {generating ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={16} />}
+                      {generating ? 'Generating...' : 'Generate Template'}
+                    </button>
+                  </div>
+
                   <h3 className="text-sm font-semibold text-slate-700 mb-4">AI-Generated Templates</h3>
                   {AI_TEMPLATES.map((template) => (
                     <button

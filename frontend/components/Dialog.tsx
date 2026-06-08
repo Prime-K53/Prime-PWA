@@ -1,4 +1,6 @@
 import React from 'react';
+import { useKeyboardContext } from '../core/keyboard';
+import { trapFocus } from '../core/keyboard';
 
 interface DialogProps {
   open: boolean;
@@ -12,49 +14,32 @@ interface DivProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
 }
 
-const useFocusTrap = (ref: React.RefObject<HTMLDivElement | null>, open: boolean) => {
-  React.useEffect(() => {
-    if (!open || !ref.current) return;
-
-    const container = ref.current;
-    const previouslyFocused = document.activeElement as HTMLElement;
-
-    const focusableSelectors = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
-    const getFocusable = () => Array.from(container.querySelectorAll<HTMLElement>(focusableSelectors));
-
-    const focusFirst = () => {
-      const focusable = getFocusable();
-      if (focusable.length > 0) focusable[0].focus();
-    };
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Tab') return;
-      const focusable = getFocusable();
-      if (focusable.length === 0) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    };
-
-    focusFirst();
-    container.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      container.removeEventListener('keydown', handleKeyDown);
-      previouslyFocused?.focus();
-    };
-  }, [open, ref]);
-};
-
 const Dialog: React.FC<DialogProps> = ({ open, onOpenChange, onClose, title, children }) => {
   const dialogRef = React.useRef<HTMLDivElement>(null);
-  useFocusTrap(dialogRef, open);
+  const { registerShortcut } = useKeyboardContext();
+
+  React.useEffect(() => {
+    if (!open) return;
+    const unregister = registerShortcut({
+      id: `dialog-escape-${Date.now()}`,
+      key: 'Escape',
+      handler: () => {
+        onOpenChange?.(false);
+        onClose?.();
+      },
+      priority: 50,
+      description: 'Close dialog',
+    });
+    const container = dialogRef.current;
+    if (container) {
+      const release = trapFocus(container);
+      return () => {
+        unregister();
+        release();
+      };
+    }
+    return unregister;
+  }, [open]);
 
   if (!open) return null;
 
@@ -81,7 +66,7 @@ const Dialog: React.FC<DialogProps> = ({ open, onOpenChange, onClose, title, chi
             <DialogHeader className="flex items-center justify-between py-4 px-6">
               {title && <DialogTitle>{title}</DialogTitle>}
               {onClose && (
-                <button onClick={handleClose} className="text-slate-400 hover:text-slate-600 transition-colors text-xl font-bold">
+                <button onClick={handleClose} className="text-slate-400 hover:text-slate-600 transition-colors text-xl font-bold" title="Close" aria-label="Close">
                   ✕
                 </button>
               )}

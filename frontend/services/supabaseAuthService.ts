@@ -19,6 +19,7 @@ export interface AuthResult {
   success: boolean;
   error?: string;
   userId?: string;
+  session?: any;
 }
 
 export interface SessionInfo {
@@ -44,6 +45,9 @@ export async function signUp(email: string, password: string, metadata?: Record<
         data: metadata || {},
       },
     }));
+
+    console.log('[Auth] signUp response:', { data, error });
+
     if (error) {
       console.error('[Supabase] signUp error:', error);
       if (error.message?.toLowerCase().includes('already registered')) {
@@ -71,26 +75,47 @@ export async function signUp(email: string, password: string, metadata?: Record<
       }
       return { success: false, error: error.message || `Request failed with status ${status || 'unknown'}` };
     }
-    if (data.session?.user) {
+
+    // Check if session is returned immediately
+    if (data.session) {
+      console.log('[Auth] Session returned immediately after signup');
       return {
         success: true,
-        userId: data.session.user.id,
+        userId: data.user?.id,
+        session: data.session
       };
     }
 
-    const { data: signInData, error: signInError } = await withTimeout(supabase.auth.signInWithPassword({
-      email: targetEmail,
-      password,
-    }));
+    // If no session, check if user was created but requires confirmation (though we expect confirmation disabled)
+    if (data.user && !data.session) {
+      console.warn('[Auth] User created but no session returned. Attempting auto-login...');
+      const { data: signInData, error: signInError } = await withTimeout(supabase.auth.signInWithPassword({
+        email: targetEmail,
+        password,
+      }));
 
-    if (signInError) {
-      console.error('[Supabase] Auto-login after signup failed:', signInError);
-      return { success: false, error: signInError.message };
+      if (signInError) {
+        console.error('[Supabase] Auto-login after signup failed:', signInError);
+        // If signIn fails, it might be because email confirmation IS required despite expectations
+        if (signInError.message?.toLowerCase().includes('email not confirmed')) {
+          return {
+            success: false,
+            error: 'Signup succeeded but email confirmation is required. Please check your email or disable email confirmation in Supabase settings.'
+          };
+        }
+        return { success: false, error: `Signup succeeded but auto-login failed: ${signInError.message}` };
+      }
+
+      return {
+        success: true,
+        userId: signInData.user?.id,
+        session: signInData.session
+      };
     }
 
     return {
-      success: true,
-      userId: signInData.user?.id || data.user?.id,
+      success: false,
+      error: 'Signup failed: No user or session data returned.'
     };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : 'Network error. Please try again.' };

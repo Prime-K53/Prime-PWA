@@ -147,5 +147,6 @@ export const enrichDocumentCustomerData = (rawData: any, customers: any[] = []) 
     schoolAddress: pickText(rawData?.schoolAddress, rawData?.school_address, resolvedAddress),
     schoolPhone: pickText(rawData?.schoolPhone, rawData?.school_phone, resolvedPhone),
     walletBalance: rawData?.walletBalance ?? rawData?.wallet_balance ?? customer?.walletBalance ?? customer?.wallet_balance ?? 0,
+    totalCustomerOutstanding: rawData?.totalCustomerOutstanding ?? rawData?.total_customer_outstanding ?? customer?.outstandingBalance ?? 0,
   };
 };

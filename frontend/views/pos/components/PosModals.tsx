@@ -145,7 +145,7 @@ export const PrintingVariantModal: React.FC<{
             <div className="bg-white rounded shadow-2xl w-full max-w-lg overflow-hidden border border-[#d4d7dc]">
                 <div className="px-6 py-4 border-b border-[#d4d7dc] flex justify-between items-center bg-[#f4f5f8]">
                     <h2 className="text-sm font-bold text-[#393a3d] uppercase tracking-wider">Configure {product.name}</h2>
-                    <button onClick={onClose} className="text-[#8d9096] hover:text-[#d52b1e]"><X size={20} /></button>
+                    <button onClick={onClose} className="text-[#8d9096] hover:text-[#d52b1e]" title="Close" aria-label="Close product configuration"><X size={20} /></button>
                 </div>
                 <div className="p-8 space-y-6">
                     <div className="space-y-4">
@@ -607,7 +607,7 @@ export const CustomerModal: React.FC<{
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[80vh] flex flex-col overflow-hidden border border-slate-200 font-sans leading-relaxed">
                 <div className="px-4 py-2.5 border-b border-slate-200 flex justify-between items-center bg-slate-50 shrink-0">
                     <h2 className="text-[20px] font-semibold text-slate-800">Select Customer</h2>
-                    <button onClick={onClose} className="text-slate-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"><X size={18} /></button>
+                    <button onClick={onClose} className="text-slate-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-slate-100 transition-colors" title="Close" aria-label="Close customer selection"><X size={18} /></button>
                 </div>
 
                 <div className="px-4 py-2 bg-white border-b border-slate-200 shrink-0">
@@ -714,7 +714,7 @@ export const HeldOrdersModal: React.FC<{
         <div className="bg-white rounded shadow-2xl w-full max-w-4xl max-h-[80vh] flex flex-col border border-[#d4d7dc]">
             <div className="px-6 py-4 border-b border-[#d4d7dc] flex justify-between items-center bg-[#f4f5f8]">
                 <h2 className="text-sm font-bold text-[#393a3d] uppercase tracking-wider">Parked Orders</h2>
-                <button onClick={onClose} className="text-[#8d9096] hover:text-[#d52b1e]"><X size={20} /></button>
+                <button onClick={onClose} className="text-[#8d9096] hover:text-[#d52b1e]" title="Close" aria-label="Close parked orders"><X size={20} /></button>
             </div>
             <div className="p-4 overflow-y-auto flex-1 divide-y divide-[#f4f5f8] custom-scrollbar">
                 {orders.length === 0 && (
@@ -776,7 +776,7 @@ export const ReturnsModal: React.FC<{
             <div className="bg-white rounded shadow-2xl w-full max-w-4xl max-h-[80vh] flex flex-col border border-[#d4d7dc]">
                 <div className="px-6 py-4 border-b border-[#d4d7dc] flex justify-between items-center bg-[#f4f5f8]">
                     <h2 className="text-sm font-bold text-[#393a3d] uppercase tracking-wider">Process Return</h2>
-                    <button onClick={onClose} className="text-[#8d9096] hover:text-[#d52b1e]"><X size={20} /></button>
+                    <button onClick={onClose} className="text-[#8d9096] hover:text-[#d52b1e]" title="Close" aria-label="Close return process"><X size={20} /></button>
                 </div>
                 <div className="p-6 bg-white border-b border-[#d4d7dc]">
                     <div className="flex gap-3 max-w-lg">
@@ -878,7 +878,7 @@ export const VariantSelectorModal: React.FC<{
                         </h2>
                         <p className="text-[10px] text-[#6b6c7f] font-medium">{product.name}</p>
                     </div>
-                    <button onClick={onClose} className="text-[#8d9096] hover:text-[#d52b1e]"><X size={20} /></button>
+                    <button onClick={onClose} className="text-[#8d9096] hover:text-[#d52b1e]" title="Close" aria-label="Close variant selection"><X size={20} /></button>
                 </div>
 
                 {/* Quantity Selector */}

@@ -177,7 +177,7 @@ const resolveThresholdRule = (
   const resolvedStep = sanitizeStep(matchedRule.step, customStep);
   return {
     method: resolvedMethod,
-    step: resolveStep(resolvedMethod, resolvedStep)
+    step: matchedRule.step !== undefined ? resolvedStep : resolveStep(resolvedMethod, resolvedStep)
   };
 };
 

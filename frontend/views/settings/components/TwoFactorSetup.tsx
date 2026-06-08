@@ -72,7 +72,7 @@ export const TwoFactorSetup: React.FC<TwoFactorSetupProps> = ({ onComplete, onCa
                   <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tighter mt-0.5">Step {step} of 3</p>
               </div>
           </div>
-          <button onClick={onCancel} className="text-slate-400 hover:text-slate-600 p-2 transition-colors"><X size={20}/></button>
+          <button onClick={onCancel} className="text-slate-400 hover:text-slate-600 p-2 transition-colors" title="Cancel" aria-label="Cancel 2FA setup"><X size={20}/></button>
         </div>
 
         <div className="p-10">

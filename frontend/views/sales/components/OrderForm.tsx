@@ -1957,7 +1957,7 @@ const handleVariantSelect = async (variant: ProductVariant) => {
                                     <span className="text-xs font-normal">Preview</span>
                                 </button>
                             )}
-                            <button onClick={handleCancelForm} className="p-2 hover:bg-slate-200 rounded-lg transition-colors"><X size={20} /></button>
+                            <button onClick={handleCancelForm} className="p-2 hover:bg-slate-200 rounded-lg transition-colors" title="Cancel" aria-label="Cancel order form"><X size={20} /></button>
                         </div>
                     </div>
 
@@ -2528,7 +2528,7 @@ const handleVariantSelect = async (variant: ProductVariant) => {
                                     
                                     {/* Row 2: Search Box + Quick Service Buttons */}
                                     <div className="p-4 flex items-center gap-4" ref={itemDropdownRef}>
-                                        <div className="relative w-80">
+                                        <div className="relative flex-1">
                                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={12} />
                                             <input
                                                 type="text"
@@ -2544,45 +2544,47 @@ const handleVariantSelect = async (variant: ProductVariant) => {
                                             <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
 
                                             {isItemDropdownOpen && (
-                                                <div className="absolute z-[60] mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-premium max-h-60 overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-100">
+                                                <div className="absolute z-[60] mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-premium max-h-[30rem] overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-100">
                                                     {filteredInventory.length === 0 ? (
                                                         <div className="p-4 flex flex-col items-center gap-3">
                                                             <p className="text-xs text-slate-400 italic font-normal">No matching items.</p>
                                                         </div>
                                                     ) : (
-                                                        filteredInventory.map(item => {
-                                                            const hasVariants = item.variants && item.variants.length > 0;
-                                                            const prices = hasVariants ? item.variants.map((v: any) => Number(v.price || v.selling_price || 0)) : [];
-                                                            const minPrice = hasVariants ? Math.min(...prices) : 0;
-                                                            const maxPrice = hasVariants ? Math.max(...prices) : 0;
-                                                            const isPriceRange = hasVariants && minPrice !== maxPrice;
+                                                        <div className="grid grid-cols-2">
+                                                            {filteredInventory.map(item => {
+                                                                const hasVariants = item.variants && item.variants.length > 0;
+                                                                const prices = hasVariants ? item.variants.map((v: any) => Number(v.price || v.selling_price || 0)) : [];
+                                                                const minPrice = hasVariants ? Math.min(...prices) : 0;
+                                                                const maxPrice = hasVariants ? Math.max(...prices) : 0;
+                                                                const isPriceRange = hasVariants && minPrice !== maxPrice;
 
-                                                            return (
-                                                                <button
-                                                                    key={item.id}
-                                                                    onClick={() => {
-                                                                        handleAddItem(item);
-                                                                        setIsItemDropdownOpen(false);
-                                                                        setItemSearch('');
-                                                                    }}
-                                                                    className="w-full px-4 py-3 text-left hover:bg-blue-50 flex flex-col gap-1 transition-colors border-b border-slate-50 last:border-0"
-                                                                >
-                                                                    <div className="flex justify-between items-start">
-                                                                        <span className="text-xs font-semibold text-slate-800 truncate pr-4">{item.name}</span>
-                                                                        <span className="text-xs font-bold text-slate-900 shrink-0">
-                                                                            {isPriceRange 
-                                                                                ? `${currency}${minPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })} - ${currency}${maxPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
-                                                                                : `${currency}${Number((hasVariants ? minPrice : (item.price || item.selling_price)) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
-                                                                            }
-                                                                        </span>
-                                                                    </div>
-                                                                    <div className="flex justify-between items-center">
-                                                                        <span className="text-[10px] text-slate-400 font-mono tracking-tight">{item.sku || 'NO-SKU'}</span>
-                                                                        <span className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">{item.type}</span>
-                                                                    </div>
-                                                                </button>
-                                                            );
-                                                        })
+                                                                return (
+                                                                    <button
+                                                                        key={item.id}
+                                                                        onClick={() => {
+                                                                            handleAddItem(item);
+                                                                            setIsItemDropdownOpen(false);
+                                                                            setItemSearch('');
+                                                                        }}
+                                                                        className="w-full px-4 py-3 text-left hover:bg-blue-50 flex flex-col gap-1 transition-colors border-b border-r border-slate-200"
+                                                                    >
+                                                                        <div className="flex justify-between items-start gap-2">
+                                                                            <span className="text-xs font-semibold text-slate-800 truncate">{item.name}</span>
+                                                                            <span className="text-xs font-bold text-slate-900 shrink-0 whitespace-nowrap">
+                                                                                {isPriceRange 
+                                                                                    ? `${currency}${minPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })} - ${currency}${maxPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                                                                                    : `${currency}${Number((hasVariants ? minPrice : (item.price || item.selling_price)) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                                                                                }
+                                                                            </span>
+                                                                        </div>
+                                                                        <div className="flex justify-between items-center">
+                                                                            <span className="text-[10px] text-slate-400 font-mono tracking-tight">{item.sku || 'NO-SKU'}</span>
+                                                                            <span className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">{item.type}</span>
+                                                                        </div>
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
                                                     )}
                                                 </div>
                                             )}

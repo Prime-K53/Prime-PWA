@@ -246,7 +246,7 @@ const ExaminationBatchModal: React.FC<ExaminationBatchModalProps> = ({ isOpen, o
               <p className="text-[11px] font-normal text-slate-400 mt-0.5">Secure Document Terminal</p>
             </div>
             <div className="flex items-center gap-3">
-              <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-lg transition-colors"><X size={20} /></button>
+              <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-lg transition-colors" title="Close" aria-label="Close examination batch"><X size={20} /></button>
             </div>
           </div>
 

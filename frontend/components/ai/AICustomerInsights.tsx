@@ -51,7 +51,7 @@ const AICustomerInsights: React.FC<Props> = ({ customer, invoices, payments }) =
                 <Sparkles size={18} color="#8b5cf6" />
                 <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0f172a' }}>Customer AI Insight</h3>
               </div>
-              <button onClick={() => setOpen(false)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8', padding: 4 }}><X size={18} /></button>
+              <button onClick={() => setOpen(false)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8', padding: 4 }} title="Close" aria-label="Close insights"><X size={18} /></button>
             </div>
 
             {loading ? (

@@ -1,8 +1,17 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Sparkles, X, Send, Loader2 } from 'lucide-react';
 import { generateAIResponse } from '../../services/geminiService';
+import { useAuth } from '../../context/AuthContext';
+import { useInventory } from '../../context/InventoryContext';
+import { useSales } from '../../context/SalesContext';
+import { useFinance } from '../../context/FinanceContext';
 
 const AIFloatingAssistant: React.FC = () => {
+  const { companyConfig, user } = useAuth();
+  const { inventory } = useInventory();
+  const { customers, sales } = useSales();
+  const { invoices, accounts } = useFinance();
+
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<{ role: string; content: string }[]>([
@@ -15,13 +24,64 @@ const AIFloatingAssistant: React.FC = () => {
   useEffect(() => { if (open) setTimeout(() => inputRef.current?.focus(), 200); }, [open]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
+  const generateContext = useCallback(() => {
+    const currency = companyConfig?.currencySymbol || 'K';
+    const unpaidInvoices = (invoices as any[]).filter((inv: any) => {
+      const s = String(inv.status || '').toLowerCase();
+      return s !== 'cancelled' && s !== 'voided' && s !== 'draft' && (s === 'unpaid' || s === 'partial' || s === 'overdue');
+    });
+    const receivables = unpaidInvoices.reduce((sum: number, inv: any) => {
+      const total = Number(inv.totalAmount) || 0;
+      const paid = Number(inv.paidAmount) || 0;
+      return sum + Math.max(0, total - paid);
+    }, 0);
+    const overdueCount = (invoices as any[]).filter((i: any) => String(i.status || '').toLowerCase() === 'overdue').length;
+    return `
+SYSTEM CONTEXT:
+- Company: ${companyConfig?.companyName || 'Prime ERP'}
+- User: ${user?.name || 'Admin'}
+- Currency: ${currency}
+- Current Date: ${new Date().toLocaleDateString()}
+
+DATA SUMMARY:
+- Inventory: ${inventory.length} items, total value: ${currency} ${inventory.reduce((sum: number, i: any) => sum + (i.cost * i.stock), 0).toLocaleString()}
+- Customers: ${customers.length} total customers
+- Invoices: ${invoices.length} total (${overdueCount} overdue, ${unpaidInvoices.length - overdueCount} unpaid/pending)
+- Unpaid Receivables: ${currency} ${receivables.toLocaleString()}
+- Sales Today: ${sales.filter((s: any) => new Date(s.date).toDateString() === new Date().toDateString()).length} transactions
+- Accounts: ${accounts.length} chart of accounts
+
+Provide concise, actionable insights. Use the data above to give specific numbers.
+`;
+  }, [inventory, customers, invoices, sales, accounts, companyConfig, user]);
+
   const handleSend = async () => {
     if (!input.trim() || loading) return;
     const q = input.trim();
     setInput('');
     setMessages(prev => [...prev, { role: 'user', content: q }]);
     setLoading(true);
-    const resp = await generateAIResponse(q);
+    const context = generateContext();
+    const resp = await generateAIResponse(
+      `${context}\n\nUser Question: ${q}`,
+      `You are Prime ERP AI Assistant.
+
+All responses must follow professional business-report formatting.
+
+Structure:
+1. Title
+2. Executive Summary
+3. Key Metrics (bullets)
+4. Analysis
+5. Recommendations
+6. Next Actions
+
+Never place multiple statistics in a single sentence.
+Always use paragraphs, bullet points, tables, or sections.
+Use Markdown formatting.
+Highlight important numbers in bold.
+Keep explanations concise but professional.`
+    );
     setMessages(prev => [...prev, { role: 'assistant', content: resp }]);
     setLoading(false);
   };
@@ -41,7 +101,7 @@ const AIFloatingAssistant: React.FC = () => {
               <Sparkles size={16} color="#8b5cf6" />
               <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>AI Assistant</span>
             </div>
-            <button onClick={() => setOpen(false)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8', padding: 4 }}>
+            <button onClick={() => setOpen(false)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8', padding: 4 }} title="Close" aria-label="Close AI assistant">
               <X size={16} />
             </button>
           </div>
@@ -74,7 +134,7 @@ const AIFloatingAssistant: React.FC = () => {
             <button onClick={handleSend} disabled={loading || !input.trim()} style={{
               border: 'none', background: '#8b5cf6', color: '#fff', cursor: 'pointer', width: 38, height: 38, borderRadius: 12,
               display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: loading || !input.trim() ? 0.5 : 1,
-            }}><Send size={16} /></button>
+            }} title="Send" aria-label="Send message"><Send size={16} /></button>
           </div>
         </div>
       )}
@@ -88,6 +148,8 @@ const AIFloatingAssistant: React.FC = () => {
       }}
         onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
         onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+        title={open ? 'Close' : 'Open AI assistant'}
+        aria-label={open ? 'Close AI assistant' : 'Open AI assistant'}
       >
         {open ? <X size={22} /> : <Sparkles size={22} />}
       </button>

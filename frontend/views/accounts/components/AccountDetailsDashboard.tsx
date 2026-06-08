@@ -1,11 +1,13 @@
-import React, { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { 
   Landmark, TrendingUp, History, 
   Shield, Activity, X
 } from 'lucide-react';
-import { Account } from '../../../types';
+import type { Account } from '../../../types';
 import { useAuth } from '../../../context/AuthContext';
 import { useFinance } from '../../../context/FinanceContext';
+import { auditLogService } from '../../../services/auditLogService';
+import type { AuditLogEntry } from '../../../services/auditLogService';
 import { AuditTimeline } from '../../shared/components/AuditTimeline';
 import { 
   XAxis, YAxis, CartesianGrid, 
@@ -22,6 +24,9 @@ export const AccountDetailsDashboard: React.FC<AccountDetailsDashboardProps> = (
   const { ledger } = useFinance();
   const currency = companyConfig?.currencySymbol || '$';
 
+  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
+  const [auditLoading, setAuditLoading] = useState(true);
+
   const accountEntries = useMemo(() => {
     return (ledger || []).filter((e: any) => 
       e.debitAccountId === account.id || 
@@ -30,6 +35,88 @@ export const AccountDetailsDashboard: React.FC<AccountDetailsDashboardProps> = (
       e.creditAccountId === account.code
     ).sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [ledger, account]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const getOrdinal = (action: string) => {
+      switch (action) {
+        case 'CREATE':
+        case 'DEBIT':
+          return 3;
+        case 'UPDATE':
+        case 'CREDIT':
+          return 2;
+        case 'VOID':
+        case 'DELETE':
+          return 1;
+        default:
+          return 0;
+      }
+    };
+    const load = async () => {
+      setAuditLoading(true);
+      const data = await auditLogService.getEntityLogs('Account', account.code || account.id);
+      const auditMap = new Map<string, AuditLogEntry>();
+
+      (data ?? []).forEach((log: any) => {
+        const entry: AuditLogEntry = {
+          id: String(log.id ?? ''),
+          timestamp: String(log.timestamp ?? log.date ?? new Date().toISOString()),
+          action: String(log.action ?? 'LEDGER'),
+          entity_type: String(log.entity_type ?? log.entityType ?? 'Account'),
+          entity_id: String(log.entity_id ?? log.entityId ?? ''),
+          user_id: String(log.user_id ?? log.userId ?? ''),
+          details_json: log.details_json,
+          details: log.details,
+          correlation_id: log.correlation_id ?? log.correlationId,
+          ip_address: log.ip_address,
+          user_agent: log.user_agent,
+          status: String(log.status || 'LOCAL')
+        };
+        const key = `${entry.action}-${entry.entity_id}-${entry.timestamp}-${entry.details ?? entry.details_json ?? ''}`;
+        auditMap.set(key, entry);
+      });
+
+      (accountEntries || []).forEach((ledgerEntry: any) => {
+        const isDebit = ledgerEntry.debitAccountId === account.id || ledgerEntry.debitAccountId === account.code;
+        const action = isDebit ? 'DEBIT' : 'CREDIT';
+        const matchedAccountId = isDebit ? ledgerEntry.debitAccountId : ledgerEntry.creditAccountId;
+        const entry: AuditLogEntry = {
+          id: `ledger-${ledgerEntry.id}`,
+          timestamp: String(ledgerEntry.date || new Date().toISOString()),
+          action,
+          entity_type: 'Account',
+          entity_id: String(matchedAccountId || account.code || account.id),
+          user_id: String(ledgerEntry.createdBy || ledgerEntry.postedBy || 'SYSTEM'),
+          details: String(ledgerEntry.description || 'Ledger posting'),
+          status: 'LEDGER'
+        };
+        const key = `${entry.action}-${entry.entity_id}-${entry.timestamp}-${entry.details}`;
+        const existing = auditMap.get(key);
+        if (!existing) {
+          auditMap.set(key, entry);
+          return;
+        }
+        const incomingOrdinal = getOrdinal(entry.action);
+        const existingOrdinal = getOrdinal(existing.action);
+        if (incomingOrdinal > existingOrdinal) {
+          existing.action = entry.action;
+        }
+      });
+
+      const merged = Array.from(auditMap.values())
+        .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+      if (!cancelled) {
+        setAuditLogs(merged);
+        setAuditLoading(false);
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [account.code, account.id, accountEntries]);
 
   const stats = useMemo(() => {
     let balance = 0;
@@ -95,6 +182,7 @@ export const AccountDetailsDashboard: React.FC<AccountDetailsDashboardProps> = (
           <button 
             onClick={onClose} 
             className="p-4 bg-white border border-slate-200 text-slate-400 rounded-3xl hover:bg-rose-50 hover:text-rose-500 hover:border-rose-200 transition-all shadow-sm"
+            title="Close" aria-label="Close account details"
           >
             <X size={24} />
           </button>
@@ -186,7 +274,11 @@ export const AccountDetailsDashboard: React.FC<AccountDetailsDashboardProps> = (
                     </h3>
                 </div>
                 <div className="flex-1 overflow-y-auto custom-scrollbar pr-4">
-                    <AuditTimeline entityType="account" entityId={account.code} />
+                    {auditLoading ? (
+                        <div className="p-6 text-center text-slate-400 text-sm">Loading audit trail...</div>
+                    ) : (
+                        <AuditTimeline logs={auditLogs} title={`Security Audit Trace: ${account.code}`} />
+                    )}
                 </div>
             </div>
           </div>

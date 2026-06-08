@@ -265,7 +265,7 @@ const Architect: React.FC = () => {
                                                  <p className="text-xs text-slate-500">{e.desc}</p>
                                              </div>
                                          </div>
-                                         <button className="p-2 text-slate-600 hover:text-white transition-colors"><ChevronRight size={16}/></button>
+                                         <button className="p-2 text-slate-600 hover:text-white transition-colors" title="View details" aria-label="View details"><ChevronRight size={16}/></button>
                                      </div>
                                  ))}
                              </div>

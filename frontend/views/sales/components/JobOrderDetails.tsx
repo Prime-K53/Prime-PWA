@@ -124,7 +124,7 @@ export const JobOrderDetails: React.FC<JobOrderDetailsProps> = ({ jobOrder, onCl
                             <Download size={16}/> Download
                         </button>
                         <button onClick={() => window.print()} className="p-2 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 shadow-sm" title="Print"><Printer size={18}/></button>
-                        <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-lg text-slate-500"><X size={24}/></button>
+                        <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-lg text-slate-500" title="Close" aria-label="Close job order details"><X size={24}/></button>
                     </div>
                 </div>
 

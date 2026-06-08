@@ -164,17 +164,10 @@ async function ensureSession(signal?: AbortSignal) {
 
 const SESSION_TIMEOUT_MS = 20_000;
 
-async function withSession<T>(fn: () => Promise<T>): Promise<T | null> {
-  const session = await Promise.race([
-    ensureSession(),
-    new Promise<null>((resolve) => setTimeout(() => resolve(null), SESSION_TIMEOUT_MS))
-  ]);
-  if (!session) return null;
-  const result = await Promise.race([
-    fn(),
-    new Promise<null>((resolve) => setTimeout(() => resolve(null), SESSION_TIMEOUT_MS))
-  ]);
-  return result;
+async function withSession<T>(fn: () => Promise<T>): Promise<T> {
+  const session = await ensureSession();
+  if (!session) throw new Error('No Supabase session available');
+  return fn();
 }
 
 export const cloudDb = {
@@ -322,6 +315,16 @@ export const cloudDb = {
       const companyId = profile.company_id || profile.companyId || await getCompanyId();
       if (!userId || !companyId) return null;
 
+      const profileData = { ...profile };
+      delete profileData.password;
+      delete profileData.confirmPassword;
+      delete profileData.profile_id;
+      delete profileData.profileId;
+      delete profileData.user_id;
+      delete profileData.userId;
+      delete profileData.company_id;
+      delete profileData.companyId;
+
       const payload = {
         id: profile.profile_id || profile.profileId || crypto.randomUUID(),
         user_id: userId,
@@ -329,7 +332,7 @@ export const cloudDb = {
         full_name: profile.full_name || profile.fullName || profile.name || user?.email?.split('@')[0] || 'User',
         role: profile.role || 'Sales Staff',
         status: profile.status || 'Active',
-        data: profile,
+        data: profileData,
         updated_at: new Date().toISOString(),
       };
 
@@ -494,6 +497,17 @@ export const cloudDb = {
 
       if (error) throw error;
       return data;
+    });
+  },
+
+  async deleteCompany(companyId: string): Promise<void> {
+    if (!SUPABASE_ENABLED) return;
+    await withSession(async () => {
+      const { error } = await supabase
+        .from('companies')
+        .delete()
+        .eq('id', companyId);
+      if (error) throw error;
     });
   },
 };

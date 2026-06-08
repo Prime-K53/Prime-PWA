@@ -518,7 +518,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, isCollapsed, toggle, toggleCo
                           <div className="p-1.5 text-blue-400 bg-blue-500/10 rounded-md group-hover:bg-blue-500/20 transition-colors"><Wrench size={16} /></div>
                           Internal Tools
                         </button>
-                        <button onClick={() => { navigate('/admin/users'); setIsSettingsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 rounded-lg text-sm font-medium text-white/80 transition-colors group">
+                        <button onClick={() => { navigate('/profile'); setIsSettingsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 rounded-lg text-sm font-medium text-white/80 transition-colors group">
                           <div className="p-1.5 text-indigo-400 bg-indigo-500/10 rounded-md group-hover:bg-indigo-500/20 transition-colors"><User size={16} /></div>
                           User Profile
                         </button>

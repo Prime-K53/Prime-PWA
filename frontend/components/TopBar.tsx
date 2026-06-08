@@ -240,7 +240,7 @@ const TopBar: React.FC<TopBarProps> = ({ toggleSidebar, toggleCollapse }) => {
                                 <h3 className="text-sm font-semibold text-slate-800">Notifications</h3>
                                 <p className="text-[10px] text-slate-400 font-medium">Updates from your workspace</p>
                             </div>
-                            <button onClick={() => setShowNotifications(false)} className="p-1.5 hover:bg-slate-200 rounded-full transition-colors text-slate-400">
+                            <button onClick={() => setShowNotifications(false)} className="p-1.5 hover:bg-slate-200 rounded-full transition-colors text-slate-400" title="Close notifications" aria-label="Close notifications">
                                 <X size={16}/>
                             </button>
                         </div>
@@ -376,7 +376,7 @@ const TopBar: React.FC<TopBarProps> = ({ toggleSidebar, toggleCollapse }) => {
         </div>
 
         <div className="relative" ref={appsMenuRef}>
-            <button className={`p-1.5 rounded-full transition-colors ${showApps ? 'bg-blue-50 text-blue-600' : 'hover:bg-slate-100 text-slate-500'}`} onClick={() => setShowApps(!showApps)}><LayoutGrid size={18}/></button>
+            <button className={`p-1.5 rounded-full transition-colors ${showApps ? 'bg-blue-50 text-blue-600' : 'hover:bg-slate-100 text-slate-500'}`} onClick={() => setShowApps(!showApps)} title="Apps menu" aria-label="Toggle apps menu"><LayoutGrid size={18}/></button>
             {showApps && (
                 <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-xl shadow-2xl border border-slate-100 p-3 z-50 animate-in fade-in zoom-in-95 origin-top-right">
                     <div className="grid grid-cols-2 gap-2">

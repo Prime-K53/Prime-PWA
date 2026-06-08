@@ -186,25 +186,57 @@ for (let i = 0; i < 900; i++) {
 const ALL_TEMPLATES = [...MARKETING_TEMPLATES, ...ADDITIONAL_TEMPLATES];
 
 class WhatsAppMarketingService {
+  private _initialized = false;
+  private _initializing = false;
+
+  async ensureInitialized(): Promise<void> {
+    if (this._initialized) return;
+    if (this._initializing) {
+      // Wait for the in-progress initialization to complete
+      while (this._initializing) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+      return;
+    }
+    this._initializing = true;
+    try {
+      await this.initializeTemplates();
+      this._initialized = true;
+    } finally {
+      this._initializing = false;
+    }
+  }
+
   async initializeTemplates(): Promise<void> {
     const existing = await dbService.getAll<WhatsAppTemplate>('whatsappTemplates');
     const now = new Date().toISOString();
+    const missing: WhatsAppTemplate[] = [];
     
-    // Always update/insert preloaded templates to ensure latest motivational content
+    // Only insert templates that truly don't exist yet
     for (const template of ALL_TEMPLATES) {
       const exists = existing.find(t => t.id === template.id);
-      if (!exists || exists.isPreloaded) {
-        await dbService.put('whatsappTemplates', { 
+      if (!exists) {
+        missing.push({ 
           ...template, 
-          createdAt: exists?.createdAt || now,
-          usageCount: exists?.usageCount || 0
+          createdAt: now,
+          usageCount: 0
         });
       }
+    }
+
+    if (missing.length === 0) return;
+
+    // Batch insert to avoid N+1 requests
+    const batchSize = 50;
+    for (let i = 0; i < missing.length; i += batchSize) {
+      const batch = missing.slice(i, i + batchSize);
+      await Promise.all(
+        batch.map(t => dbService.put('whatsappTemplates', t))
+      );
     }
   }
 
   async getTemplates(category?: string): Promise<WhatsAppTemplate[]> {
-    await this.initializeTemplates();
     const templates = await dbService.getAll<WhatsAppTemplate>('whatsappTemplates');
     if (category) {
       return templates.filter(t => t.category === category);

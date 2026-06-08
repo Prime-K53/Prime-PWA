@@ -23,6 +23,10 @@ async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return Promise.race([promise, timer]);
 }
 
+function normalizeRoleForDisplay(role: string): string {
+  return role === 'Company Admin' ? 'Admin' : role;
+}
+
 interface Notification {
   id: string;
   message: string;
@@ -287,7 +291,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         showCompanyLogo: true,
         showPaymentTerms: true,
         showDueDate: true,
-        showOutstandingAndWalletBalances: false
+        showOutstandingAndWalletBalances: false,
+        showAccountSummary: false
       },
       cloudSync: {
         enabled: SUPABASE_ENABLED,
@@ -423,7 +428,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const cloudProfile = profileRows[0];
     const profileData = cloudProfile?.data || {};
     const companyId = cloudProfile?.company_id || supabaseUser.user_metadata?.company_id || '';
-    const role = (cloudProfile?.role || profileData.role || supabaseUser.user_metadata?.role || 'Sales Staff') as UserRole;
+    const role = normalizeRoleForDisplay(cloudProfile?.role || profileData.role || supabaseUser.user_metadata?.role || 'Sales Staff') as UserRole;
     const isSuperAdmin = Boolean(profileData.is_super_admin || supabaseUser.user_metadata?.is_super_admin || role === 'Super Admin' || role === 'Company Admin' || role === 'Admin');
     const groupIds = profileData.group_ids || profileData.groupIds || supabaseUser.user_metadata?.group_ids || roleToGroupIds(String(role), isSuperAdmin);
     const fullName = cloudProfile?.full_name || profileData.fullName || profileData.full_name || supabaseUser.user_metadata?.full_name || supabaseUser.email?.split('@')[0] || 'User';
@@ -530,7 +535,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUserGroups(groups.length > 0 ? groups : INITIAL_USER_GROUPS);
           setAllUsers((profileRows || []).map((profile: any) => {
             const profileData = profile.data || {};
-            const role = profile.role || profileData.role || 'Sales Staff';
+            const role = normalizeRoleForDisplay(profile.role || profileData.role || 'Sales Staff');
             return {
               id: profile.user_id || profile.id,
               username: profile.username || profileData.username || profile.full_name || 'user',
@@ -1040,13 +1045,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }));
     setCompanyConfig(normalizedConfig);
+    localStorage.setItem('nexus_company_config', JSON.stringify(normalizedConfig));
     if (SUPABASE_ENABLED) {
       void cloudDb.upsertCompany(normalizedConfig as any).catch((error) => {
         console.error('Failed to save company config to Supabase', error);
         notify('Company config could not be saved to cloud', 'error');
       });
-    } else {
-      localStorage.setItem('nexus_company_config', JSON.stringify(normalizedConfig));
     }
     void syncDocumentNumberSeriesConfig(normalizedConfig).catch((error) => {
       console.error('Failed to sync document numbering configuration', error);
@@ -1116,7 +1120,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setCompanyConfig(normalizedConfig);
 
       const savedCompanyId = await cloudDb.upsertCompany(normalizedConfig as any);
-      const { data: { session } } = await withTimeout(supabase.auth.getSession(), 15000);
+      
+      // PRODUCTION-GRADE FIX: Wait for session with a robust timeout and listener
+      let session: any = null;
+      try {
+        const { data } = await withTimeout(supabase.auth.getSession(), 5000);
+        session = data.session;
+      } catch (e) {
+        console.warn('[Auth] Initial getSession failed or timed out:', e);
+      }
+
+      if (!session) {
+        console.log('[Auth] No session found, waiting for auth state change...');
+        try {
+          session = await new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+              subscription.unsubscribe();
+              reject(new AuthFlowError('Auth timeout: No Supabase session available after 10s', {
+                code: 'signup_session_timeout',
+                userMessage: 'Account created, but we are still waiting for your session. Please try refreshing or signing in manually.'
+              }));
+            }, 10000);
+
+            const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
+              console.log('[Auth] Auth state change during setup:', event, !!newSession);
+              if (newSession) {
+                clearTimeout(timeout);
+                subscription.unsubscribe();
+                resolve(newSession);
+              }
+            });
+          });
+        } catch (error: any) {
+          console.error('[Auth] Session wait failed:', error);
+          throw error;
+        }
+      }
 
       if (!session?.user) {
         throw new AuthFlowError('No Supabase session is available after signup.', {
@@ -1129,7 +1168,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ...adminUser,
         user_id: session.user.id,
         company_id: savedCompanyId || cloudCompanyId,
-        role: 'Company Admin',
+        role: 'Admin',
         status: 'Active',
         is_super_admin: true,
         group_ids: ['GRP-ADMIN'],
@@ -1142,7 +1181,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setAllUsers([{
         ...adminUser,
         id: session.user.id,
-        role: 'Company Admin' as UserRole,
+        role: 'Admin' as UserRole,
         status: 'Active',
         active: true,
         isSuperAdmin: true,
@@ -1254,7 +1293,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signUpSupabase = async (email: string, password: string, metadata?: Record<string, any>) => {
     const { signUp } = await import('../services/supabaseAuthService');
-    return signUp(email, password, metadata);
+    const result = await signUp(email, password, metadata);
+    
+    // If signup succeeded and returned a session, we can optimistically set the user
+    // or wait for the onAuthStateChange. However, the SetupWizard will call completeSetup
+    // which also checks for a session.
+    
+    return result;
   };
 
   const sendPasswordResetOtp = async (email: string) => {

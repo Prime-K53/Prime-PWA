@@ -371,8 +371,8 @@ Provide concise, actionable insights. Use the data above to give specific number
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 />
                 <div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-1">
-                  <button className="p-1.5 text-slate-400 hover:text-purple-500"><Image size={16} /></button>
-                  <button className="p-1.5 text-slate-400 hover:text-purple-500"><FileText size={16} /></button>
+                  <button className="p-1.5 text-slate-400 hover:text-purple-500" title="Attach image" aria-label="Attach image"><Image size={16} /></button>
+                  <button className="p-1.5 text-slate-400 hover:text-purple-500" title="Attach file" aria-label="Attach file"><FileText size={16} /></button>
                 </div>
               </div>
               <button

@@ -43,6 +43,7 @@ const buildPreviewData = (config: CompanyConfig): PrimeDocData => {
     amountPaid,
     totalAmount,
     status: 'Partially Paid',
+    totalCustomerOutstanding: 5600,
     walletBalance: 350,
   };
 };
@@ -129,9 +130,9 @@ export const PrimeTemplatePreview: React.FC<PrimeTemplatePreviewProps> = ({ conf
         </div>
       )}
 
-      {isGenerating && (
-        <div className="absolute inset-x-0 top-0 flex items-center justify-center bg-white/80 py-2 text-xs font-semibold text-slate-600 backdrop-blur-sm">
-          {genInfo || 'Refreshing preview…'}
+      {isGenerating && !directPath && (
+        <div className="flex h-full items-center justify-center bg-white">
+          <p className="text-sm font-medium text-slate-500">{genInfo || 'Preparing the Prime PDF preview...'}</p>
         </div>
       )}
     </div>

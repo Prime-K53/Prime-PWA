@@ -24,6 +24,7 @@ import { z } from 'zod';
 
 import { api } from '../services/api';
 import { dbService } from '../services/db';
+import cloudDb from '../services/cloudDb';
 import { getPlaceholder } from '../constants/placeholders';
 import { isPasswordProtectionEnabled, normalizeSecuritySettings, withNormalizedSecurityConfig } from '../utils/securitySettings';
 import {
@@ -170,6 +171,7 @@ const Settings: React.FC = () => {
         },
         invoiceTemplates: {
             ...DEFAULT_PRIME_TEMPLATE_SETTINGS,
+            ...(companyConfig?.invoiceTemplates || {}),
             showOutstandingAndWalletBalances: companyConfig?.invoiceTemplates?.showOutstandingAndWalletBalances ?? false
         },
         glMapping: {},
@@ -240,6 +242,9 @@ const Settings: React.FC = () => {
     const [bomTemplates, setBomTemplates] = useState<any[]>([]);
     const [isRestoringBackup, setIsRestoringBackup] = useState(false);
     const [show2FASetup, setShow2FASetup] = useState(false);
+    const [rowsPerPage, setRowsPerPage] = useState(() => {
+        try { const v = parseInt(localStorage.getItem('prime:pagination:default') || '', 10); return !isNaN(v) && v > 0 ? v : 25; } catch { return 25; }
+    });
     const restoreInputRef = useRef<HTMLInputElement>(null);
 
     const readBackupStatus = () => {
@@ -492,6 +497,33 @@ const Settings: React.FC = () => {
                 })
             }
         }));
+    };
+
+    const handleDeleteCompany = async () => {
+        const confirmed = window.confirm(
+            `Delete "${config.companyName}" permanently?\n\n` +
+            'This will remove your company from Supabase and reset all local data. This action cannot be undone.'
+        );
+        if (!confirmed) return;
+
+        const doubleConfirm = window.confirm(
+            'ARE YOU SURE?\n\n' +
+            'All company data on Supabase will be deleted. Local data will be cleared. You will be signed out.'
+        );
+        if (!doubleConfirm) return;
+
+        try {
+            const companyId = config.companyId || (config as any).id;
+            if (companyId) {
+                await cloudDb.deleteCompany(companyId);
+            }
+            await dbService.factoryReset();
+            localStorage.clear();
+            sessionStorage.clear();
+            window.location.reload();
+        } catch (error) {
+            notify('Failed to delete company: ' + (error instanceof Error ? error.message : String(error)), 'error');
+        }
     };
 
     const handleAssetUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'signature') => {
@@ -786,11 +818,32 @@ const Settings: React.FC = () => {
                                             </div>
                                         </div>
                                     </div>
+                                 </section>
+
+                                <section className="white-card overflow-hidden border-red-200">
+                                    <div className="settings-section-header flex justify-between items-center bg-red-50 border-b-red-200">
+                                        <div>
+                                            <h3 className="text-sm font-bold text-red-700">Danger Zone</h3>
+                                            <p className="text-[11px] text-red-500 mt-0.5">Irreversible actions that affect your entire company.</p>
+                                        </div>
+                                    </div>
+                                    <div className="p-8 flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm font-bold text-[#393A3D]">Delete this company</p>
+                                            <p className="text-[11px] text-[#6B6C6F] mt-0.5">Permanently remove {config.companyName || 'your company'} from Supabase and reset all local data.</p>
+                                        </div>
+                                        <button
+                                            onClick={handleDeleteCompany}
+                                            className="bg-red-600 text-white px-6 py-2.5 rounded-full font-bold text-sm hover:bg-red-700 transition-all flex items-center gap-2 active:scale-95 shadow-md shadow-red-500/10"
+                                        >
+                                            <Trash2 size={16} /> Delete Company
+                                        </button>
+                                    </div>
                                 </section>
 
-                            </div>
-                        )
-                    }
+                             </div>
+                         )
+                     }
 
                     {activeTab === 'Appearance' && (
                             <div className="space-y-8">
@@ -845,6 +898,26 @@ const Settings: React.FC = () => {
                                                 />
                                                 <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#2CA01C]"></div>
                                             </label>
+                                        </div>
+
+                                        <div className="h-px bg-slate-100" />
+
+                                        <div className="flex justify-between items-center group/item hover:bg-slate-50 transition-all -mx-8 px-8 py-4">
+                                            <div>
+                                                <p className="font-bold text-slate-800 text-sm">Rows Per Page</p>
+                                                <p className="text-[11px] text-slate-500 mt-0.5">Default number of items shown on list views.</p>
+                                            </div>
+                                            <select
+                                                value={rowsPerPage}
+                                                onChange={e => { const v = Number(e.target.value); setRowsPerPage(v); try { localStorage.setItem('prime:pagination:default', String(v)); } catch {} }}
+                                                className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-blue-500/5 focus:border-blue-500 transition-all shadow-sm"
+                                            >
+                                                <option value={10}>10</option>
+                                                <option value={15}>15</option>
+                                                <option value={25}>25</option>
+                                                <option value={50}>50</option>
+                                                <option value={100}>100</option>
+                                            </select>
                                         </div>
                                     </div>
                                 </section>
@@ -1681,6 +1754,7 @@ const Settings: React.FC = () => {
                                                 { key: 'showCompanyLogo', label: 'Show Company Logo', sub: 'Display logo on top right/left.' },
                                                 { key: 'showPaymentTerms', label: 'Include Payment Terms', sub: 'Add terms & conditions footer.' },
                                                 { key: 'showDueDate', label: 'Show Due Date', sub: 'Highlight payment deadline.' },
+                                                { key: 'showAccountSummary', label: 'Show Account Summary', sub: 'Replaces Payment Terms with an account balance summary.' },
                                                 { key: 'showOutstandingAndWalletBalances', label: 'Invoice Balance Details', sub: 'Show outstanding and wallet balances on general invoices.' }
                                             ].map(item => (
                                                 <div key={item.key} className="flex justify-between items-center group/item p-3 -mx-3 hover:bg-slate-50/50 rounded-xl transition-all">
@@ -2270,8 +2344,8 @@ const Settings: React.FC = () => {
                                                             {api.enabled ? 'Active' : 'Disabled'}
                                                         </div>
                                                         <div className="flex items-center gap-2">
-                                                            <button className="p-2.5 text-slate-400 hover:text-[#2CA01C] hover:bg-[#2CA01C]/10 rounded-xl transition-all"><Settings2 size={18} /></button>
-                                                            <button className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"><Trash2 size={18} /></button>
+                                                            <button className="p-2.5 text-slate-400 hover:text-[#2CA01C] hover:bg-[#2CA01C]/10 rounded-xl transition-all" title="Edit settings" aria-label="Edit API settings"><Settings2 size={18} /></button>
+                                                            <button className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all" title="Delete" aria-label="Delete API credential"><Trash2 size={18} /></button>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -2900,102 +2974,6 @@ id: `webhook-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
                             )
                         }
 
-
-                        {
-                            activeTab === 'Appearance' && (
-                                <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4">
-                                    <section>
-                                        <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-10 flex items-center gap-3">
-                                            <Monitor size={18} className="text-blue-600" /> System Interface Theme
-                                        </h3>
-                                        <div className="grid grid-cols-3 gap-8">
-                                            {[
-                                                { id: 'Light', icon: Sun, label: 'Crystal Light', desc: 'Clean & high contrast' },
-                                                { id: 'Dark', icon: Moon, label: 'Midnight Blue', desc: 'Easy on the eyes' },
-                                                { id: 'System', icon: Laptop, label: 'Dynamic Sync', desc: 'Follow system settings' }
-                                            ].map(theme => (
-                                                <button
-                                                    key={theme.id}
-                                                    onClick={() => setConfig({ ...config, appearance: { ...config.appearance, theme: theme.id as any } as any })}
-                                                    className={`p-6 rounded-lg border-2 flex flex-col items-center gap-6 transition-all group ${config.appearance?.theme === theme.id ? 'border-[#2CA01C] bg-green-50 shadow-md' : 'border-[#D4D7DC] bg-white hover:border-[#2CA01C]'}`}
-                                                >
-                                                    <div className={`p-4 rounded-md transition-all ${config.appearance?.theme === theme.id ? 'bg-[#2CA01C] text-white shadow-sm' : 'bg-[#F4F5F8] text-[#6B6C6F] group-hover:bg-green-100 group-hover:text-[#2CA01C]'}`}>
-                                                        <theme.icon size={28} />
-                                                    </div>
-                                                    <div className="text-center">
-                                                        <p className={`text-[11px] font-bold uppercase tracking-[0.2em] ${config.appearance?.theme === theme.id ? 'text-[#2CA01C]' : 'text-[#393A3D]'}`}>{theme.label}</p>
-                                                        <p className="text-[10px] text-[#6B6C6F] mt-2 font-bold">{theme.desc}</p>
-                                                    </div>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </section>
-
-                                    <section className="pt-10 border-t border-slate-100">
-                                        <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-10 flex items-center gap-3">
-                                            <Layers size={18} className="text-emerald-600" /> Layout Density & Comfort
-                                        </h3>
-                                        <div className="grid grid-cols-2 gap-10">
-                                            <div className="p-6 bg-white rounded-lg border border-[#D4D7DC] shadow-sm flex items-center justify-between">
-                                                <div className="flex items-center gap-6">
-                                                    <div className="p-4 bg-slate-50 rounded-2xl text-slate-400"><Monitor size={24} /></div>
-                                                    <div>
-                                                        <p className="font-black text-slate-900 uppercase text-sm">Interface Density</p>
-                                                        <p className="text-[10px] text-slate-500 font-bold mt-1">Adjust spacing of tables and lists.</p>
-                                                    </div>
-                                                </div>
-                                                <select
-                                                    className="bg-slate-50 border border-slate-100 rounded-xl px-4 py-2 font-bold text-xs outline-none"
-                                                    value={config.appearance?.density || 'Comfortable'}
-                                                    onChange={e => setConfig({ ...config, appearance: { ...config.appearance, density: e.target.value as any } as any })}
-                                                >
-                                                    <option value="Comfortable">Comfortable</option>
-                                                    <option value="Compact">Compact</option>
-                                                </select>
-                                            </div>
-                                            <div className="p-6 bg-white rounded-lg border border-[#D4D7DC] shadow-sm flex items-center justify-between">
-                                                <div className="flex items-center gap-6">
-                                                    <div className="p-4 bg-slate-50 rounded-2xl text-slate-400"><Layers size={24} /></div>
-                                                    <div>
-                                                        <p className="font-black text-slate-900 uppercase text-sm">Border Radius</p>
-                                                        <p className="text-[10px] text-slate-500 font-bold mt-1">Adjust corner roundness of UI elements.</p>
-                                                    </div>
-                                                </div>
-                                                <select
-                                                    className="bg-slate-50 border border-slate-100 rounded-xl px-4 py-2 font-bold text-xs outline-none"
-                                                    value={config.appearance?.borderRadius || 'Medium'}
-                                                    onChange={e => setConfig({ ...config, appearance: { ...config.appearance, borderRadius: e.target.value as any } as any })}
-                                                >
-                                                    <option value="None">None</option>
-                                                    <option value="Small">Small</option>
-                                                    <option value="Medium">Medium</option>
-                                                    <option value="Large">Large</option>
-                                                    <option value="Full">Full</option>
-                                                </select>
-                                            </div>
-                                            <div className="p-6 bg-white rounded-lg border border-[#D4D7DC] shadow-sm flex items-center justify-between">
-                                                <div className="flex items-center gap-6">
-                                                    <div className="p-4 bg-slate-50 rounded-2xl text-slate-400"><Zap size={24} /></div>
-                                                    <div>
-                                                        <p className="font-black text-slate-900 uppercase text-sm">Motion & Effects</p>
-                                                        <p className="text-[10px] text-slate-500 font-bold mt-1">Enable UI transitions and animations.</p>
-                                                    </div>
-                                                </div>
-                                                <label className="relative inline-flex items-center cursor-pointer">
-                                                    <input
-                                                        type="checkbox"
-                                                        className="sr-only peer"
-                                                        checked={config.appearance?.enableAnimations !== false}
-                                                        onChange={e => setConfig({ ...config, appearance: { ...config.appearance, enableAnimations: e.target.checked } as any })}
-                                                    />
-                                                    <div className="w-12 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#2CA01C]"></div>
-                                                </label>
-                                            </div>
-                                        </div>
-                                    </section>
-                                </div>
-                            )
-                        }
 
                         {
                             activeTab === 'System' && (

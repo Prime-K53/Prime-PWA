@@ -200,17 +200,24 @@ const SetupWizard: React.FC = () => {
 
       if (SUPABASE_ENABLED && admin.email) {
         const supabasePassword = admin.password || `${admin.username}_${Date.now()}`;
+        console.log('[Setup] Starting Supabase signup for:', admin.email);
+        
         const signUpResult = await signUpSupabase(admin.email.trim(), supabasePassword, {
           username: admin.username.trim(),
           full_name: admin.fullName.trim(),
           role: 'Admin',
           is_super_admin: true,
           group_ids: ['GRP-ADMIN'],
+          company_id: companyConfig?.companyId || '',
+          company_name: companyConfig?.companyName || '',
         });
 
         if (!signUpResult.success) {
-          console.warn('[Setup] Supabase signup failed, proceeding with local setup:', signUpResult.error);
+          console.error('[Setup] Supabase signup failed:', signUpResult.error);
+          throw new Error(`Cloud account creation failed: ${signUpResult.error}`);
         }
+        
+        console.log('[Setup] Supabase signup successful, user ID:', signUpResult.userId);
       }
 
       await completeSetup(

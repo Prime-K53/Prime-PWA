@@ -19,8 +19,10 @@ import { PwaInstallProvider, usePwaInstall } from './context/PwaInstallContext';
 import PwaInstallBanner from './components/PwaInstallBanner';
 import PwaUpdateNotification from './components/PwaUpdateNotification';
 import PwaInstallPage from './views/PwaInstallPage';
+import { KeyboardProvider } from './core/keyboard';
 
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { useKeyboard } from './core/keyboard';
 import { useDocumentStore } from './stores/documentStore.ts';
 import { PreviewModal } from './views/shared/components/PDF/PreviewModal.tsx';
 import { PdfWorker } from './views/shared/components/PDF/PdfWorker.tsx';
@@ -126,6 +128,7 @@ const Settings = lazyWithRetry('./views/Settings', () => import('./views/Setting
 const ChatApp = lazyWithRetry('./views/apps/ChatApp', () => import('./views/apps/ChatApp'));
 const UserManagement = lazyWithRetry('./views/admin/UserManagement', () => import('./views/admin/UserManagement'));
 const ProfileActivity = lazyWithRetry('./views/admin/ProfileActivity', () => import('./views/admin/ProfileActivity'));
+const Profile = lazyWithRetry('./views/Profile', () => import('./views/Profile'));
 const MigrationHealth = lazyWithRetry('./views/admin/MigrationHealth', () => import('./views/admin/MigrationHealth'));
 const BOMRecipes = lazyWithRetry('./views/production/BOMRecipes', () => import('./views/production/BOMRecipes'));
 const DataImport = lazyWithRetry('./views/admin/DataImport', () => import('./views/admin/DataImport'));
@@ -314,6 +317,34 @@ const AppLayout: React.FC = () => {
       setSidebarOpen(false);
     }
   }, [location.pathname]);
+
+  useKeyboard([
+    {
+      id: 'nav-dashboard', key: 'd', alt: true, priority: 100,
+      handler: () => window.location.hash = '#/',
+      description: 'Go to dashboard',
+    },
+    {
+      id: 'nav-settings', key: 's', alt: true, priority: 100,
+      handler: () => window.location.hash = '#/settings',
+      description: 'Go to settings',
+    },
+    {
+      id: 'nav-users', key: 'u', alt: true, priority: 100,
+      handler: () => window.location.hash = '#/admin/users',
+      description: 'Go to users',
+    },
+    {
+      id: 'nav-home', key: 'h', alt: true, priority: 100,
+      handler: () => window.location.hash = '#/',
+      description: 'Go home',
+    },
+    {
+      id: 'sidebar-toggle', key: '\\', alt: true, priority: 100,
+      handler: () => setSidebarCollapsed(p => !p),
+      description: 'Toggle sidebar',
+    },
+  ], [location.pathname]);
 
   return (
     <div className="app-layout-scroll">
@@ -558,6 +589,7 @@ const AppLayout: React.FC = () => {
                 <Route path="/admin/users" element={<ErrorBoundary name="Admin"><ProtectedRoute permission="admin.users"><UserManagement /></ProtectedRoute></ErrorBoundary>} />
                 <Route path="/admin/profile" element={<ErrorBoundary name="Admin"><ProfileActivity /></ErrorBoundary>} />
                 <Route path="/admin/migration-health" element={<ErrorBoundary name="Admin"><MigrationHealth /></ErrorBoundary>} />
+                <Route path="/profile" element={<ErrorBoundary name="Profile"><Profile /></ErrorBoundary>} />
                 <Route path="/settings" element={<ErrorBoundary name="Settings"><ProtectedRoute permission="admin.settings"><Settings /></ProtectedRoute></ErrorBoundary>} />
 
                 <Route element={<ErrorBoundary name="Accounting"><Outlet /></ErrorBoundary>}>
@@ -604,7 +636,7 @@ const RootNavigator: React.FC = () => {
               Prime <span className="text-blue-600">ERP</span> System
             </h1>
             <p className="text-slate-400 font-bold uppercase tracking-[0.2em] text-[10px] animate-pulse">
-              Connecting To Supabase Cloud...
+              Powered by AI
             </p>
           </div>
 
@@ -679,29 +711,31 @@ const App: React.FC = () => {
   return (
     <HashRouter>
       <ErrorBoundary>
-        <NotificationProvider>
-          <AuthProvider>
-            <FinanceProvider>
-              <InventoryProvider>
-                <ProductionProvider>
-                  <ExaminationProvider>
-                    <ProcurementProvider>
-                      <SalesProvider>
-                        <OrdersProvider>
-                          <DataProvider>
-                            <RootNavigator />
-                          </DataProvider>
-                        </OrdersProvider>
-                      </SalesProvider>
-                    </ProcurementProvider>
-                  </ExaminationProvider>
-                </ProductionProvider>
-              </InventoryProvider>
-            </FinanceProvider>
-          </AuthProvider>
-        </NotificationProvider>
+        <KeyboardProvider>
+          <NotificationProvider>
+            <AuthProvider>
+              <FinanceProvider>
+                <InventoryProvider>
+                  <ProductionProvider>
+                    <ExaminationProvider>
+                      <ProcurementProvider>
+                        <SalesProvider>
+                          <OrdersProvider>
+                            <DataProvider>
+                              <RootNavigator />
+                            </DataProvider>
+                          </OrdersProvider>
+                        </SalesProvider>
+                      </ProcurementProvider>
+                    </ExaminationProvider>
+                  </ProductionProvider>
+                </InventoryProvider>
+              </FinanceProvider>
+            </AuthProvider>
+          </NotificationProvider>
+        </KeyboardProvider>
       </ErrorBoundary>
-    </HashRouter>
+      </HashRouter>
   );
 };
 

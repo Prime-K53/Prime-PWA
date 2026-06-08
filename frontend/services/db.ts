@@ -419,7 +419,7 @@ const SUPABASE_CONFIGURED = isSupabaseConfigured;
 const LOCAL_ONLY_STORES = new Set([
   'syncOutbox', 'files', 'idempotencyKeys',
   'customerNotificationLogs',
-  'whatsappChats', 'whatsappTemplates', 'whatsappCampaigns', 'whatsappAutomations',
+  'whatsappChats', 'whatsappCampaigns', 'whatsappAutomations',
   'alerts', 'reminders', 'auditLogs'
 ]);
 
@@ -857,9 +857,15 @@ export const dbService = {
     },
 
     async getAll<T>(storeName: keyof NexusDB): Promise<T[]> {
-        if (isCloudOnlyMode() && String(storeName) !== 'syncOutbox') {
-            const cloudValues = await cloudDb.getAll<T>(String(storeName));
-            return cloudValues || [];
+        if (isCloudOnlyMode() && !LOCAL_ONLY_STORES.has(String(storeName)) && String(storeName) !== 'syncOutbox') {
+            try {
+                const cloudValues = await cloudDb.getAll<T>(String(storeName));
+                if (cloudValues !== null && cloudValues.length > 0) {
+                    return cloudValues;
+                }
+            } catch (err) {
+                console.warn(`[DB] Cloud-only getAll failed for ${String(storeName)}, falling back to local:`, err);
+            }
         }
 
         // Cloud-primary: read from Supabase first when online

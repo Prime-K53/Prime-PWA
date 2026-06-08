@@ -548,7 +548,7 @@ export const BOMForm: React.FC<BOMFormProps> = ({ inventory, workCenters, initia
                                                     </div>
                                                 </div>
                                             )}
-                                            <button onClick={handleAddComp} className="zoho-button-primary !p-2.5"><Plus size={18} /></button>
+                                            <button onClick={handleAddComp} className="zoho-button-primary !p-2.5" title="Add component" aria-label="Add component"><Plus size={18} /></button>
                                         </div>
 
                                         {/* Components Table */}
@@ -715,7 +715,7 @@ export const BOMForm: React.FC<BOMFormProps> = ({ inventory, workCenters, initia
                                                     <input type="number" className="w-full p-2.5 border border-slate-200 rounded-lg text-[13px] font-bold text-center outline-none focus:ring-4 focus:ring-blue-500/10 bg-white finance-nums" value={tempRun} onChange={e => setTempRun(parseFloat(e.target.value))} />
                                                 </div>
                                             </div>
-                                            <button onClick={handleAddOp} className="zoho-button-primary !p-2.5 flex items-center justify-center"><Plus size={18} /></button>
+                                            <button onClick={handleAddOp} className="zoho-button-primary !p-2.5 flex items-center justify-center" title="Add operation" aria-label="Add operation"><Plus size={18} /></button>
                                         </div>
 
                                         {/* Operations Timeline */}
@@ -1038,7 +1038,7 @@ export const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ boms, inventory,
                         <p className="text-[11px] font-medium text-slate-400 mt-0.5">Order Ref: {formData.id}</p>
                     </div>
                     <div className="flex items-center gap-3">
-                        <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 transition-colors"><X size={20} /></button>
+                        <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 transition-colors" title="Close" aria-label="Close production form"><X size={20} /></button>
                     </div>
                 </div>
 

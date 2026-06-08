@@ -167,8 +167,8 @@ const ChatApp: React.FC = () => {
               </div>
             </div>
             <div className="flex gap-2">
-               <button className="p-2 text-slate-500 hover:bg-slate-200 rounded-full"><Phone size={20}/></button>
-               <button className="p-2 text-slate-500 hover:bg-slate-200 rounded-full"><MoreVertical size={20}/></button>
+               <button className="p-2 text-slate-500 hover:bg-slate-200 rounded-full" title="Call" aria-label="Call contact"><Phone size={20}/></button>
+               <button className="p-2 text-slate-500 hover:bg-slate-200 rounded-full" title="More options" aria-label="More options"><MoreVertical size={20}/></button>
             </div>
           </div>
 

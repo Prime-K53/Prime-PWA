@@ -95,6 +95,8 @@ const Toast: React.FC = () => {
       <button 
         onClick={clearActiveNotification}
         className="p-1 hover:bg-slate-100 rounded-full text-slate-300 hover:text-slate-500 transition-colors"
+        title="Dismiss"
+        aria-label="Dismiss"
       >
         <X size={16} />
       </button>

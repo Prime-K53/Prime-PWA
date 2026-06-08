@@ -1,14 +1,26 @@
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
+
+const GLOBAL_STORAGE_KEY = 'prime:pagination:default';
+
+function getGlobalItemsPerPage(fallback: number): number {
+  try {
+    const stored = localStorage.getItem(GLOBAL_STORAGE_KEY);
+    if (stored !== null) {
+      const parsed = parseInt(stored, 10);
+      if (!isNaN(parsed) && parsed > 0) return parsed;
+    }
+  } catch { }
+  return fallback;
+}
 
 export function usePagination<T>(data: T[], initialItemsPerPage: number = 25) {
   const safeData = Array.isArray(data) ? data : [];
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(initialItemsPerPage);
+  const [itemsPerPage, setItemsPerPage] = useState(() => getGlobalItemsPerPage(initialItemsPerPage));
 
   const maxPage = Math.ceil(safeData.length / itemsPerPage) || 1;
 
-  // Reset to page 1 when data changes significantly
   useMemo(() => {
     if (currentPage > maxPage && maxPage > 0) {
       setCurrentPage(1);
@@ -44,8 +56,14 @@ export function usePagination<T>(data: T[], initialItemsPerPage: number = 25) {
 
   const changeItemsPerPage = useCallback((count: number) => {
     setItemsPerPage(count);
-    setCurrentPage(1); // Reset to first page when changing items per page
+    setCurrentPage(1);
   }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(GLOBAL_STORAGE_KEY, String(itemsPerPage));
+    } catch { }
+  }, [itemsPerPage]);
 
   return { 
     next, 

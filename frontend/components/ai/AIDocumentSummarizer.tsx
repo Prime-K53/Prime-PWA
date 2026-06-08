@@ -55,7 +55,7 @@ const AIDocumentSummarizer: React.FC<Props> = ({ docType, data, label = 'AI Summ
                 <FileText size={18} color={color} />
                 <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0f172a' }}>{docType} Summary</h3>
               </div>
-              <button onClick={() => setOpen(false)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8', padding: 4 }}><X size={18} /></button>
+              <button onClick={() => setOpen(false)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8', padding: 4 }} title="Close" aria-label="Close summary"><X size={18} /></button>
             </div>
 
             {loading ? (

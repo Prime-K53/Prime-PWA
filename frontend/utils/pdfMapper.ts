@@ -16,6 +16,33 @@ const ensureItems = (items: any[] | undefined | null, label = 'Item'): any[] => 
   return valid;
 };
 
+export const generateAccountSummary = (item: any, companyConfig: any, customers: any[] = []) => {
+    const walletBalance = Number(item.walletBalance || 0);
+    let outstandingBalance = Number(item.totalCustomerOutstanding || 0);
+    
+    // Compute outstanding balance from customer's live outstandingBalance if not present in payload
+    if (outstandingBalance === 0) {
+        const customerId = item.customerId || item.customer_id || item.customer?.id || item.clientId || item.client_id;
+        if (customerId) {
+            const customer = customers.find((c: any) => c.id === customerId || c.customerId === customerId);
+            if (customer?.outstandingBalance) {
+                outstandingBalance = Number(customer.outstandingBalance);
+            }
+        }
+    }
+    
+    const currency = companyConfig?.currencySymbol || 'K';
+    const todayStr = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    
+    const fmt = (val: number) => val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    
+    return {
+        outstandingBalance,
+        walletBalance,
+        statement: `Your outstanding balance is ${currency} ${fmt(outstandingBalance)} and wallet balance of ${currency} ${fmt(walletBalance)} as of ${todayStr}.`
+    };
+};
+
 export const mapToInvoiceData = (item: any, companyConfig: any, targetType?: string, boms?: any[], inventory?: any[]): PrimeDocData => {
     const toNum = (val: any, fallback = 0) => {
         if (typeof val === 'number') return isNaN(val) ? fallback : val;
@@ -235,7 +262,7 @@ export const mapToInvoiceData = (item: any, companyConfig: any, targetType?: str
     const baseData = {
         number: resolvedNumber,
         date: new Date(item.orderDate || item.date || item.nextRunDate || Date.now()).toLocaleDateString(),
-        dueDate: item.dueDate || item.validUntil || item.expiryDate || '',
+        dueDate: normalizeDateInputValue(item.dueDate || item.validUntil || item.expiryDate || ''),
         paymentTerms: resolveFirstText(
             item.paymentTerms,
             item.payment_terms

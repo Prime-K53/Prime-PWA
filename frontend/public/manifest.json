@@ -1,7 +1,8 @@
 {
   "short_name": "PrimeERP",
   "name": "Prime ERP System",
-  "description": "Prime ERP - Enterprise Resource Planning System",
+  "id": "/",
+  "description": "Prime ERP System - cloud-first enterprise resource planning powered by Supabase.",
   "icons": [
     {
       "src": "./pwa-icon-192x192.png",
@@ -26,14 +27,18 @@
       "purpose": "maskable"
     }
   ],
-  "start_url": ".",
+  "start_url": "/?source=windows-pwa",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
   "orientation": "any",
-  "theme_color": "#2563eb",
+  "theme_color": "#0d1421",
   "background_color": "#f8fafc",
   "categories": ["business", "productivity"],
   "lang": "en",
-  "scope": ".",
+  "scope": "/",
+  "launch_handler": {
+    "client_mode": ["navigate-existing", "auto"]
+  },
   "screenshots": [
     {
       "src": "./screenshot-dashboard.png",

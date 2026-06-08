@@ -3,6 +3,7 @@ import { pdf } from '@react-pdf/renderer';
 import { useDocumentStore, DocType } from '../stores/documentStore';
 import { useAuth } from '../context/AuthContext';
 import { useSales } from '../context/SalesContext';
+import { useFinance } from '../context/FinanceContext';
 import { mapToInvoiceData } from '../utils/pdfMapper';
 import { enrichDocumentCustomerData } from '../utils/documentCustomerData';
 import { PrimeDocument } from '../views/shared/components/PDF/PrimeDocument';
@@ -16,6 +17,7 @@ export const useDocumentPreview = () => {
   const { safeOpenPreview } = useDocumentStore();
   const { notify, companyConfig } = useAuth();
   const { customers } = useSales();
+  const { invoices } = useFinance();
 
   const prepareDocument = async (
     openMode: 'preview' | 'print',
@@ -41,6 +43,20 @@ export const useDocumentPreview = () => {
       }
 
       let enrichedData = enrichDocumentCustomerData(rawData, customers);
+
+      const customerName = enrichedData?.customerName || enrichedData?.customer_name;
+      if (customerName && invoices) {
+        const totalOutstanding = (invoices as any[])
+          .filter((inv: any) =>
+            inv.customerName === customerName &&
+            !['Paid', 'Cancelled', 'Void', 'Draft'].includes(String(inv.status || ''))
+          )
+          .reduce((sum: number, inv: any) => {
+            const due = Math.max(0, Number(inv.totalAmount || 0) - Number(inv.paidAmount || 0));
+            return sum + due;
+          }, 0);
+        enrichedData = { ...enrichedData, totalCustomerOutstanding: totalOutstanding };
+      }
 
       if (effectiveType === 'SUBSCRIPTION' && rawData) {
         try {
@@ -77,7 +93,8 @@ export const useDocumentPreview = () => {
         await initializePrimePdfFonts();
         const blob = await pdf(createElement(PrimeDocument as any, {
           type: effectiveType,
-          data: securedData as PrimeDocData
+          data: securedData as PrimeDocData,
+          customers: customers as any
         }) as any).toBlob();
 
         const duration = performance.now() - startTime;

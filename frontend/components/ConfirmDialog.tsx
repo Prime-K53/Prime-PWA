@@ -1,5 +1,6 @@
 import React from 'react';
 import { AlertTriangle, HelpCircle, Info, X, CheckCircle, XCircle } from 'lucide-react';
+import { useKeyboardContext, trapFocus } from '../core/keyboard';
 
 export type ConfirmDialogType = 'warning' | 'danger' | 'info' | 'success' | 'question';
 
@@ -55,46 +56,6 @@ const typeConfig = {
   }
 };
 
-const useFocusTrap = (ref: React.RefObject<HTMLDivElement | null>, open: boolean) => {
-  React.useEffect(() => {
-    if (!open || !ref.current) return;
-
-    const container = ref.current;
-    const previouslyFocused = document.activeElement as HTMLElement;
-
-    const focusableSelectors = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
-    const getFocusable = () => Array.from(container.querySelectorAll<HTMLElement>(focusableSelectors));
-
-    const focusFirst = () => {
-      const focusable = getFocusable();
-      if (focusable.length > 0) focusable[0].focus();
-    };
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Tab') return;
-      const focusable = getFocusable();
-      if (focusable.length === 0) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    };
-
-    focusFirst();
-    container.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      container.removeEventListener('keydown', handleKeyDown);
-      previouslyFocused?.focus();
-    };
-  }, [open, ref]);
-};
-
 export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   open,
   onOpenChange,
@@ -109,7 +70,30 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   showCancel = true
 }) => {
   const dialogRef = React.useRef<HTMLDivElement>(null);
-  useFocusTrap(dialogRef, open);
+  const { registerShortcut } = useKeyboardContext();
+
+  React.useEffect(() => {
+    if (!open) return;
+    const unregister = registerShortcut({
+      id: `confirm-escape-${Date.now()}`,
+      key: 'Escape',
+      handler: () => {
+        onCancel?.();
+        onOpenChange?.(false);
+      },
+      priority: 50,
+      description: 'Close confirm dialog',
+    });
+    const container = dialogRef.current;
+    if (container) {
+      const release = trapFocus(container);
+      return () => {
+        unregister();
+        release();
+      };
+    }
+    return unregister;
+  }, [open]);
 
   if (!open) return null;
 

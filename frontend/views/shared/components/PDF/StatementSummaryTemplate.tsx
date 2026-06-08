@@ -120,11 +120,11 @@ export const StatementSummaryTemplate: React.FC<{ data: StatementDoc; configOver
          {/* Static Bottom Disclaimer */}
          <View style={s.legalBottom} fixed>
            <Text style={{ fontSize: 7, fontWeight: 'bold', marginBottom: 2 }}>Computer Generated Statement</Text>
-           <Text style={{ marginTop: 4, fontSize: 7, color: '#94a3b8' }}>
-             This is a computer-generated document. For enquiries contact:
-           </Text>
-           <Text style={{ marginTop: 2, fontSize: 7, color: '#94a3b8' }}>
-             {`${config?.companyName || 'PRIME PRINTING INC'}, ${config?.addressLine1 || ''}, ${config?.phone || ''}`}
+            <Text style={{ marginTop: 4, fontSize: 7, color: '#94a3b8' }}>
+              This is a computer-generated document. No signature required, For enquiries contact:
+            </Text>
+            <Text style={{ marginTop: 2, fontSize: 7, color: '#94a3b8' }}>
+              {`${config?.companyName || 'PRIME PRINTING INC'}, ${config?.addressLine1 || ''}, Phone ${config?.phone || ''}`}
            </Text>
          </View>
       </Page>

@@ -199,6 +199,8 @@ export const ProfitSummaryCard: React.FC = () => {
             <button 
               onClick={() => navigate('/tools/market-adjustments')}
               className="w-10 h-10 rounded-full bg-[#111C44] text-white flex items-center justify-center hover:bg-[#1b254b] transition-colors shadow-md"
+              title="Edit market adjustments"
+              aria-label="Edit market adjustments"
             >
               <PenLine size={18} />
             </button>

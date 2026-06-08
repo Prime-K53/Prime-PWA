@@ -1255,7 +1255,7 @@ const JobTicketDetail: React.FC<JobTicketDetailProps> = ({ ticket, currency, onE
             <h2 className="text-[20px] font-semibold text-slate-900 leading-tight">{ticket.ticketNumber}</h2>
             <p className="text-[13px] text-slate-500 font-medium">{ticket.customerName}</p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600" title="Close" aria-label="Close job ticket"><X size={20} /></button>
         </div>
 
         <div className="flex border-b border-slate-200 overflow-x-auto">

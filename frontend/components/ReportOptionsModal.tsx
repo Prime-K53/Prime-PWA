@@ -192,7 +192,7 @@ const ReportOptionsModal: React.FC<ReportOptionsModalProps> = ({ isOpen, onClose
                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mt-0.5">Report Configuration & Advanced Options</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-2.5 bg-white border border-slate-200 text-slate-400 hover:text-slate-600 rounded-2xl transition-all shadow-sm">
+                    <button onClick={onClose} className="p-2.5 bg-white border border-slate-200 text-slate-400 hover:text-slate-600 rounded-2xl transition-all shadow-sm" title="Close" aria-label="Close">
                         <X size={20} />
                     </button>
                 </div>

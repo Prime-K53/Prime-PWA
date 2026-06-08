@@ -471,7 +471,7 @@ const CartItemRow: React.FC<{ item: CartItem, updateQuantity: (id: string, delta
                     )}
 
                 </div>
-                <button onClick={() => removeFromCart(item.id)} className="text-slate-400 hover:text-red-600 transition-colors p-1">
+                <button onClick={() => removeFromCart(item.id)} className="text-slate-400 hover:text-red-600 transition-colors p-1" title="Remove item" aria-label="Remove item from cart">
                     <X size={14} />
                 </button>
             </div>
@@ -479,7 +479,7 @@ const CartItemRow: React.FC<{ item: CartItem, updateQuantity: (id: string, delta
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                     <div className="flex items-center border border-slate-200 rounded-lg bg-white overflow-hidden">
-                        <button onClick={() => updateQuantity(item.id, -1)} className="w-6 h-6 flex items-center justify-center hover:bg-slate-50 border-r border-slate-200"><Minus size={10} /></button>
+                        <button onClick={() => updateQuantity(item.id, -1)} className="w-6 h-6 flex items-center justify-center hover:bg-slate-50 border-r border-slate-200" title="Decrease quantity" aria-label="Decrease quantity"><Minus size={10} /></button>
                         <input
                             type="number"
                             className="w-10 text-xs font-bold text-slate-800 text-center focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
@@ -488,7 +488,7 @@ const CartItemRow: React.FC<{ item: CartItem, updateQuantity: (id: string, delta
                             onKeyDown={handleKeyDown}
                             onBlur={handleBlur}
                         />
-                        <button onClick={() => updateQuantity(item.id, 1)} className="w-6 h-6 flex items-center justify-center hover:bg-slate-50 border-l border-slate-200"><Plus size={10} /></button>
+                        <button onClick={() => updateQuantity(item.id, 1)} className="w-6 h-6 flex items-center justify-center hover:bg-slate-50 border-l border-slate-200" title="Increase quantity" aria-label="Increase quantity"><Plus size={10} /></button>
                     </div>
                     <span className="text-[11px] text-slate-500 flex items-center gap-1">
                         @ {currency}

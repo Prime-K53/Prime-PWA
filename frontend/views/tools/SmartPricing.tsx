@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Calculator, ChevronDown, ChevronUp, X, Info, Copy, RefreshCw, Save, Printer, Package, Settings, Plus, TrendingUp } from 'lucide-react';
+import { Calculator, ChevronDown, ChevronUp, X, Info, Copy, RefreshCw, Save, Printer, Package, Settings, Plus, TrendingUp, Download } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useSales } from '../../context/SalesContext';
 import { applyProductPriceRounding } from '../../services/pricingRoundingService';
@@ -8,6 +8,7 @@ import { dbService } from '../../services/db';
 import { getGlobalDefaultMargin } from '../../services/pricingService';
 import { Item, MarketAdjustment, BOMTemplate, FinishingOption } from '../../types';
 import { resolveVolumeMarginValue, getVolumeDiscountTiers } from '../../utils/pricingEngineShared';
+import html2canvas from 'html2canvas';
 
 const defaultFinishingOptions: FinishingOption[] = [
     { id: 'binding', name: 'Binding', enabled: false, price: 150, description: 'Book binding - comb or spiral', items: [] },
@@ -73,6 +74,7 @@ const SmartPricing: React.FC = () => {
     const [finishingExpanded, setFinishingExpanded] = useState(true);
     const [marketExpanded, setMarketExpanded] = useState(false);
     const [bomExpanded, setBomExpanded] = useState(false);
+    const [showSummaryCard, setShowSummaryCard] = useState(false);
 
     useEffect(() => {
         const loadData = async () => {
@@ -504,6 +506,20 @@ const SmartPricing: React.FC = () => {
     const formatCurrency = (value: number) => `${currency} ${value.toFixed(2)}`;
     const totalPages = pages * copies;
     const totalSheets = Math.ceil(pages / 2) * copies;
+
+    const handleSaveCardImage = async () => {
+        const el = document.getElementById('price-summary-card');
+        if (!el) return;
+        try {
+            const canvas = await html2canvas(el, { backgroundColor: '#ffffff', scale: 2, useCORS: true, logging: false });
+            const link = document.createElement('a');
+            link.download = `price-summary-card-${Date.now()}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        } catch (err) {
+            console.error('Failed to save card image:', err);
+        }
+    };
 
     const formatRoundingLabel = (methodUsed: string): string => {
         if (!methodUsed) return 'rounded';
@@ -942,6 +958,13 @@ const SmartPricing: React.FC = () => {
                                     Reset
                                 </button>
                                 <button 
+                                    onClick={() => setShowSummaryCard(true)}
+                                    className="w-full flex items-center justify-center gap-2 py-3 border border-indigo-200 text-indigo-700 rounded-xl hover:bg-indigo-50 transition-colors"
+                                >
+                                    <Download size={18} />
+                                    Summary Card
+                                </button>
+                                <button 
                                     onClick={() => {
                                         setShowProductDialog(true);
                                     }}
@@ -1006,6 +1029,70 @@ const SmartPricing: React.FC = () => {
                                 className="flex-1 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700"
                             >
                                 Save Changes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showSummaryCard && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl">
+                        <div className="flex items-center justify-between p-6 border-b border-slate-100">
+                            <h2 className="text-xl font-bold text-slate-800">Price Summary Card</h2>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={handleSaveCardImage}
+                                    className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                    title="Save as Image"
+                                >
+                                    <Download size={20} />
+                                </button>
+                                <button onClick={() => setShowSummaryCard(false)} className="p-2 hover:bg-slate-100 rounded-lg">
+                                    <X size={20} />
+                                </button>
+                            </div>
+                        </div>
+                        <div id="price-summary-card" className="p-6">
+                            <div className="space-y-4">
+                                <div className="text-center pb-4 border-b border-slate-100">
+                                    <h3 className="text-lg font-bold text-slate-800">Pricing Summary</h3>
+                                    <p className="text-xs text-slate-400">{new Date().toLocaleDateString()}</p>
+                                </div>
+                                <div className="space-y-3">
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-600">Pages per Copy</span>
+                                        <span className="font-medium text-slate-800">{pages}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-600">Number of Copies</span>
+                                        <span className="font-medium text-slate-800">{copies}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-600">Sheets Needed</span>
+                                        <span className="font-medium text-slate-800">{totalSheets}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-600">Toner</span>
+                                        <span className="font-medium text-slate-800">{selectedToner?.name || 'None'}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-600">Finishing</span>
+                                        <span className="font-medium text-slate-800">{finishingOptions.filter(o => o.enabled).map(o => o.name).join(', ') || 'None'}</span>
+                                    </div>
+                                </div>
+                                <div className="border-t-2 border-indigo-100 pt-4 mt-4 flex justify-between items-center">
+                                    <span className="text-lg font-bold text-slate-800">Total</span>
+                                    <span className="text-2xl font-bold text-indigo-600">{formatCurrency(displayTotal)}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="p-6 border-t border-slate-100">
+                            <button
+                                onClick={() => setShowSummaryCard(false)}
+                                className="w-full py-3 border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 transition-colors"
+                            >
+                                Close
                             </button>
                         </div>
                     </div>

@@ -44,6 +44,24 @@ const runRun = (query, params = []) => {
   });
 };
 
+const all = (query, params = []) => {
+  return new Promise((resolve, reject) => {
+    getDb().all(query, params, (err, rows) => {
+      if (err) reject(err);
+      else resolve(rows || []);
+    });
+  });
+};
+
+const addColumnIfMissing = async (tableName, columnName, columnType) => {
+  const columns = await all(`PRAGMA table_info(${tableName})`);
+  const exists = columns.some((column) => column.name === columnName);
+  if (exists) {
+    return;
+  }
+  await runRun(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnType}`);
+};
+
 const toBoolean = (value) => {
   if (typeof value === 'boolean') return value;
   const normalized = String(value ?? '').trim().toLowerCase();

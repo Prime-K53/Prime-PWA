@@ -645,3 +645,43 @@
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
+/* ── Global keyboard focus indicators ───────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid #3B82F6;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Ensure remove-default-outline components still have keyboard focus */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible,
+[tabindex]:focus-visible,
+a[href]:focus-visible {
+  outline: 2px solid #3B82F6;
+  outline-offset: 2px;
+}
+
+/* Prevent mouse click outlines */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ── Keyboard shortcut hint styling ─────────────────────────────────────── */
+.kbd-shortcut {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 5px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #64748B;
+  background: #F1F5F9;
+  border: 1px solid #E2E8F0;
+  border-radius: 4px;
+  font-family: inherit;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
