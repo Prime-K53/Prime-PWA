@@ -1,5 +1,3 @@
-import { dbService } from './db';
-
 export interface AIConfig {
   provider: 'openai' | 'anthropic' | 'ollama' | 'openrouter';
   apiKey: string;
@@ -35,10 +33,23 @@ class AIService {
   private async ensureLoaded(): Promise<void> {
     if (this.loaded) return;
     try {
-      const saved = await dbService.get<AIConfig>('settings', 'aiConfig');
-      if (saved) {
-        this.config = { ...DEFAULT_CONFIG, ...saved };
+      const raw = localStorage.getItem('nexus_company_config');
+      if (raw) {
+        const companyConfig = JSON.parse(raw);
+        const aiConfig = companyConfig?.aiConfig;
+        if (aiConfig) {
+          this.config = {
+            provider: aiConfig.provider || DEFAULT_CONFIG.provider,
+            apiKey: aiConfig.apiKey || aiConfig.openrouterApiKey || DEFAULT_CONFIG.apiKey,
+            endpoint: aiConfig.endpoint || aiConfig.baseUrl || DEFAULT_CONFIG.endpoint,
+            model: aiConfig.model || aiConfig.openrouterModel || DEFAULT_CONFIG.model,
+            enabled: true,
+          };
+          this.loaded = true;
+          return;
+        }
       }
+      this.config = { ...DEFAULT_CONFIG };
     } catch {
       this.config = { ...DEFAULT_CONFIG };
     }
@@ -52,8 +63,16 @@ class AIService {
 
   async saveConfig(config: Partial<AIConfig>): Promise<void> {
     await this.ensureLoaded();
-    this.config = { ...this.config, ...config };
-    await dbService.put('settings', { key: 'aiConfig', value: this.config, id: 'aiConfig' });
+    const merged = { ...this.config, ...config };
+    this.config = { ...merged, enabled: true };
+    try {
+      const raw = localStorage.getItem('nexus_company_config');
+      if (raw) {
+        const existing = JSON.parse(raw);
+        existing.aiConfig = { ...(existing.aiConfig || {}), ...config, enabled: true };
+        localStorage.setItem('nexus_company_config', JSON.stringify(existing));
+      }
+    } catch {}
   }
 
   private buildSystemPrompt(context: string): string {
