@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { AlertTriangle, FileText, Loader2, RefreshCw, Download, ExternalLink } from 'lucide-react';
+import { AlertTriangle, FileText, Loader2, RefreshCw, Download, ExternalLink, ZoomIn, ZoomOut } from 'lucide-react';
 import type { PDFPreviewSource } from './pdfPreviewUtils';
 import { downloadPdfSource, formatPdfSize, getPdfErrorMessage, preparePdfBytes } from './pdfPreviewUtils';
 import { platform } from '../../../../services/platform';
 import { isPdfDebugLoggingEnabled } from '../../../../utils/debugFlags';
+import { getDeviceProfile } from '../../../../utils/documentPreview';
 
 const HARD_TIMEOUT_MS = 20000;
 const SLOW_WARN_MS = 10000;
@@ -28,6 +29,10 @@ const previewLog = (event: string, meta?: Record<string, unknown>) => {
   console.log('[Preview]', JSON.stringify(entry));
 };
 
+const deviceProfile = getDeviceProfile();
+const isIOS = deviceProfile.isIOS;
+const isTabletOrMobile = deviceProfile.isTablet || deviceProfile.isMobile;
+
 export const NativePdfPreview: React.FC<NativePdfPreviewProps> = ({
   source = null,
   directPath = null,
@@ -49,6 +54,7 @@ export const NativePdfPreview: React.FC<NativePdfPreviewProps> = ({
   const [slow, setSlow] = useState(false);
   const [retry, setRetry] = useState(0);
   const [size, setSize] = useState<string>('');
+  const [zoom, setZoom] = useState(1);
 
   const cleanup = useCallback(() => {
     loadedRef.current = false;
@@ -250,11 +256,50 @@ export const NativePdfPreview: React.FC<NativePdfPreviewProps> = ({
   }
 
   if (hideHeader) {
+    // iOS devices can't reliably display PDFs in iframes — show download card instead
+    if (isIOS && phase === 'load' && previewUrl) {
+      return (
+        <div className={`flex h-full flex-col items-center justify-center p-6 ${className}`}>
+          <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+              <FileText className="h-8 w-8" />
+            </div>
+            <p className="mt-4 text-base font-bold text-slate-900">PDF Ready</p>
+            <p className="mt-1 text-sm text-slate-500">iOS cannot preview PDFs inline. Download to view.</p>
+            {size && <p className="mt-2 text-xs text-slate-400">Size: {size}</p>}
+            <button
+              onClick={handleDownload}
+              className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-blue-700"
+            >
+              <Download className="h-4 w-4" /> Download PDF
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className={`relative flex h-full flex-col overflow-hidden ${className}`}>
         {slow && phase === 'load' && (
           <div className="z-10 border-b border-amber-200 bg-amber-50 px-4 py-2 text-[10px] text-amber-800">
-            Preview is taking longer than expected. If it doesn't load, try opening in system viewer.
+            Preview is taking longer than expected. If it doesn't load, try downloading it.
+          </div>
+        )}
+
+        {isTabletOrMobile && phase === 'done' && (
+          <div className="z-10 flex items-center justify-between border-b border-slate-200 bg-white px-3 py-1.5">
+            <div className="flex items-center gap-2">
+              <button onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))} className="flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100" title="Zoom out">
+                <ZoomOut className="h-3.5 w-3.5" />
+              </button>
+              <span className="min-w-[3rem] text-center text-[11px] font-medium text-slate-600">{Math.round(zoom * 100)}%</span>
+              <button onClick={() => setZoom((z) => Math.min(3, z + 0.25))} className="flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100" title="Zoom in">
+                <ZoomIn className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <button onClick={handleDownload} className="flex items-center gap-1.5 rounded-lg bg-blue-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-blue-600 transition-colors hover:bg-blue-100">
+              <Download className="h-3 w-3" /> Download
+            </button>
           </div>
         )}
 
@@ -263,8 +308,9 @@ export const NativePdfPreview: React.FC<NativePdfPreviewProps> = ({
             <iframe
               ref={iframeRef}
               src={previewUrl}
-              className="h-full w-full border-none bg-[#b5b0a8]"
+              className="h-full w-full border-none bg-[#b5b0a8] origin-top-left"
               title={title}
+              style={isTabletOrMobile ? { transform: `scale(${zoom})`, width: `${100 / zoom}%`, height: `${100 / zoom}%` } : undefined}
             />
           )}
           {phase === 'load' && !loadedRef.current && (
@@ -290,13 +336,30 @@ export const NativePdfPreview: React.FC<NativePdfPreviewProps> = ({
           <span className="truncate font-medium text-slate-700">{title}</span>
         </div>
         <div className="flex items-center gap-3 shrink-0">
+          {isTabletOrMobile && phase === 'done' && (
+            <div className="flex items-center gap-1">
+              <button onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))} className="flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-600" title="Zoom out">
+                <ZoomOut className="h-3.5 w-3.5" />
+              </button>
+              <span className="min-w-[2.5rem] text-center text-[10px] font-medium text-slate-500">{Math.round(zoom * 100)}%</span>
+              <button onClick={() => setZoom((z) => Math.min(3, z + 0.25))} className="flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-600" title="Zoom in">
+                <ZoomIn className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
           {size && <span className="text-slate-400">{size}</span>}
-          {phase === 'done' && <span className="font-medium text-emerald-600">Ready</span>}
+          {phase === 'done' && !isTabletOrMobile && <span className="font-medium text-emerald-600">Ready</span>}
           <button onClick={handleDownload} className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700" title="Download PDF">
             <Download className="h-4 w-4" />
           </button>
         </div>
       </div>
+
+      {isIOS && phase === 'load' && previewUrl && !loadedRef.current && (
+        <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-[10px] text-amber-800">
+          iOS may not display PDF previews in-browser. <button onClick={handleDownload} className="font-semibold underline">Download</button> to view.
+        </div>
+      )}
 
       {slow && phase === 'load' && (
         <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
@@ -309,9 +372,9 @@ export const NativePdfPreview: React.FC<NativePdfPreviewProps> = ({
           <iframe
             ref={iframeRef}
             src={previewUrl}
-            className="h-full w-full bg-[#b5b0a8]"
-            style={{ border: 'none' }}
+            className="h-full w-full border-none bg-[#b5b0a8] origin-top-left"
             title={title}
+            style={isTabletOrMobile ? { transform: `scale(${zoom})`, width: `${100 / zoom}%`, height: `${100 / zoom}%` } : { border: 'none' }}
           />
         )}
         {phase === 'load' && !loadedRef.current && (

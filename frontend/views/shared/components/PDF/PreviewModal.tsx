@@ -9,6 +9,7 @@ import { hydrateCompanyPdfAssets } from '../../../../utils/companyAssetUtils';
 import { NativePdfPreview } from './NativePdfPreview';
 import { downloadPdfSource, getPdfErrorMessage, type PDFPreviewSource, resolvePdfFilePreviewSource } from './pdfPreviewUtils';
 import { validateDocumentData } from './documentValidation';
+import { getDeviceProfile } from '../../../../utils/documentPreview';
 
 interface PreviewModalProps {
   isOpen: boolean;
@@ -117,11 +118,14 @@ export const PreviewModal = ({ isOpen, onClose, type, data = null, file = null }
 
   const hasContent = pdfSource || directPath;
 
+  const device = getDeviceProfile();
+  const isTabletOrMobile = device.isTablet || device.isMobile;
+
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#8d8880]/35 p-4 backdrop-blur-[2px]">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#8d8880]/35 p-2 sm:p-3 md:p-4 backdrop-blur-[2px]">
       <div
-        className="flex w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-[#d7d1c7] bg-[#f3f0ea] shadow-2xl"
-        style={{ height: 'min(90vh, 800px)' }}
+        className="flex w-full flex-col overflow-hidden rounded-2xl border border-[#d7d1c7] bg-[#f3f0ea] shadow-2xl max-w-full sm:max-w-xl md:max-w-3xl lg:max-w-5xl"
+        style={{ height: isTabletOrMobile ? '98vh' : 'min(90vh, 800px)' }}
       >
         {type !== 'ACCOUNT_STATEMENT' && type !== 'ACCOUNT_STATEMENT_SUMMARY' && (
         <div className="flex shrink-0 items-center justify-between border-b border-[#d7d1c7] bg-[#f6f3ee] px-5 py-3">
