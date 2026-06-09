@@ -1,3 +1,5 @@
+import { dbService } from './db';
+
 export interface OfflineMarginSetting {
   id: string;
   scope: 'global' | 'category' | 'line_item';
@@ -197,8 +199,14 @@ export const listOfflineMarginAuditLogs = (filters?: {
   });
 };
 
-const persistMarginSettings = (settings: OfflineMarginSetting[]) => {
+const persistMarginSettings = async (settings: OfflineMarginSetting[]) => {
   writeJsonArray(OFFLINE_MARGIN_STORE_KEY, settings);
+  // Also write to IndexedDB for cross-device sync
+  try {
+    for (const setting of settings) {
+      await dbService.put('profitMarginSettings', setting as any);
+    }
+  } catch { /* best-effort */ }
   return settings;
 };
 
@@ -362,3 +370,40 @@ export const resolveOfflineEffectiveMargin = (
     apply_volume_margins: false
   };
 };
+
+/**
+ * Copy any localStorage profit margin data into IndexedDB so it can be
+ * synced to Supabase. Safe to call on startup (only migrates entries that
+ * aren't already in IndexedDB).
+ */
+export async function migrateLocalMarginsToIndexedDB(): Promise<void> {
+  try {
+    const localSettings = readJsonArray<OfflineMarginSetting>(OFFLINE_MARGIN_STORE_KEY);
+    if (localSettings.length === 0) return;
+    for (const setting of localSettings) {
+      const existing = await dbService.get('profitMarginSettings', setting.id).catch(() => null);
+      if (!existing) {
+        await dbService.put('profitMarginSettings', setting as any);
+      }
+    }
+  } catch { /* best-effort */ }
+}
+
+/**
+ * Called on startup to restore localStorage margin data from IndexedDB
+ * (populated by cloud sync). This ensures the synchronous read paths
+ * (resolveOfflineEffectiveMargin, listOfflineMarginSettings) work on
+ * devices that received data via sync.
+ */
+export async function restoreLocalMarginsFromSync(): Promise<void> {
+  try {
+    const cloud = await dbService.getAll('profitMarginSettings').catch(() => []);
+    if (cloud.length === 0) return;
+    const existingRaw = localStorage.getItem(OFFLINE_MARGIN_STORE_KEY);
+    if (existingRaw) {
+      const existing = JSON.parse(existingRaw);
+      if (Array.isArray(existing) && existing.length >= cloud.length) return;
+    }
+    localStorage.setItem(OFFLINE_MARGIN_STORE_KEY, JSON.stringify(cloud));
+  } catch { /* best-effort */ }
+}

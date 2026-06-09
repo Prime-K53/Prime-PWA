@@ -26,7 +26,7 @@ DECLARE
     'products', 'ledger_entries', 'production_batches', 'production_resources',
     'work_centers', 'work_orders', 'sales_orders', 'user_groups', 'bom_templates',
     'bank_accounts', 'customer_payments', 'examination_batches', 'audit_logs',
-    'goods_receipts', 'supplier_payments', 'resource_allocations', 'market_adjustments',
+    'goods_receipts', 'supplier_payments', 'resource_allocations', 'profit_margin_settings', 'market_adjustments',
     'material_categories', 'warehouse_inventory', 'material_batches', 'inventory_transactions',
     'material_reservations', 'bank_transactions', 'bank_statements', 'bank_scheduled_payments',
     'bank_exchange_rates', 'bank_fees', 'bank_reconciliations', 'bank_adjustments',

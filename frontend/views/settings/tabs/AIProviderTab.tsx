@@ -130,6 +130,15 @@ export const AIProviderTab: React.FC<AIProviderTabProps> = ({ config, setConfig,
       geminiModel: finalModel,
     };
     setConfig({ ...config, aiConfig: newAiConfig });
+    // Persist to localStorage so aiService.loadFromStorage() finds it on reload
+    try {
+      const raw = localStorage.getItem('nexus_company_config');
+      if (raw) {
+        const existing = JSON.parse(raw);
+        existing.aiConfig = newAiConfig;
+        localStorage.setItem('nexus_company_config', JSON.stringify(existing));
+      }
+    } catch { /* best-effort */ }
     // Apply to runtime
     setAIProvider(provider);
     configureAI({ apiKey, model: finalModel, baseUrl: provider === 'gemini' ? undefined : resolvedBaseUrl });

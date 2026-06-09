@@ -47,6 +47,7 @@ interface NexusDB extends DBSchema {
     customerPayments: { key: string; value: CustomerPayment; };
     boms: { key: string; value: BillOfMaterial; };
     bomTemplates: { key: string; value: BOMTemplate; };
+    profitMarginSettings: { key: string; value: any; };
     marketAdjustments: { key: string; value: MarketAdjustment; };
     materialReservations: { key: string; value: MaterialReservation; };
     materialCategories: { key: string; value: MaterialCategory; };

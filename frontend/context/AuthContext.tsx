@@ -671,11 +671,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (SUPABASE_ENABLED && setupComplete) {
           try {
             const { startPeriodicSync, fullSync } = await import('../services/syncService');
+            const { restoreLocalMarginsFromSync, migrateLocalMarginsToIndexedDB } = await import('../services/offlineProfitMargins');
             startPeriodicSync();
+            // Restore profit margins from IndexedDB (populated by previous sync pulls)
+            restoreLocalMarginsFromSync().catch(() => {});
+            // Push any local-only profit margins into the sync pipeline
+            migrateLocalMarginsToIndexedDB().catch(() => {});
             fullSync().then(result => {
               if (result.pulled > 0 || result.pushed > 0) {
                 console.log(`[Auth] Initial Supabase sync: ${result.pulled} pulled, ${result.pushed} pushed`);
               }
+              // After pull, restore any newly synced profit margins to localStorage
+              restoreLocalMarginsFromSync().catch(() => {});
             }).catch(err => console.warn('[Auth] Initial sync failed:', err));
           } catch (syncErr) {
             console.warn("[Auth] Sync service init skipped:", syncErr);

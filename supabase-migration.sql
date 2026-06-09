@@ -103,6 +103,7 @@ DECLARE
     'budgets', 'transfers', 'employees', 'payroll_runs', 'payslips',
     'goods_receipts', 'shipments', 'cheques', 'supplier_payments',
     'job_tickets', 'job_ticket_settings', 'resource_allocations',
+    'profit_margin_settings',
     'market_adjustments', 'material_categories', 'warehouse_inventory',
     'material_batches', 'inventory_transactions', 'material_reservations',
     'bank_transactions', 'bank_statements', 'vat_transactions', 'vat_returns',
@@ -181,6 +182,7 @@ DECLARE
     'budgets', 'transfers', 'employees', 'payroll_runs', 'payslips',
     'goods_receipts', 'shipments', 'cheques', 'supplier_payments',
     'job_tickets', 'job_ticket_settings', 'resource_allocations',
+    'profit_margin_settings',
     'market_adjustments', 'material_categories', 'warehouse_inventory',
     'material_batches', 'inventory_transactions', 'material_reservations',
     'bank_transactions', 'bank_statements', 'vat_transactions', 'vat_returns',
@@ -403,6 +405,7 @@ DECLARE
     'budgets', 'transfers', 'employees', 'payroll_runs', 'payslips',
     'goods_receipts', 'shipments', 'cheques', 'supplier_payments',
     'job_tickets', 'job_ticket_settings', 'resource_allocations',
+    'profit_margin_settings',
     'market_adjustments', 'material_categories', 'warehouse_inventory',
     'material_batches', 'inventory_transactions', 'material_reservations',
     'bank_transactions', 'bank_statements', 'vat_transactions', 'vat_returns',
@@ -626,7 +629,8 @@ DECLARE
     'examination_inventory_deductions', 'examination_batch_notifications',
     'sms_campaigns', 'sms_templates', 'subcontract_orders',
     'maintenance_logs', 'job_tickets', 'job_ticket_settings',
-    'resource_allocations', 'market_adjustments', 'material_categories',
+    'resource_allocations', 'profit_margin_settings',
+    'market_adjustments', 'material_categories',
     'warehouse_inventory', 'material_batches', 'inventory_transactions',
     'material_reservations'
   ];
