@@ -1,5 +1,5 @@
-
 import { useState, useMemo, useCallback, useEffect } from 'react';
+import { dbService } from '../services/db';
 
 const GLOBAL_STORAGE_KEY = 'prime:pagination:default';
 
@@ -59,11 +59,21 @@ export function usePagination<T>(data: T[], initialItemsPerPage: number = 25) {
     setCurrentPage(1);
   }, []);
 
+  // Sync pagination preference across devices via cloud settings
   useEffect(() => {
-    try {
-      localStorage.setItem(GLOBAL_STORAGE_KEY, String(itemsPerPage));
-    } catch { }
+    localStorage.setItem(GLOBAL_STORAGE_KEY, String(itemsPerPage));
+    dbService.saveSetting(GLOBAL_STORAGE_KEY, itemsPerPage).catch(() => {});
   }, [itemsPerPage]);
+
+  useEffect(() => {
+    let cancelled = false;
+    dbService.getSetting<number>(GLOBAL_STORAGE_KEY).then((cloud) => {
+      if (!cancelled && cloud !== undefined && cloud > 0 && cloud !== itemsPerPage) {
+        setItemsPerPage(cloud);
+      }
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   return { 
     next, 

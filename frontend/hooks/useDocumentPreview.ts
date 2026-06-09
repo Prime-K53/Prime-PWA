@@ -60,19 +60,9 @@ export const useDocumentPreview = () => {
 
       if (effectiveType === 'SUBSCRIPTION' && rawData) {
         try {
-          let customer = (customers || []).find((c: any) =>
+          const customer = (customers || []).find((c: any) =>
             String(c.id) === String(rawData.customerId) || c.name === rawData.customerName
           );
-
-          if (!customer) {
-            const savedCustomers = localStorage.getItem('nexus_customers');
-            if (savedCustomers) {
-              const parsedCustomers = JSON.parse(savedCustomers);
-              customer = (parsedCustomers || []).find((c: any) =>
-                String(c.id) === String(rawData.customerId) || c.name === rawData.customerName
-              );
-            }
-          }
 
           if (customer) {
             enrichedData = {

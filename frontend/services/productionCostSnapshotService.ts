@@ -6,6 +6,7 @@
  */
 
 import { ProductionCostSnapshot } from '../types';
+import { dbService } from './db';
 
 export interface ConsumptionSnapshot {
   id: string;
@@ -78,11 +79,11 @@ class ProductionCostSnapshotService {
     };
 
     // Get existing snapshots
-    const existing = this.getAllSnapshots();
+    const existing = await this.getAllSnapshots();
     existing.push(consumptionSnapshot);
 
-    // Save to localStorage (or IndexedDB in production)
-    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(existing));
+    // Save via cloud-synced settings store
+    await dbService.saveSetting(this.STORAGE_KEY, existing);
 
     return consumptionSnapshot;
   }
@@ -90,8 +91,10 @@ class ProductionCostSnapshotService {
   /**
    * Get all production cost snapshots
    */
-  getAllSnapshots(): ConsumptionSnapshot[] {
+  async getAllSnapshots(): Promise<ConsumptionSnapshot[]> {
     try {
+      const saved = await dbService.getSetting<ConsumptionSnapshot[]>(this.STORAGE_KEY);
+      if (saved && saved.length > 0) return saved;
       const stored = localStorage.getItem(this.STORAGE_KEY);
       if (stored) {
         return JSON.parse(stored);
@@ -105,15 +108,17 @@ class ProductionCostSnapshotService {
   /**
    * Get snapshots for a specific exam
    */
-  getSnapshotsForExam(examId: string): ConsumptionSnapshot[] {
-    return this.getAllSnapshots().filter(s => s.examId === examId);
+  async getSnapshotsForExam(examId: string): Promise<ConsumptionSnapshot[]> {
+    const all = await this.getAllSnapshots();
+    return all.filter(s => s.examId === examId);
   }
 
   /**
    * Get snapshots for a specific school
    */
-  getSnapshotsForSchool(schoolName: string): ConsumptionSnapshot[] {
-    return this.getAllSnapshots().filter(s =>
+  async getSnapshotsForSchool(schoolName: string): Promise<ConsumptionSnapshot[]> {
+    const all = await this.getAllSnapshots();
+    return all.filter(s =>
       s.schoolName?.toLowerCase() === schoolName?.toLowerCase()
     );
   }
@@ -121,11 +126,12 @@ class ProductionCostSnapshotService {
   /**
    * Get snapshots within a date range
    */
-  getSnapshotsByDateRange(startDate: string, endDate: string): ConsumptionSnapshot[] {
+  async getSnapshotsByDateRange(startDate: string, endDate: string): Promise<ConsumptionSnapshot[]> {
     const start = new Date(startDate).getTime();
     const end = new Date(endDate).getTime();
+    const all = await this.getAllSnapshots();
 
-    return this.getAllSnapshots().filter(s => {
+    return all.filter(s => {
       const snapshotDate = new Date(s.timestamp).getTime();
       return snapshotDate >= start && snapshotDate <= end;
     });
@@ -134,15 +140,15 @@ class ProductionCostSnapshotService {
   /**
    * Get total production costs for a period
    */
-  getTotalCosts(startDate?: string, endDate?: string): {
+  async getTotalCosts(startDate?: string, endDate?: string): Promise<{
     totalPaperCost: number;
     totalTonerCost: number;
     totalWasteCost: number;
     totalProductionCost: number;
     totalSheets: number;
     averageCostPerSheet: number;
-  } {
-    let snapshots = this.getAllSnapshots();
+  }> {
+    let snapshots = await this.getAllSnapshots();
 
     if (startDate && endDate) {
       snapshots = this.getSnapshotsByDateRange(startDate, endDate);
@@ -173,13 +179,13 @@ class ProductionCostSnapshotService {
   /**
    * Get cost breakdown by school
    */
-  getCostsBySchool(startDate?: string, endDate?: string): Array<{
+  async getCostsBySchool(startDate?: string, endDate?: string): Promise<Array<{
     schoolName: string;
     totalCost: number;
     totalSheets: number;
     examCount: number;
-  }> {
-    let snapshots = this.getAllSnapshots();
+  }>> {
+    let snapshots = await this.getAllSnapshots();
 
     if (startDate && endDate) {
       snapshots = this.getSnapshotsByDateRange(startDate, endDate);
@@ -214,15 +220,16 @@ class ProductionCostSnapshotService {
   /**
    * Clear all snapshots (for testing/reset)
    */
-  clearAllSnapshots(): void {
+  async clearAllSnapshots(): Promise<void> {
+    await dbService.saveSetting(this.STORAGE_KEY, []);
     localStorage.removeItem(this.STORAGE_KEY);
   }
 
   /**
    * Export snapshots to CSV
    */
-  exportToCSV(snapshots?: ConsumptionSnapshot[]): string {
-    const data = snapshots || this.getAllSnapshots();
+  async exportToCSV(snapshots?: ConsumptionSnapshot[]): Promise<string> {
+    const data = snapshots || await this.getAllSnapshots();
 
     const headers = [
       'ID', 'Exam ID', 'Subject', 'School', 'Class', 'Candidates',

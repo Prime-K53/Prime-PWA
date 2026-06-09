@@ -8,19 +8,6 @@ const pickText = (...candidates: any[]) => {
   return '';
 };
 
-const loadStoredCustomers = () => {
-  if (typeof window === 'undefined') return [];
-
-  try {
-    const savedCustomers = localStorage.getItem('nexus_customers');
-    if (!savedCustomers) return [];
-    const parsedCustomers = JSON.parse(savedCustomers);
-    return Array.isArray(parsedCustomers) ? parsedCustomers : [];
-  } catch {
-    return [];
-  }
-};
-
 const hasUsableCustomerShape = (value: any) =>
   Boolean(
     value
@@ -39,8 +26,7 @@ const hasUsableCustomerShape = (value: any) =>
 export const enrichDocumentCustomerData = (rawData: any, customers: any[] = []) => {
   if (!rawData) return rawData;
 
-  const storedCustomers = loadStoredCustomers();
-  const customerPool = [...(customers || []), ...storedCustomers];
+  const customerPool = customers || [];
   const inlineCustomer = [rawData?.customer, rawData?.client, rawData?.school].find(hasUsableCustomerShape) || null;
   const candidateIds = [
     rawData?.customerId,
