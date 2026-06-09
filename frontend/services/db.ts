@@ -1033,6 +1033,23 @@ export const dbService = {
         return resultId;
     },
 
+    async bulkPut<T>(storeName: keyof NexusDB, items: T[]): Promise<void> {
+      if (items.length === 0) return;
+      // Skip cloud writes — bulkPut is for syncing cloud data into local cache
+      await withDbRecovery(async (db) => {
+        if (!db.objectStoreNames.contains(storeName as any)) return;
+        const tx = db.transaction(storeName as any, 'readwrite');
+        const store = tx.objectStore(storeName as any);
+        for (const item of items) {
+          stampCompanyId(item);
+          (item as any)._updatedAt = new Date().toISOString();
+          store.put(item);
+        }
+        await tx.done;
+        emitDataChange([String(storeName)]);
+      });
+    },
+
     async getSetting<T>(key: string): Promise<T | undefined> {
         if (isCloudOnlyMode()) {
             const cloudValue = await cloudDb.getSetting<T>(key);
