@@ -1,2 +1,0 @@
-[ENV] Missing optional secrets (using defaults): SESSION_SECRET, ENCRYPTION_KEY
-[LICENSE NOTICE] Using fallback local secret for validation.
