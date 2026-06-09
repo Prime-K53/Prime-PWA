@@ -420,8 +420,7 @@ const SUPABASE_CONFIGURED = isSupabaseConfigured;
 const LOCAL_ONLY_STORES = new Set([
   'syncOutbox', 'files', 'idempotencyKeys',
   'customerNotificationLogs',
-  'whatsappChats', 'whatsappCampaigns', 'whatsappAutomations',
-  'alerts', 'reminders', 'auditLogs'
+  'alerts', 'auditLogs'
 ]);
 
 const shouldUseCloud = () => {

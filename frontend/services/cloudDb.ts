@@ -75,6 +75,9 @@ export const STORE_TO_TABLE: Record<string, string> = {
   walletTransactions: 'wallet_transactions',
   deliveryNotes: 'delivery_notes',
   payrollRuns: 'payroll_runs',
+  shipments: 'shipments',
+  schools: 'schools',
+  tasks: 'tasks',
 };
 
 const SUPABASE_ENABLED = isSupabaseConfigured();

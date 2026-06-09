@@ -96,6 +96,17 @@ const STORE_TO_TABLE: Record<string, string> = {
   walletTransactions: 'wallet_transactions',
   deliveryNotes: 'delivery_notes',
   payrollRuns: 'payroll_runs',
+  expenses: 'expenses',
+  income: 'income',
+  budgets: 'budgets',
+  transfers: 'transfers',
+  cheques: 'cheques',
+  employees: 'employees',
+  payslips: 'payslips',
+  subscribers: 'subscribers',
+  shipments: 'shipments',
+  schools: 'schools',
+  tasks: 'tasks',
 };
 
 const TABLES_TO_SYNC = [
@@ -112,6 +123,24 @@ const TABLES_TO_SYNC = [
   'recurringInvoices', 'scheduledPayments', 'walletTransactions',
   'deliveryNotes', 'payrollRuns',
   'vatTransactions', 'vatReturns', 'roundingLogs',
+  'expenses', 'income', 'budgets', 'transfers', 'cheques',
+  'employees', 'payslips',
+  'materialCategories', 'warehouseInventory', 'materialBatches',
+  'inventoryTransactions', 'materialReservations',
+  'jobTickets', 'jobTicketSettings', 'resourceAllocations',
+  'examinationJobSubjects', 'examinationInvoiceGroups',
+  'examinationRecurringProfiles', 'examinationInventoryDeductions',
+  'examinationBatchNotifications',
+  'examPapers', 'examPrintingBatches',
+  'salesExchangeItems', 'salesExchangeApprovals',
+  'subcontractOrders', 'maintenanceLogs', 'classes', 'subjects',
+  'subscribers', 'shipments', 'schools', 'tasks',
+  'bankScheduledPayments', 'bankExchangeRates', 'bankFees',
+  'bankReconciliations', 'bankAdjustments', 'bankCashFlowForecasts',
+  'bankAlerts', 'bankCategories',
+  'smsCampaigns', 'smsTemplates',
+  'marketAdjustmentTransactions', 'notificationAuditLogs',
+  'whatsappChats', 'whatsappTemplates', 'whatsappCampaigns', 'whatsappAutomations',
 ];
 
 const getTable = (storeName: string): string => STORE_TO_TABLE[storeName] || storeName;
