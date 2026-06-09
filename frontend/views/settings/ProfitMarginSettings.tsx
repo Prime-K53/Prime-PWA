@@ -935,7 +935,7 @@ const ProfitMarginSettings: React.FC = () => {
                     if (valid.length === 0) { toast('At least one valid tier is required', 'error'); return; }
                     setSavingTiers(true);
                     try {
-                      saveVolumeDiscountTiers(valid);
+                      await saveVolumeDiscountTiers(valid);
                       toast('Volume discount tiers saved', 'success');
                     } catch (err: any) {
                       toast(err.message || 'Failed to save tiers', 'error');

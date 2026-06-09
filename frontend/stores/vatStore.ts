@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { VATConfig, VatTransaction, VatReturn } from '../types';
 import { dbService } from '../services/db';
+import { cloudDb } from '../services/cloudDb';
 import { generateNextId } from '../utils/helpers';
 
 interface VatState {
@@ -55,14 +56,19 @@ export const useVatStore = create<VatState>((set, get) => ({
         // Update local state
         set({ config });
 
-        // Update CompanyConfig in localStorage
+        // Update CompanyConfig in localStorage and sync to cloud
         const storedConfig = localStorage.getItem('nexus_company_config');
-        let newCompanyConfig = {};
+        let newCompanyConfig: Record<string, unknown> = {};
         if (storedConfig) {
             newCompanyConfig = JSON.parse(storedConfig);
         }
         (newCompanyConfig as any).vat = config;
         localStorage.setItem('nexus_company_config', JSON.stringify(newCompanyConfig));
+        try {
+            await cloudDb.upsertCompany(newCompanyConfig as any);
+        } catch (err) {
+            console.error('[VatStore] Failed to sync config to cloud:', err);
+        }
     },
 
     addTransaction: async (transaction: VatTransaction) => {

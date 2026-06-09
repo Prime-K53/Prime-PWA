@@ -1,4 +1,5 @@
 import { roundToCurrency } from './helpers';
+import { dbService } from '../services/db';
 
 type PricingAdjustmentLike = {
   name?: string;
@@ -85,11 +86,11 @@ export const getSavedVolumeDiscountTiers = (): Array<{ minPages: number; discoun
   }
 };
 
-export const saveVolumeDiscountTiers = (
+export const saveVolumeDiscountTiers = async (
   tiers: Array<{ minPages: number; discountPercent: number }>
-): void => {
+): Promise<void> => {
   try {
-    localStorage.setItem(VOLUME_TIERS_LOCAL_KEY, JSON.stringify(tiers));
+    await dbService.saveSetting(VOLUME_TIERS_LOCAL_KEY, tiers);
   } catch { /* non-fatal */ }
 };
 

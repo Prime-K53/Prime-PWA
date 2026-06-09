@@ -668,7 +668,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
         }
 
-        if (SUPABASE_ENABLED && setupComplete) {
+          if (SUPABASE_ENABLED && setupComplete) {
           try {
             const { startPeriodicSync, fullSync } = await import('../services/syncService');
             const { restoreLocalMarginsFromSync, migrateLocalMarginsToIndexedDB } = await import('../services/offlineProfitMargins');
@@ -684,6 +684,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               // After pull, restore any newly synced profit margins to localStorage
               restoreLocalMarginsFromSync().catch(() => {});
             }).catch(err => console.warn('[Auth] Initial sync failed:', err));
+
+            // Migrate existing local business settings to cloud
+            const LOCAL_BUSINESS_KEYS = [
+              'nexus_volume_discount_tiers',
+              'nexus_currency_settings',
+              'nexus_exchange_rates',
+              'nexus_workflow_definitions',
+              'nexus_workflow_templates',
+              'inventoryAlertConfig',
+            ];
+            for (const key of LOCAL_BUSINESS_KEYS) {
+              try {
+                const local = localStorage.getItem(key);
+                if (local) {
+                  await dbService.saveSetting(key, JSON.parse(local));
+                }
+              } catch {}
+            }
           } catch (syncErr) {
             console.warn("[Auth] Sync service init skipped:", syncErr);
           }

@@ -68,10 +68,14 @@ class CurrencyService {
    */
   private async loadSettings(): Promise<void> {
     try {
-      const saved = localStorage.getItem(CURRENCY_SETTINGS_KEY);
+      const saved = await dbService.getSetting<CurrencySettings>(CURRENCY_SETTINGS_KEY);
       if (saved) {
-        const parsed = JSON.parse(saved);
-        this.settings = { ...DEFAULT_CURRENCY_SETTINGS, ...parsed };
+        this.settings = { ...DEFAULT_CURRENCY_SETTINGS, ...saved };
+      } else {
+        const local = localStorage.getItem(CURRENCY_SETTINGS_KEY);
+        if (local) {
+          this.settings = { ...DEFAULT_CURRENCY_SETTINGS, ...JSON.parse(local) };
+        }
       }
 
       if (OFFLINE_MODE) {
@@ -94,7 +98,7 @@ class CurrencyService {
    */
   private async saveSettings(): Promise<void> {
     try {
-      localStorage.setItem(CURRENCY_SETTINGS_KEY, JSON.stringify(this.settings));
+      await dbService.saveSetting(CURRENCY_SETTINGS_KEY, this.settings);
     } catch (error) {
       logger.error('Failed to save currency settings', error as Error);
     }
@@ -105,13 +109,21 @@ class CurrencyService {
    */
   private async loadExchangeRates(): Promise<void> {
     try {
-      const saved = localStorage.getItem(EXCHANGE_RATES_KEY);
-      if (saved) {
-        const rates: ExchangeRate[] = JSON.parse(saved);
-        rates.forEach(rate => {
+      const saved = await dbService.getSetting<ExchangeRate[]>(EXCHANGE_RATES_KEY);
+      if (saved && saved.length > 0) {
+        saved.forEach(rate => {
           const key = this.getRateKey(rate.fromCurrency, rate.toCurrency);
           this.exchangeRates.set(key, rate);
         });
+      } else {
+        const local = localStorage.getItem(EXCHANGE_RATES_KEY);
+        if (local) {
+          const rates: ExchangeRate[] = JSON.parse(local);
+          rates.forEach(rate => {
+            const key = this.getRateKey(rate.fromCurrency, rate.toCurrency);
+            this.exchangeRates.set(key, rate);
+          });
+        }
       }
     } catch (error) {
       logger.error('Failed to load exchange rates', error as Error);
@@ -124,7 +136,7 @@ class CurrencyService {
   private async saveExchangeRates(): Promise<void> {
     try {
       const rates = Array.from(this.exchangeRates.values());
-      localStorage.setItem(EXCHANGE_RATES_KEY, JSON.stringify(rates));
+      await dbService.saveSetting(EXCHANGE_RATES_KEY, rates);
     } catch (error) {
       logger.error('Failed to save exchange rates', error as Error);
     }

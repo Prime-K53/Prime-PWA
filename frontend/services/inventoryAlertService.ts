@@ -9,6 +9,7 @@
  */
 
 import { Item, WarehouseInventory } from '../types';
+import { dbService } from './db';
 
 export interface InventoryAlert {
   id: string;
@@ -56,17 +57,25 @@ class InventoryAlertService {
   private checkInterval: NodeJS.Timeout | null = null;
 
   constructor() {
-    this.loadConfig();
+    const local = localStorage.getItem(this.CONFIG_KEY);
+    if (local) {
+      try { this.config = { ...DEFAULT_CONFIG, ...JSON.parse(local) }; } catch {}
+    }
   }
 
   /**
    * Load alert configuration
    */
-  private loadConfig(): void {
+  private async loadConfig(): Promise<void> {
     try {
-      const stored = localStorage.getItem(this.CONFIG_KEY);
-      if (stored) {
-        this.config = { ...DEFAULT_CONFIG, ...JSON.parse(stored) };
+      const saved = await dbService.getSetting<AlertConfig>(this.CONFIG_KEY);
+      if (saved) {
+        this.config = { ...DEFAULT_CONFIG, ...saved };
+      } else {
+        const stored = localStorage.getItem(this.CONFIG_KEY);
+        if (stored) {
+          this.config = { ...DEFAULT_CONFIG, ...JSON.parse(stored) };
+        }
       }
     } catch (error) {
       console.error('[InventoryAlertService] Error loading config:', error);
@@ -76,9 +85,13 @@ class InventoryAlertService {
   /**
    * Save alert configuration
    */
-  saveConfig(config: Partial<AlertConfig>): void {
+  async saveConfig(config: Partial<AlertConfig>): Promise<void> {
     this.config = { ...this.config, ...config };
-    localStorage.setItem(this.CONFIG_KEY, JSON.stringify(this.config));
+    try {
+      await dbService.saveSetting(this.CONFIG_KEY, this.config);
+    } catch (error) {
+      console.error('[InventoryAlertService] Error saving config:', error);
+    }
   }
 
   /**

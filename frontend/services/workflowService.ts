@@ -76,10 +76,15 @@ class WorkflowService {
    */
   private async loadDefinitions(): Promise<void> {
     try {
-      const saved = localStorage.getItem(WORKFLOW_DEFINITIONS_KEY);
-      if (saved) {
-        const definitions: WorkflowDefinition[] = JSON.parse(saved);
-        definitions.forEach(def => this.definitions.set(def.id, def));
+      const saved = await dbService.getSetting<WorkflowDefinition[]>(WORKFLOW_DEFINITIONS_KEY);
+      if (saved && saved.length > 0) {
+        saved.forEach(def => this.definitions.set(def.id, def));
+      } else {
+        const local = localStorage.getItem(WORKFLOW_DEFINITIONS_KEY);
+        if (local) {
+          const definitions: WorkflowDefinition[] = JSON.parse(local);
+          definitions.forEach(def => this.definitions.set(def.id, def));
+        }
       }
     } catch (error) {
       logger.error('Failed to load workflow definitions', error as Error);
@@ -92,7 +97,7 @@ class WorkflowService {
   private async saveDefinitions(): Promise<void> {
     try {
       const definitions = Array.from(this.definitions.values());
-      localStorage.setItem(WORKFLOW_DEFINITIONS_KEY, JSON.stringify(definitions));
+      await dbService.saveSetting(WORKFLOW_DEFINITIONS_KEY, definitions);
     } catch (error) {
       logger.error('Failed to save workflow definitions', error as Error);
     }
@@ -216,16 +221,21 @@ class WorkflowService {
    */
   private async loadTemplates(): Promise<void> {
     try {
-      const saved = localStorage.getItem(WORKFLOW_TEMPLATES_KEY);
-      if (saved) {
-        const templates: WorkflowTemplate[] = JSON.parse(saved);
-        templates.forEach(tpl => this.templates.set(tpl.id, tpl));
+      const saved = await dbService.getSetting<WorkflowTemplate[]>(WORKFLOW_TEMPLATES_KEY);
+      if (saved && saved.length > 0) {
+        saved.forEach(tpl => this.templates.set(tpl.id, tpl));
       } else {
-        // Load default templates
-        DEFAULT_WORKFLOW_TEMPLATES.forEach(tpl => {
-          this.templates.set(tpl.id, tpl);
-        });
-        await this.saveTemplates();
+        const local = localStorage.getItem(WORKFLOW_TEMPLATES_KEY);
+        if (local) {
+          const templates: WorkflowTemplate[] = JSON.parse(local);
+          templates.forEach(tpl => this.templates.set(tpl.id, tpl));
+        } else {
+          // Load default templates
+          DEFAULT_WORKFLOW_TEMPLATES.forEach(tpl => {
+            this.templates.set(tpl.id, tpl);
+          });
+          await this.saveTemplates();
+        }
       }
     } catch (error) {
       logger.error('Failed to load workflow templates', error as Error);
@@ -238,7 +248,7 @@ class WorkflowService {
   private async saveTemplates(): Promise<void> {
     try {
       const templates = Array.from(this.templates.values());
-      localStorage.setItem(WORKFLOW_TEMPLATES_KEY, JSON.stringify(templates));
+      await dbService.saveSetting(WORKFLOW_TEMPLATES_KEY, templates);
     } catch (error) {
       logger.error('Failed to save workflow templates', error as Error);
     }
