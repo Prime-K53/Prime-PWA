@@ -6,7 +6,7 @@ export type SecuritySettingsWithAccess = SecuritySettingsConfig & {
 };
 
 export const DEFAULT_SECURITY_SETTINGS: SecuritySettingsWithAccess = {
-  sessionTimeoutMinutes: 30,
+  sessionTimeoutMinutes: 10,
   forcePasswordChangeDays: 90,
   requireTwoFactor: false,
   auditLogLevel: 'Standard',

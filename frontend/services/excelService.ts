@@ -59,10 +59,8 @@ export const parseCSV = (file: File): Promise<any[]> => {
         headers.forEach((header, index) => {
           let val: any = values[index];
           
-          // Basic type inference
-          if (!isNaN(Number(val)) && val !== '') {
-            val = Number(val);
-          }
+          // Keep values as strings — consumers handle type conversion explicitly.
+          // Avoids stripping leading zeros or '+' from phone numbers.
           
           obj[header] = val;
         });

@@ -14,8 +14,8 @@ import type { Item } from '../../types';
 
 const DataImport: React.FC = () => {
   const { notify, companyConfig } = useAuth();
-  const { addCustomer, customers } = useSales();
-  const { addItem, inventory } = useInventory();
+  const { addCustomer, updateCustomer, customers } = useSales();
+  const { addItem, updateItem, inventory } = useInventory();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -25,6 +25,16 @@ const DataImport: React.FC = () => {
   const [previewData, setPreviewData] = useState<any[]>([]);
   const [importResults, setImportResults] = useState<{accepted: any[], rejected: any[]} | null>(null);
   const [activeResultsTab, setActiveResultsTab] = useState<'accepted' | 'rejected'>('accepted');
+
+  const normalizePhone = (val: any): string => {
+    if (!val) return '';
+    let phone = String(val).replace(/^'/, '').trim();
+    phone = phone.replace(/[^\d+]/g, '');
+    if (phone && !phone.startsWith('+')) {
+      phone = '+' + phone;
+    }
+    return phone;
+  };
 
   const handleFileClick = (type: 'Products' | 'Customers') => {
     setImportingType(type);
@@ -75,11 +85,13 @@ const DataImport: React.FC = () => {
                 rejected.push({ ...row, status: 'Skipped', message: 'Duplicate - customer already exists' });
                 continue;
               }
+              const phoneValue = normalizePhone(row.Contact || row.Phone || row.contact || row['Phone Number'] || row.PhoneNumber || row.Mobile || row['Mobile Number'] || row.MobileNumber || row.Telephone || row['Phone No'] || row.Phone_Number || '');
               const customer = {
                 id: row.ID || row.id || generateNextId('customer', currentCustomers, companyConfig),
                 name,
                 accountNumber: row.AccountNumber || row.accountNumber || generateAccountNumber(),
-                contact: row.Contact || row.Phone || row.contact || '',
+                contact: phoneValue,
+                phone: phoneValue,
                 email: row.Email || row.email || '',
                 address: row.Address || row.address || '',
                 customerType: (row.Type || row.type || row.CustomerType) === 'Credit' ? 'Credit' : 'Retail',
@@ -136,6 +148,89 @@ const DataImport: React.FC = () => {
       notify(`Import complete: ${accepted.length} successful, ${rejected.length} skipped.`, accepted.length > 0 ? 'success' : 'error');
     } catch (error) {
       notify("Import failed unexpectedly.", "error");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const processUpdate = async () => {
+    if (!importingType || previewData.length === 0) return;
+
+    setIsProcessing(true);
+    const accepted: any[] = [];
+    const rejected: any[] = [];
+
+    try {
+      for (const row of previewData) {
+        try {
+          if (importingType === 'Customers') {
+            const name = row.Name || row.name || row.CustomerName;
+            if (name) {
+              const nameLower = name.toLowerCase();
+              const existing = customers.find(c => c.name.toLowerCase() === nameLower);
+              if (existing) {
+                const phoneValue = normalizePhone(row.Contact || row.Phone || row.contact || row['Phone Number'] || row.PhoneNumber || row.Mobile || row['Mobile Number'] || row.MobileNumber || row.Telephone || row['Phone No'] || row.Phone_Number || '');
+                const updatedCustomer = {
+                  ...existing,
+                  name,
+                  accountNumber: row.AccountNumber || row.accountNumber || existing.accountNumber,
+                  contact: phoneValue || existing.contact,
+                  phone: phoneValue || existing.phone,
+                  email: row.Email || row.email || existing.email || '',
+                  address: row.Address || row.address || existing.address || '',
+                  customerType: (row.Type || row.type || row.CustomerType) === 'Credit' ? 'Credit' : (existing.customerType || 'Retail'),
+                  walletBalance: Number(row.WalletBalance || row.balance || existing.walletBalance || 0),
+                  loyaltyPoints: Number(row.LoyaltyPoints || row.points || existing.loyaltyPoints || 0)
+                };
+                await updateCustomer(updatedCustomer as any);
+                accepted.push({ ...row, status: 'Updated', message: 'Successfully updated' });
+              } else {
+                rejected.push({ ...row, status: 'Skipped', message: 'Customer not found - no matching record to update' });
+              }
+            } else {
+              rejected.push({ ...row, status: 'Rejected', message: 'Missing Name field' });
+            }
+          } else {
+            const name = row.Name || row.name || row.ItemName;
+            if (name) {
+              const nameLower = name.toLowerCase();
+              const sku = (row.SKU || row.sku || '').toString().trim();
+              const existing = inventory.find(
+                item => item.name.toLowerCase() === nameLower || (sku && item.sku === sku)
+              );
+              if (existing) {
+                const updatedItem: Item = {
+                  ...existing,
+                  name,
+                  sku: sku || existing.sku,
+                  price: Number(row.Price || row.price || existing.price || 0),
+                  cost: Number(row.Cost || row.cost || existing.cost || 0),
+                  stock: Number(row.Stock || row.stock || existing.stock || 0),
+                  minStockLevel: Number(row.MinStock || row.minStock || existing.minStockLevel || 10),
+                  category: row.Category || row.category || existing.category || 'General',
+                  type: (row.Type || row.type || existing.type || 'Product') as Item['type'],
+                  unit: row.Unit || row.unit || existing.unit || 'pcs'
+                };
+                await updateItem(updatedItem);
+                accepted.push({ ...row, status: 'Updated', message: 'Successfully updated' });
+              } else {
+                rejected.push({ ...row, status: 'Skipped', message: 'Product not found - no matching record to update' });
+              }
+            } else {
+              rejected.push({ ...row, status: 'Rejected', message: 'Missing Name field' });
+            }
+          }
+        } catch (err: any) {
+          rejected.push({ ...row, status: 'Rejected', message: err.message || 'Unknown error' });
+        }
+      }
+
+      setImportStats({ success: accepted.length, failed: rejected.length });
+      setImportResults({ accepted, rejected });
+      setPreviewData([]);
+      notify(`Update complete: ${accepted.length} updated, ${rejected.length} skipped.`, accepted.length > 0 ? 'success' : 'error');
+    } catch (error) {
+      notify("Update failed unexpectedly.", "error");
     } finally {
       setIsProcessing(false);
     }
@@ -210,6 +305,14 @@ const DataImport: React.FC = () => {
                   >
                     {isProcessing ? <Loader2 size={10} className="animate-spin"/> : <CheckCircle size={10}/>}
                     Commit
+                  </button>
+                  <button 
+                    onClick={processUpdate}
+                    disabled={isProcessing}
+                    className="px-3 py-1 bg-emerald-600 text-white rounded-lg font-bold text-[9px] uppercase tracking-widest hover:bg-emerald-700 transition-colors flex items-center gap-1.5 shadow-md shadow-emerald-200"
+                  >
+                    {isProcessing ? <Loader2 size={10} className="animate-spin"/> : <Upload size={10}/>}
+                    Update
                   </button>
                 </div>
               </div>

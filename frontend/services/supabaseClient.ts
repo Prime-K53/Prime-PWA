@@ -29,7 +29,8 @@ export const supabase = createClient(
       persistSession: true,
       detectSessionInUrl: true,
       flowType: 'pkce',
-      storageKey: 'prime-erp-supabase-auth'
+      storageKey: 'prime-erp-supabase-auth',
+      storage: sessionStorage
     },
     realtime: {
       params: {

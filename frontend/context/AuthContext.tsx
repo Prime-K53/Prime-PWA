@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { User, UserRole, UserGroup, PasswordPolicy, CompanyConfig, AuditLogEntry, SystemAlert, Reminder } from '../types';
 import { INITIAL_USER_GROUPS, AVAILABLE_PERMISSIONS } from '../constants';
 import { generateNextId } from '../utils/helpers';
@@ -739,6 +739,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       subscription.unsubscribe();
     };
   }, []);
+
+  // ── Inactivity timeout ──
+  const lastActivityRef = useRef(Date.now());
+
+  useEffect(() => {
+    const update = () => { lastActivityRef.current = Date.now(); };
+    const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
+    events.forEach(e => window.addEventListener(e, update, { passive: true }));
+    return () => { events.forEach(e => window.removeEventListener(e, update)); };
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    lastActivityRef.current = Date.now(); // reset timer on login
+
+    const timeoutMin = companyConfig?.securitySettings?.sessionTimeoutMinutes ?? 30;
+    if (timeoutMin <= 0) return;
+
+    const id = setInterval(() => {
+      const elapsed = (Date.now() - lastActivityRef.current) / 60000;
+      if (elapsed >= timeoutMin) {
+        logout();
+      }
+    }, 60000);
+
+    return () => clearInterval(id);
+  }, [user, companyConfig?.securitySettings?.sessionTimeoutMinutes]);
 
   const notify = useCallback((message: string, type: 'success' | 'error' | 'info' | 'warning') => {
     setNotification({ id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, message, type });
