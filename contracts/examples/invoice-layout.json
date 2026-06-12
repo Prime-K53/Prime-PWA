@@ -1,0 +1,155 @@
+{
+  "metadata": {
+    "title": "Standard Invoice Layout",
+    "pageSize": "A4",
+    "orientation": "portrait",
+    "unit": "mm",
+    "margins": { "top": 15, "right": 15, "bottom": 15, "left": 15 }
+  },
+  "fixedSections": [
+    {
+      "id": "global-header",
+      "role": "header",
+      "repeat": "every-page",
+      "content": {
+        "type": "container",
+        "layout": "horizontal",
+        "style": { "padding": { "top": 0, "right": 0, "bottom": 10, "left": 0 } },
+        "children": [
+          {
+            "type": "text",
+            "content": "INVOICE",
+            "style": { "fontSize": 24, "fontWeight": "bold", "color": "#1e293b" },
+            "flex": 1
+          },
+          {
+            "type": "container",
+            "layout": "vertical",
+            "children": [
+              { "type": "text", "content": "{{issuer.name}}", "style": { "fontWeight": "bold" } },
+              { "type": "text", "content": "{{issuer.address}}", "style": { "fontSize": 9 } }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "global-footer",
+      "role": "footer",
+      "repeat": "every-page",
+      "content": {
+        "type": "container",
+        "layout": "vertical",
+        "style": { "border": { "width": 0.5, "style": "solid", "color": "#e2e8f0", "edges": ["top"] }, "padding": { "top": 5, "right": 0, "bottom": 0, "left": 0 } },
+        "children": [
+          {
+            "type": "text",
+            "content": "Thank you for your business. Please quote invoice number on all payments.",
+            "style": { "fontSize": 8, "textAlign": "center", "color": "#64748b" }
+          },
+          {
+            "type": "text",
+            "content": "Page {pageNumber} of {totalPages}",
+            "style": { "fontSize": 8, "textAlign": "right" }
+          }
+        ]
+      }
+    }
+  ],
+  "flowSections": [
+    {
+      "id": "billing-details",
+      "elements": [
+        {
+          "type": "container",
+          "layout": "horizontal",
+          "style": { "padding": { "top": 10, "right": 0, "bottom": 15, "left": 0 } },
+          "children": [
+            {
+              "type": "container",
+              "layout": "vertical",
+              "flex": 1,
+              "children": [
+                { "type": "text", "content": "BILL TO:", "style": { "fontSize": 8, "fontWeight": "bold", "color": "#64748b" } },
+                { "type": "text", "content": "{{customer.name}}", "style": { "fontWeight": "600" } },
+                { "type": "text", "content": "{{customer.address}}", "style": { "fontSize": 10 } }
+              ]
+            },
+            {
+              "type": "container",
+              "layout": "vertical",
+              "children": [
+                { "type": "text", "content": "Invoice #: {{id}}", "style": { "fontWeight": "bold" } },
+                { "type": "text", "content": "Date: {{dates.issueDate}}", "style": { "fontSize": 10 } },
+                { "type": "text", "content": "Due Date: {{dates.dueDate}}", "style": { "fontSize": 10, "color": "#ef4444" } }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "items-table",
+      "elements": [
+        {
+          "type": "table",
+          "showHeaders": true,
+          "dataSource": "items",
+          "columns": [
+            { "id": "desc", "header": "Description", "width": "auto" },
+            { "id": "qty", "header": "Qty", "width": 20, "align": "right" },
+            { "id": "price", "header": "Unit Price", "width": 30, "align": "right" },
+            { "id": "total", "header": "Total", "width": 30, "align": "right" }
+          ],
+          "rows": [
+            {
+              "cells": {
+                "desc": { "type": "text", "content": "{{item.description}}" },
+                "qty": { "type": "text", "content": "{{item.quantity}}" },
+                "price": { "type": "text", "content": "{{item.price}}" },
+                "total": { "type": "text", "content": "{{item.total}}" }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "summary",
+      "elements": [
+        {
+          "type": "container",
+          "layout": "horizontal",
+          "style": { "padding": { "top": 20, "right": 0, "bottom": 0, "left": 0 } },
+          "children": [
+            { "type": "spacer", "flex": 1 },
+            {
+              "type": "container",
+              "layout": "vertical",
+              "width": 80,
+              "children": [
+                {
+                  "type": "container",
+                  "layout": "horizontal",
+                  "children": [
+                    { "type": "text", "content": "Subtotal:", "flex": 1 },
+                    { "type": "text", "content": "{{totals.subtotal}}", "style": { "textAlign": "right" } }
+                  ]
+                },
+                { "type": "line", "orientation": "horizontal", "thickness": 1, "color": "#000", "style": { "padding": { "top": 2, "right": 0, "bottom": 2, "left": 0 } } },
+                {
+                  "type": "container",
+                  "layout": "horizontal",
+                  "children": [
+                    { "type": "text", "content": "TOTAL:", "style": { "fontWeight": "bold" }, "flex": 1 },
+                    { "type": "text", "content": "{{totals.total}}", "style": { "fontWeight": "bold", "textAlign": "right", "fontSize": 14 } }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

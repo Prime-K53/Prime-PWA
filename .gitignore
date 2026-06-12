@@ -1,0 +1,62 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+*.env
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+frontend/dist/
+
+# Dev / OS files
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Large binary artifacts
+node-v20.19.0-win-x64.zip
+null
+
+# Release executables (exceeds GitHub 100MB limit)
+release/
+.tools/
+
+# Internal tooling
+.kilocode/
+skills-lock.json
+Microsoft/
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+
+# Storage (contains runtime data)
+backend/storage/
+
+# Debug/test scripts
+backend/check_*.cjs
+backend/debug_*.cjs
+backend/test_*.cjs
+
+# Scratch/temp files
+frontend/scratch/
+.kilo/
+
+# Installer output
+installer-output/
+windows-installer/
+
+# Test artifacts
+test_node.js
+.opencode

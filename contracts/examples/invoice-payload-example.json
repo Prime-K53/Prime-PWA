@@ -1,0 +1,92 @@
+{
+  "issuer": {
+    "id": "CORP-001",
+    "name": "Prime Solutions Ltd.",
+    "address": {
+      "line1": "100 Innovation Way",
+      "city": "London",
+      "postalCode": "EC1A 1BB",
+      "countryCode": "GB"
+    },
+    "contact": {
+      "email": "billing@primesolutions.com",
+      "phone": "+44 20 7946 0000",
+      "website": "https://primesolutions.com"
+    }
+  },
+  "customer": {
+    "id": "CUST-882",
+    "name": "Global Tech Industries",
+    "address": {
+      "line1": "Friedrichstraße 123",
+      "city": "Berlin",
+      "postalCode": "10117",
+      "countryCode": "DE"
+    },
+    "contact": {
+      "email": "ap@globaltech.de",
+      "phone": "+49 30 123456"
+    }
+  },
+  "dates": {
+    "issuedAt": "2026-01-21T09:00:00Z",
+    "dueDate": "2026-02-20",
+    "servicePeriodStart": "2026-01-01",
+    "servicePeriodEnd": "2026-01-31"
+  },
+  "items": [
+    {
+      "sequence": 1,
+      "id": "SKU-ERP-SUB",
+      "description": "Enterprise ERP Subscription - Professional Tier",
+      "quantity": "1.00",
+      "uom": "Month",
+      "pricing": {
+        "unitPrice": { "amount": "1200.00", "currency": "EUR", "precision": 2 },
+        "discounts": [],
+        "subtotalNet": { "amount": "1200.00", "currency": "EUR", "precision": 2 },
+        "subtotalGross": { "amount": "1200.00", "currency": "EUR", "precision": 2 }
+      }
+    },
+    {
+      "sequence": 2,
+      "id": "SKU-CONS-HOUR",
+      "description": "On-site Integration Consultancy",
+      "quantity": "15.5",
+      "uom": "Hour",
+      "pricing": {
+        "unitPrice": { "amount": "150.00", "currency": "EUR", "precision": 2 },
+        "discounts": [
+          {
+            "description": "Early Bird Discount",
+            "type": "PERCENTAGE",
+            "value": "10.0",
+            "amount": { "amount": "232.50", "currency": "EUR", "precision": 2 }
+          }
+        ],
+        "subtotalNet": { "amount": "2092.50", "currency": "EUR", "precision": 2 },
+        "subtotalGross": { "amount": "2092.50", "currency": "EUR", "precision": 2 }
+      }
+    }
+  ],
+  "totals": {
+    "subtotalNet": { "amount": "3292.50", "currency": "EUR", "precision": 2 },
+    "totalDiscount": { "amount": "232.50", "currency": "EUR", "precision": 2 },
+    "grandTotal": { "amount": "3292.50", "currency": "EUR", "precision": 2 }
+  },
+  "payment": {
+    "totalPaid": { "amount": "0.00", "currency": "EUR", "precision": 2 },
+    "totalRemaining": { "amount": "3292.50", "currency": "EUR", "precision": 2 },
+    "status": "UNPAID"
+  },
+  "references": {
+    "purchaseOrderNumber": "PO-GLOBAL-2026-X",
+    "quotationUid": "QT-99182-AA",
+    "notes": "Payment via SEPA transfer only. Please include the invoice number in the reference.",
+    "termsAndConditions": "Standard Net 30 terms apply."
+  },
+  "extensions": {
+    "carbonFootprint": "1.2kg CO2e",
+    "digitalSignature": "sha256:7e56...8a11"
+  }
+}

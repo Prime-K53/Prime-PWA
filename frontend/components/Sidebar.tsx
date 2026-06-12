@@ -1,0 +1,584 @@
+
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  PieChart, Users, ArrowLeftRight, ArrowRightLeft, BarChart3, Package, Factory,
+  ChevronRight, Plus, Settings, LogOut, User,
+  Wrench, Shield, CreditCard, Barcode, ChevronDown, Download, Upload,
+  FileText, Briefcase, Banknote, UserPlus,
+  Award,
+  TrendingUp, Layers, Cpu, CheckSquare, MessageSquare,
+  Activity, Box, Warehouse, Table, Clock, DollarSign, RefreshCw,
+  Landmark, Coins, Landmark as Bank, Scale, FileBarChart, PieChart as Pie,
+  Wallet, Target, Truck, ShieldCheck, Database, WifiOff, HardDrive,
+  CheckCircle, MonitorPlay, Maximize, Share2, Cpu as Processor, Sparkles,
+  Smartphone, FileSpreadsheet, BookOpen, FileCheck, History,
+  Calculator, Search
+} from 'lucide-react';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { useSales } from '../context/SalesContext';
+import { useData } from '../context/DataContext';
+import { resolveAppAssetUrl } from '../utils/runtime';
+
+interface SidebarProps {
+  isOpen: boolean;
+  toggle: () => void;
+  isCollapsed: boolean;
+  toggleCollapse: () => void;
+}
+
+const Sidebar: React.FC<SidebarProps> = ({ isOpen, isCollapsed, toggle, toggleCollapse }) => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout, companyConfig } = useAuth();
+  const { setIsPosModalOpen } = useSales();
+  const { refreshAllData } = useData();
+  const getTabletViewport = () => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth <= 1024 && window.innerWidth >= 768;
+  };
+
+  const [isNewMenuOpen, setIsNewMenuOpen] = useState(false);
+  const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
+  const [settingsMenuPosition, setSettingsMenuPosition] = useState({ top: 0, left: 0 });
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [isTabletViewport, setIsTabletViewport] = useState(getTabletViewport);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    setRefreshError(null);
+    try {
+      await refreshAllData?.();
+    } catch (err) {
+      console.error('Refresh failed:', err);
+      setRefreshError('Failed to refresh application data. Please try again.');
+      
+      // Auto-clear error after 5 seconds
+      setTimeout(() => setRefreshError(null), 5000);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+  const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({
+    'Inventory': false,
+    'Manufacturing': false,
+    'Sales': false,
+    'Procurement': false,
+    'Reports': false,
+    'Tools': false,
+'System Settings': false,
+    'Internal Tools': false
+  });
+
+  const newMenuRef = useRef<HTMLDivElement>(null);
+  const settingsMenuRef = useRef<HTMLDivElement>(null);
+  const settingsButtonRef = useRef<HTMLButtonElement>(null);
+
+  const updateSettingsMenuPosition = (anchor?: HTMLElement | null) => {
+    const target = anchor || settingsButtonRef.current;
+    if (!target || typeof window === 'undefined') return;
+
+    const rect = target.getBoundingClientRect();
+    const menuWidth = 220;
+    const menuHeight = 300;
+    const gap = 16;
+    const viewportPadding = 8;
+
+    const preferredLeft = rect.right + gap;
+    const maxLeft = window.innerWidth - menuWidth - viewportPadding;
+    const left = Math.max(viewportPadding, Math.min(preferredLeft, maxLeft));
+
+    const preferredTop = rect.top;
+    const maxTop = window.innerHeight - menuHeight - viewportPadding;
+    const top = Math.max(viewportPadding, Math.min(preferredTop, maxTop));
+
+    setSettingsMenuPosition({ top, left });
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (newMenuRef.current && !newMenuRef.current.contains(event.target as Node)) {
+        setIsNewMenuOpen(false);
+      }
+      if (settingsMenuRef.current && !settingsMenuRef.current.contains(event.target as Node)) {
+        setIsSettingsMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsTabletViewport(getTabletViewport());
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    if (!isSettingsMenuOpen) return;
+
+    const reposition = () => updateSettingsMenuPosition();
+    reposition();
+    window.addEventListener('resize', reposition);
+    window.addEventListener('scroll', reposition, true);
+
+    return () => {
+      window.removeEventListener('resize', reposition);
+      window.removeEventListener('scroll', reposition, true);
+    };
+  }, [isSettingsMenuOpen]);
+
+  const isCompressed = isCollapsed || isTabletViewport;
+
+  const isActive = (path: string) => {
+    if (!path) return false;
+    if (path === '/' && location.pathname === '/') return true;
+
+    // Fix for user request: "when supplier is selected procurement should not be highlighted in the side bar, so do clients sales flow should not be highlighted"
+    // We explicitly exclude these paths when checking for the parent menu items.
+    const normalizedPath = path.endsWith('/') ? path.slice(0, -1) : path;
+    const normalizedLocation = location.pathname.endsWith('/') ? location.pathname.slice(0, -1) : location.pathname;
+
+    if (normalizedPath === '/sales-flow' && normalizedLocation.startsWith('/sales-flow/clients')) return false;
+    if (normalizedPath === '/procurement' && normalizedLocation.startsWith('/procurement/suppliers')) return false;
+
+    if (path !== '/' && normalizedLocation.startsWith(normalizedPath)) return true;
+    return false;
+  };
+
+  const toggleSubMenu = (label: string) => {
+    if (isCollapsed) {
+      toggleCollapse();
+    }
+    setExpandedMenus(prev => ({ ...prev, [label]: !prev[label] }));
+  };
+
+  const menuGroups = [
+    {
+      group: "Command",
+      items: [
+        { label: 'Dashboard', path: '/', icon: <PieChart size={18} /> },
+        {
+          label: 'Customers',
+          path: '/customers',
+          icon: <Users size={18} />,
+          hideSubMenu: true,
+          subItems: [
+            { label: 'Clients', path: '/sales-flow/clients', icon: <UserPlus size={14} /> },
+            { label: 'Suppliers', path: '/procurement/suppliers', icon: <Users size={14} /> },
+            { label: 'Task Manager', path: '/sales-flow/tasks', icon: <CheckSquare size={14} /> },
+            { label: 'CRM Comms', path: '/internal-tools/chat', icon: <MessageSquare size={14} /> },
+          ]
+        },
+      ]
+    },
+    {
+      group: "Operations",
+      items: [
+        {
+          label: 'Supply Chain',
+          path: '/supply-chain',
+          icon: <Package size={18} />,
+          hideSubMenu: true,
+          subItems: [
+            { label: 'Master Inventory', path: '/supply-chain/inventory', icon: <Box size={14} /> },
+            { label: 'Goods Inbound', path: '/supply-chain/grn', icon: <Package size={14} /> },
+            { label: 'Shipping Manager', path: '/supply-chain/shipping', icon: <Truck size={14} /> },
+          ]
+        },
+        {
+          label: 'Production',
+          path: '/industrial',
+          icon: <Factory size={18} />,
+          visible: companyConfig?.enabledModules?.manufacturing,
+          hideSubMenu: true,
+          subItems: [
+            { label: 'Work Orders', path: '/industrial/work-orders', icon: <Briefcase size={14} /> },
+            { label: 'MRP Logic', path: '/industrial/mrp', icon: <Layers size={14} /> },
+            { label: 'Production Schedule', path: '/industrial/scheduler', icon: <Clock size={14} /> },
+            { label: 'Kiosk Terminal', path: '/industrial/kiosk', icon: <MonitorPlay size={14} /> },
+            { label: 'Machine Health', path: '/industrial/maintenance', icon: <Activity size={14} /> },
+          ]
+        },
+        {
+          label: 'Examination',
+          path: '/examination',
+          icon: <BookOpen size={18} />,
+          hideSubMenu: true,
+          subItems: [
+            { label: 'Batches', path: '/examination/batches', icon: <Layers size={14} /> },
+            { label: 'New Batch', path: '/examination/batches/new', icon: <Plus size={14} /> },
+          ]
+        },
+      ].filter(item => item.visible !== false)
+    },
+    {
+      group: "Intelligence",
+      items: [
+        {
+          label: 'Smart Operations',
+          path: '/smart-operations',
+          icon: <Cpu size={18} />,
+          hideSubMenu: true,
+          subItems: [
+            { label: 'AI Assistant', path: '/smart-operations/ai', icon: <Sparkles size={14} /> },
+            { label: 'Market Adjustments', path: '/smart-operations/adjustments', icon: <TrendingUp size={14} /> },
+            { label: 'Smart Pricing Engine', path: '/smart-operations/pricing', icon: <Calculator size={14} /> },
+            { label: 'Marketing Messages', path: '/smart-operations/messages', icon: <MessageSquare size={14} /> },
+          ]
+        },
+      ]
+    },
+    {
+      group: "Revenue",
+      items: [
+        {
+          label: 'Sales Flow',
+          path: '/sales-flow',
+          icon: <ArrowLeftRight size={18} />,
+          hideSubMenu: true,
+          subItems: [
+            { label: 'Point of Sale', path: '/sales-flow/pos', icon: <Coins size={14} /> },
+            { label: 'Payment Management', path: '/sales-flow/payments', icon: <Banknote size={14} /> },
+            { label: 'Quotations', path: '/sales-flow/quotations', icon: <FileText size={14} /> },
+            { label: 'Orders', path: '/sales-flow/orders', icon: <CheckSquare size={14} /> },
+            { label: 'Billing / Invoices', path: '/sales-flow/invoices', icon: <FileSpreadsheet size={14} /> },
+            { label: 'Subscriptions', path: '/sales-flow/subscriptions', icon: <RefreshCw size={14} /> },
+            { label: 'Lead Board', path: '/sales-flow/leads', icon: <Target size={14} /> },
+          ]
+        },
+        {
+          label: 'Revenue Analysis',
+          path: '/revenue',
+          icon: <Activity size={18} />,
+          hideSubMenu: true,
+          subItems: [
+            { label: 'Dashboard', path: '/revenue', icon: <Activity size={14} /> },
+            { label: 'Sales Audit', path: '/revenue/sales-audit', icon: <FileText size={14} /> },
+            { label: 'Margin Performance', path: '/revenue/margin-performance', icon: <BarChart3 size={14} /> },
+            { label: 'Rounding Analytics', path: '/revenue/rounding-analytics', icon: <Activity size={14} /> },
+            { label: 'Client Ledger', path: '/revenue/contacts', icon: <Users size={14} /> },
+            { label: 'Business Intel', path: '/revenue/intel', icon: <PieChart size={14} /> },
+            { label: 'Health Diagnostic', path: '/revenue/health', icon: <Sparkles size={14} /> },
+          ]
+        },
+        {
+          label: 'Procurement',
+          path: '/procurement',
+          icon: <CreditCard size={18} />,
+          hideSubMenu: true,
+          subItems: [
+            { label: 'Vendor Bills', path: '/procurement/bills', icon: <FileText size={14} /> },
+            { label: 'Supplier Payments', path: '/procurement/payments', icon: <Wallet size={14} /> },
+            { label: 'Subcontracting', path: '/procurement/subcontracting', icon: <Share2 size={14} /> },
+            { label: 'Expense Log', path: '/procurement/expenses', icon: <TrendingUp size={14} /> },
+          ]
+        },
+      ]
+    },
+    {
+      group: "Capital",
+      visible: companyConfig?.enabledModules?.accounting,
+      items: [
+        { label: 'Banking & Finance', path: '/accounts/banking', icon: <Bank size={18} /> },
+        { label: 'Account Transfers', path: '/accounts/transfers', icon: <ArrowRightLeft size={18} /> },
+        { label: 'VAT Module', path: '/vat', icon: <FileText size={18} /> },
+        { label: 'Chart of Accounts', path: '/accounts/chart-of-accounts', icon: <Landmark size={18} /> },
+        { label: 'Payroll Engine', path: '/accounts/payroll', icon: <Users size={18} />, visible: companyConfig?.enabledModules?.payroll },
+        {
+          label: 'Fiscal Reports',
+          path: '/fiscal-reports',
+          icon: <FileBarChart size={18} />,
+          hideSubMenu: true,
+          subItems: [
+            { label: 'Dashboard', path: '/fiscal-reports', icon: <BarChart3 size={14} /> },
+            { label: 'Profit & Loss', path: '/fiscal-reports/financials?type=IncomeStatement', icon: <TrendingUp size={14} /> },
+            { label: 'Balance Sheet', path: '/fiscal-reports/financials?type=BalanceSheet', icon: <Scale size={14} /> },
+            { label: 'Cash Flow', path: '/fiscal-reports/financials?type=CashFlow', icon: <Activity size={14} /> },
+            { label: 'Trial Balance', path: '/fiscal-reports/financials?type=TrialBalance', icon: <FileCheck size={14} /> },
+            { label: 'Budget Analysis', path: '/fiscal-reports/financials?type=Budget', icon: <Target size={14} /> },
+            { label: 'Aged Receivables', path: '/fiscal-reports/financials?type=AgedAR', icon: <History size={14} /> },
+            { label: 'Aged Payables', path: '/fiscal-reports/financials?type=AgedAP', icon: <FileText size={14} /> },
+            { label: 'Bank Recon', path: '/fiscal-reports/reconciliation', icon: <Scale size={14} /> },
+            { label: 'Budgets', path: '/fiscal-reports/budgets', icon: <Target size={14} /> },
+          ]
+        },
+      ].filter(item => item.visible !== false)
+    },
+    {
+      group: "System Settings",
+      items: [
+        {
+          label: 'System Settings',
+          path: '',
+          icon: <Processor size={18} />,
+          hideSubMenu: true,
+          isPopup: true
+        }
+      ]
+    }
+  ].filter(group => group.visible !== false);
+
+  return (
+    <aside className={`
+      fixed top-0 left-0 z-40 h-full bg-[#111C44] text-white/70 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] flex flex-col font-sans border-r border-white/5 md:shrink-0 md:self-start
+      ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+      md:translate-x-0 md:sticky md:top-0 md:h-screen
+      ${isCompressed ? 'md:w-[72px]' : 'md:w-56'}
+    `}>
+      {/* Brand Section */}
+      <div className="h-14 flex items-center px-4 shrink-0 bg-[#111C44] border-b border-white/5">
+        <div className="flex items-center gap-3 w-full">
+          <div
+            onClick={toggleCollapse}
+            className="w-9 h-9 shrink-0 cursor-pointer hover:opacity-80 transition-all"
+          >
+            <img src={resolveAppAssetUrl('/pwa-icon-192x192.png')} alt="Prime ERP" className="w-full h-full rounded-lg" />
+          </div>
+          {!isCompressed && (
+            <div className="flex-1 flex flex-col overflow-hidden">
+              {companyConfig?.companyName ? (
+                (() => {
+                  const nameParts = companyConfig.companyName.split(' ');
+                  const firstName = nameParts[0] || '';
+                  const secondName = nameParts[1] || '';
+                  return (
+                    <span className="font-bold text-[15px] tracking-tight text-white truncate">
+                      {firstName}
+                      <span className="text-[#0086ff]">{secondName.toUpperCase()}</span>
+                    </span>
+                  );
+                })()
+              ) : (
+                <span className="font-bold text-[15px] tracking-tight text-white">Prime<span className="text-[#0086ff]">BOOKS</span></span>
+              )}
+              <span className="text-[9px] font-semibold text-white/40 uppercase tracking-wider -mt-0.5 truncate">Enterprise ERP</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Quick Action Group */}
+      <div className="px-3 mt-4 space-y-2">
+        {/* Primary Action (Quick Action) */}
+        <div className="relative" ref={newMenuRef}>
+          <button
+            onClick={() => setIsNewMenuOpen(!isNewMenuOpen)}
+            className={`w-full flex items-center justify-center gap-2 py-2 rounded-lg transition-all active:scale-[0.98] border border-[#0086ff]
+                  ${isNewMenuOpen
+                ? 'bg-[#0086ff]/10 text-[#0086ff] shadow-md'
+                : 'bg-transparent text-[#0086ff] shadow-sm hover:bg-[#0086ff]/5'}`}
+          >
+            <div className={`transition-transform duration-300 ${isNewMenuOpen ? 'rotate-45' : ''}`}>
+              <Plus size={18} />
+            </div>
+            {!isCompressed && <span className="font-semibold text-xs">Quick Action</span>}
+          </button>
+
+        {isNewMenuOpen && (
+          <div className={`absolute left-full top-0 ml-4 bg-[#1b254b] border border-white/10 rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-left-5 duration-200 z-50 w-[600px] p-6`}>
+            <div className="grid grid-cols-3 gap-8">
+              {/* Column 1 - Sales & CRM */}
+              <div className="space-y-4">
+                <h3 className="text-xs font-bold text-white/40 uppercase tracking-widest px-2">Sales & CRM</h3>
+                <div className="space-y-1">
+                  <button onClick={() => { setIsPosModalOpen(true); setIsNewMenuOpen(false); }} className="w-full flex items-center gap-3 px-2 py-2 hover:bg-white/5 rounded-lg text-sm font-medium text-white/80 transition-colors group">
+                    <div className="p-1.5 text-blue-400 bg-blue-500/10 rounded-md group-hover:bg-blue-500/20 transition-colors"><Coins size={16} /></div>
+                    Point of Sale
+                  </button>
+                  <button onClick={() => { navigate('/sales-flow/clients', { state: { action: 'create' } }); setIsNewMenuOpen(false); }} className="w-full flex items-center gap-3 px-2 py-2 hover:bg-white/5 rounded-lg text-sm font-medium text-white/80 transition-colors group">
+                    <div className="p-1.5 text-blue-400 bg-blue-500/10 rounded-md group-hover:bg-blue-500/20 transition-colors"><UserPlus size={16} /></div>
+                    New Client
+                  </button>
+                  <button onClick={() => { navigate('/sales-flow/invoices', { state: { action: 'create' } }); setIsNewMenuOpen(false); }} className="w-full flex items-center gap-3 px-2 py-2 hover:bg-white/5 rounded-lg text-sm font-medium text-white/80 transition-colors group">
+                    <div className="p-1.5 text-blue-400 bg-blue-500/10 rounded-md group-hover:bg-blue-500/20 transition-colors"><FileSpreadsheet size={16} /></div>
+                    Create Invoice
+                  </button>
+                  <button onClick={() => { navigate('/sales-flow/quotations', { state: { action: 'create', type: 'Quotation' } }); setIsNewMenuOpen(false); }} className="w-full flex items-center gap-3 px-2 py-2 hover:bg-white/5 rounded-lg text-sm font-medium text-white/80 transition-colors group">
+                    <div className="p-1.5 text-amber-400 bg-amber-500/10 rounded-md group-hover:bg-amber-500/20 transition-colors"><FileText size={16} /></div>
+                    New Quotation
+                  </button>
+                </div>
+              </div>
+
+              {/* Column 2 - Operations */}
+              <div className="space-y-4">
+                <h3 className="text-xs font-bold text-white/40 uppercase tracking-widest px-2">Operations</h3>
+                <div className="space-y-1">
+                  <button onClick={() => { navigate('/procurement/suppliers', { state: { action: 'create' } }); setIsNewMenuOpen(false); }} className="w-full flex items-center gap-3 px-2 py-2 hover:bg-white/5 rounded-lg text-sm font-medium text-white/80 transition-colors group">
+                    <div className="p-1.5 text-indigo-400 bg-indigo-500/10 rounded-md group-hover:bg-indigo-500/20 transition-colors"><Users size={16} /></div>
+                    New Supplier
+                  </button>
+                  <button onClick={() => { navigate('/supply-chain/inventory'); setIsNewMenuOpen(false); }} className="w-full flex items-center gap-3 px-2 py-2 hover:bg-white/5 rounded-lg text-sm font-medium text-white/80 transition-colors group">
+                    <div className="p-1.5 text-emerald-400 bg-emerald-500/10 rounded-md group-hover:bg-emerald-500/20 transition-colors"><Box size={16} /></div>
+                    Add Stock Item
+                  </button>
+                  <button onClick={() => { navigate('/sales-flow/tasks', { state: { action: 'create' } }); setIsNewMenuOpen(false); }} className="w-full flex items-center gap-3 px-2 py-2 hover:bg-white/5 rounded-lg text-sm font-medium text-white/80 transition-colors group">
+                    <div className="p-1.5 text-amber-400 bg-amber-500/10 rounded-md group-hover:bg-amber-500/20 transition-colors"><CheckSquare size={16} /></div>
+                    New Task
+                  </button>
+                </div>
+              </div>
+
+              {/* Column 3 - Manufacturing */}
+              <div className="space-y-4">
+                <h3 className="text-xs font-bold text-white/40 uppercase tracking-widest px-2">Production</h3>
+                <div className="space-y-1">
+                  <button onClick={() => { navigate('/industrial/work-orders', { state: { action: 'create' } }); setIsNewMenuOpen(false); }} className="w-full flex items-center gap-3 px-2 py-2 hover:bg-white/5 rounded-lg text-sm font-medium text-white/80 transition-colors group">
+                    <div className="p-1.5 text-purple-400 bg-purple-500/10 rounded-md group-hover:bg-purple-500/20 transition-colors"><Briefcase size={16} /></div>
+                    New Work Order
+                  </button>
+                  <button onClick={() => { navigate('/examination/batches/new'); setIsNewMenuOpen(false); }} className="w-full flex items-center gap-3 px-2 py-2 hover:bg-white/5 rounded-lg text-sm font-medium text-white/80 transition-colors group">
+                    <div className="p-1.5 text-pink-400 bg-pink-500/10 rounded-md group-hover:bg-pink-500/20 transition-colors"><BookOpen size={16} /></div>
+                    New Examination Batch
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+
+      {/* Navigation */}
+      <nav className="flex-1 flex flex-col space-y-1 overflow-y-auto custom-scrollbar px-3 py-4 pb-6">
+        {menuGroups.map((group) => (
+          <div key={group.group} className="mb-6">
+            {!isCompressed && (
+              <p className="px-3 text-[10px] font-bold text-white/30 uppercase tracking-widest mb-3">{group.group}</p>
+            )}
+            <div className="space-y-1">
+              {group.items.map((item) => {
+                const hasSub = !!item.subItems && !item.hideSubMenu;
+                const isExpanded = expandedMenus[item.label];
+                const isPopup = item.isPopup;
+                const active = (item.path && isActive(item.path)) || item.subItems?.some(s => isActive(s.path));
+
+                return (
+                    <div key={item.label} ref={isPopup ? settingsMenuRef : undefined}>
+                    <button
+                      ref={isPopup ? settingsButtonRef : undefined}
+                      title={isCompressed ? item.label : undefined}
+                      onClick={(e) => {
+                        if (isPopup) {
+                          if (isCompressed) {
+                            // When sidebar is collapsed, navigate to settings instead of showing popup
+                            navigate('/settings');
+                          } else {
+                            if (isSettingsMenuOpen) {
+                              setIsSettingsMenuOpen(false);
+                            } else {
+                              updateSettingsMenuPosition(e.currentTarget);
+                              setIsSettingsMenuOpen(true);
+                            }
+                          }
+                        } else if (hasSub) {
+                          toggleSubMenu(item.label);
+                        } else if (item.path) {
+                          navigate(item.path);
+                        } else if (item.action) {
+                          item.action();
+                        }
+                      }}
+                      className={`
+                        w-full flex items-center px-3 py-2 rounded-lg transition-all duration-200 group
+                        ${active && !hasSub && !isPopup
+                          ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20'
+                          : item.color ? `${item.color} hover:bg-white/5` : 'text-white/70 hover:text-white hover:bg-white/5'}
+                      `}
+                    >
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <span className={`transition-colors duration-200 ${active ? 'text-white' : 'text-white/40 group-hover:text-white'}`}>
+                          {item.icon}
+                        </span>
+                        {!isCompressed && (
+                          <span className={`text-[13px] font-semibold truncate ${active ? 'text-white' : ''}`}>
+                            {item.label}
+                          </span>
+                        )}
+                      </div>
+
+                      {!isCompressed && hasSub && !isPopup && (
+                        <ChevronRight size={14} className={`transition-transform duration-300 text-white/20 ${isExpanded ? 'rotate-90 text-white' : ''}`} />
+                      )}
+                    </button>
+
+                    {/* System Settings Popup Menu */}
+                    {!isCompressed && isPopup && isSettingsMenuOpen && (
+                      <div
+                        className="fixed bg-[#1b254b] border border-white/10 rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-left-5 duration-200 z-[70] w-[220px] p-2"
+                        style={{ top: `${settingsMenuPosition.top}px`, left: `${settingsMenuPosition.left}px` }}
+                      >
+                        <button onClick={() => { navigate('/internal-tools'); setIsSettingsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 rounded-lg text-sm font-medium text-white/80 transition-colors group">
+                          <div className="p-1.5 text-blue-400 bg-blue-500/10 rounded-md group-hover:bg-blue-500/20 transition-colors"><Wrench size={16} /></div>
+                          Internal Tools
+                        </button>
+                        <button onClick={() => { navigate('/profile'); setIsSettingsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 rounded-lg text-sm font-medium text-white/80 transition-colors group">
+                          <div className="p-1.5 text-indigo-400 bg-indigo-500/10 rounded-md group-hover:bg-indigo-500/20 transition-colors"><User size={16} /></div>
+                          User Profile
+                        </button>
+                        <button onClick={() => { navigate('/audit'); setIsSettingsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 rounded-lg text-sm font-medium text-white/80 transition-colors group">
+                          <div className="p-1.5 text-emerald-400 bg-emerald-500/10 rounded-md group-hover:bg-emerald-500/20 transition-colors"><ShieldCheck size={16} /></div>
+                          Security Log
+                        </button>
+                        <button onClick={() => { navigate('/admin/migration-health'); setIsSettingsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 rounded-lg text-sm font-medium text-white/80 transition-colors group">
+                          <div className="p-1.5 text-cyan-400 bg-cyan-500/10 rounded-md group-hover:bg-cyan-500/20 transition-colors"><Database size={16} /></div>
+                          Migration Health
+                        </button>
+                        <button onClick={() => { navigate('/settings'); setIsSettingsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 rounded-lg text-sm font-medium text-white/80 transition-colors group">
+                          <div className="p-1.5 text-amber-400 bg-amber-500/10 rounded-md group-hover:bg-amber-500/20 transition-colors"><Settings size={16} /></div>
+                          Settings
+                        </button>
+                        <div className="border-t border-white/10 my-1"></div>
+                        <button onClick={() => { logout(); setIsSettingsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-red-500/10 rounded-lg text-sm font-medium text-red-400 transition-colors group">
+                          <div className="p-1.5 text-red-400 bg-red-500/10 rounded-md group-hover:bg-red-500/20 transition-colors"><LogOut size={16} /></div>
+                          Log out
+                        </button>
+                      </div>
+                    )}
+
+                    {!isCompressed && hasSub && !isPopup && isExpanded && (
+                      <div className="mt-1 ml-4 border-l border-white/10 pl-2 space-y-1">
+                        {item.subItems.map(sub => {
+                          const subActive = isActive(sub.path);
+                          return (
+                            <button
+                              key={sub.path}
+                              onClick={() => {
+                                if (sub.path === '/sales-flow/pos') {
+                                  setIsPosModalOpen(true);
+                                } else {
+                                  navigate(sub.path);
+                                }
+                              }}
+                              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[12px] transition-all
+                                            ${subActive
+                                  ? 'text-white bg-white/10 font-bold'
+                                  : 'text-white/50 hover:text-white hover:bg-white/5'}`}
+                            >
+                              <div className={`${subActive ? 'text-white' : 'text-white/20'}`}>
+                                {sub.icon}
+                              </div>
+                              {sub.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </nav>
+    </aside>
+  );
+};
+
+export default Sidebar;

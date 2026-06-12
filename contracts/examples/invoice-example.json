@@ -1,0 +1,74 @@
+{
+  "identity": {
+    "uid": "550e8400-e29b-41d4-a716-446655440000",
+    "sequenceId": "INV-2026-00042",
+    "type": "SALES_INVOICE",
+    "version": 1,
+    "tenantId": "prime-erp-main"
+  },
+  "lifecycle": {
+    "state": "APPROVED",
+    "createdAt": "2026-01-21T14:30:00Z",
+    "updatedAt": "2026-01-21T15:00:00Z",
+    "createdBy": "user_admin_01",
+    "updatedBy": "user_mgr_05",
+    "finalizedAt": "2026-01-21T15:00:00Z",
+    "tags": [
+      "Priority",
+      "Q1-Sales"
+    ]
+  },
+  "payload": {
+    "header": {
+      "customerId": "CUST-998",
+      "customerName": "Acme Global Industries",
+      "billingAddress": "123 Innovation Drive, Silicon Valley, CA",
+      "shippingAddress": "Warehouse 4, Port of Oakland, CA",
+      "date": "2026-01-21",
+      "dueDate": "2026-02-21",
+      "paymentTerms": "NET30",
+      "reference": "PO-8821-ACME"
+    },
+    "lines": [
+      {
+        "itemId": "ITEM-101",
+        "description": "High-Performance ERP Integration Module",
+        "quantity": 2,
+        "unitPrice": 1500.0,
+        "discountAmount": 100.0,
+        "totalNet": 2900.0,
+        "totalGross": 2900.0,
+        "uom": "License"
+      },
+      {
+        "itemId": "ITEM-505",
+        "description": "Premium On-Site Training (Per Day)",
+        "quantity": 3,
+        "unitPrice": 800.0,
+        "discountAmount": 0.0,
+        "totalNet": 2400.0,
+        "totalGross": 2400.0,
+        "uom": "Day"
+      }
+    ],
+    "totals": {
+      "subtotal": 5300.0,
+      "discountTotal": 100.0,
+      "grandTotal": 5200.0,
+      "currency": "USD"
+    }
+  },
+  "metadata": {
+    "workflowInstanceId": "wf-abc-123",
+    "clientIp": "192.168.1.50",
+    "sourceChannel": "WEB_PORTAL"
+  },
+  "links": [
+    {
+      "targetUid": "661f9511-f30c-52e5-b827-557766551111",
+      "targetType": "QUOTATION",
+      "relationship": "SOURCE"
+    }
+  ],
+  "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}
